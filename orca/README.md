@@ -1,12 +1,18 @@
 # Orca
 
+**AI coding agents as teammates.** Assign an issue to an agent and it works on your own machine with **OpenAI Codex** or **TRAE CLI 2.x**: it reads and changes code, runs tests, commits to a branch, reports back on the issue and waits for review. Comment to continue in the same session. Every automation is a composable, visually edited workflow. Self-hosted; English UI with a Chinese toggle; Asia/Singapore by default.
+
+📘 **[Technical design & Codex walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and an 18-step live demo with real Codex runs.
+
+---
+
 > 代号 Orca（可替换）。把 AI 编码智能体当作团队成员：Issue 指派给 Agent，Agent 在你自己的机器上用 **OpenAI Codex** 或 **TRAE CLI** 干活，边做边汇报，做完交给人审；所有自动化都是**可编排的工作流**。
 
 - 后端：Java 21 · Spring Boot 4.1 · PostgreSQL（开发用 H2）
 - 运行时：`orca-daemon`，跑在开发机 / 构建机上，驱动本机已登录的 Codex（app-server 协议）或 TRAE CLI 2.x（ACP 协议）
 - 前端：React · TypeScript · Ant Design · React Flow（见 [web/README.md](web/README.md)）
 
-设计说明见 [docs/design.md](docs/design.md)，两种 CLI 的对接细节与实测记录见 [docs/providers.md](docs/providers.md)。
+完整的技术方案与 Codex 实操手册见 [docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)；设计说明见 [docs/design.md](docs/design.md)，两种 CLI 的对接细节与实测记录见 [docs/providers.md](docs/providers.md)。
 
 ## 架构
 
