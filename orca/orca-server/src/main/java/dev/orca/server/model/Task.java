@@ -18,6 +18,8 @@ public class Task {
   public String prompt;
   public String recap;
   public String outputSchemaJson;
+  /** Native review target (Codex review/start) instead of a prompt; null for a normal turn. */
+  public String reviewJson;
   public String status;
   public String statusDetail;
   public String sessionRef;

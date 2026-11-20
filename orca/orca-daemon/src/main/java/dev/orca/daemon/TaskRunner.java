@@ -175,10 +175,17 @@ final class TaskRunner implements Runnable {
     Duration timeout = Duration.ofSeconds(task.timeoutSeconds() > 0 ? task.timeoutSeconds() : 3600);
 
     List<Path> images = download(dir);
-    buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", task.prompt(),
+    boolean nativeReview = task.review() != null && session.capabilities().contains(dev.orca.agent.core.Capability.REVIEW);
+    buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", nativeReview ? describeReview(task.review()) : task.prompt(),
         "images", images.isEmpty() ? null : images.stream().map(p -> p.getFileName().toString()).toList()));
     dev.orca.agent.core.AgentEventSink sink = e -> buffer.add(attribute(relativize(e, dir)));
-    TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout), sink);
+    Map<String, Object> review = task.review();
+    if (review != null && !session.capabilities().contains(dev.orca.agent.core.Capability.REVIEW)) {
+      // no native review in this CLI: ask for the same review in words
+      prompt = TurnSpec.reviewPrompt(review, prompt);
+      review = null;
+    }
+    TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout, review), sink);
     Map<String, Object> usage = new LinkedHashMap<>(r.usage());
     while (r.ok() && !cancelRequested && !followUps.isEmpty()) {
       List<String> texts = new ArrayList<>();
@@ -217,6 +224,15 @@ final class TaskRunner implements Runnable {
       env.putAll(a.env());
     }
     return env;
+  }
+
+  static String describeReview(Map<String, Object> review) {
+    return switch (String.valueOf(review.get("type"))) {
+      case "baseBranch" -> "Review the changes on this branch against `" + review.getOrDefault("branch", "main") + "`.";
+      case "uncommittedChanges" -> "Review the uncommitted changes.";
+      case "commit" -> "Review commit " + review.get("sha") + ".";
+      default -> TurnSpec.reviewPrompt(review, null);
+    };
   }
 
   /** Approvals a person decided are reported as such rather than as the policy's. */

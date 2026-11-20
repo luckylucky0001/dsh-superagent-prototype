@@ -25,6 +25,7 @@ public class Bootstrap implements ApplicationRunner {
   public static final String COMMENT_WORKFLOW = "wf_builtin_comment";
   public static final String REVIEW_TEMPLATE = "wf_template_review";
   public static final String LOOP_TEMPLATE = "wf_template_review_loop";
+  public static final String CODEX_REVIEW_TEMPLATE = "wf_template_codex_review";
 
   private final MemberRepo members;
   private final AuthService auth;
@@ -81,6 +82,12 @@ public class Bootstrap implements ApplicationRunner {
           "Run by hand: the implementer works, the reviewer checks; requested changes go back until the review "
               + "passes (max 3 rounds); then a person approves and the issue is done.",
           false, loopDefinition(), false, null);
+    }
+    if (!workflowRepo.existsById(CODEX_REVIEW_TEMPLATE)) {
+      workflows.save(CODEX_REVIEW_TEMPLATE, "Template: review an issue branch",
+          "Run by hand: an agent reviews the issue branch against the default branch (Codex uses its built-in "
+              + "reviewer) and posts the findings on the issue.",
+          false, codexReviewDefinition(), false, null);
     }
     if (!workflowRepo.existsById(REVIEW_TEMPLATE)) {
       workflows.save(REVIEW_TEMPLATE, "Template: implement → cross-review → approve",
@@ -160,6 +167,19 @@ public class Bootstrap implements ApplicationRunner {
                     + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 150, 340)),
         "edges", List.of(edge("e1", "start", "out", "loop"), edge("e2", "loop", "passed", "approve"),
             edge("e3", "approve", "approved", "done"), edge("e4", "loop", "failed", "report")));
+  }
+
+  static Map<String, Object> codexReviewDefinition() {
+    return Map.of(
+        "nodes", List.of(
+            node("start", "trigger.manual", "Run by hand", Map.of("inputs", "issueId, reviewer"), 0, 0),
+            node("review", "agent.run", "Review the branch", Map.of("agent", "{{ trigger.input.reviewer }}",
+                "issue", "{{ trigger.input.issueId }}", "mode", "review", "reviewTarget", "baseBranch",
+                "prompt", "Pay attention to correctness, tests and anything the issue asks for."), 0, 170),
+            node("post", "issue.comment", "Post the review", Map.of("issue", "{{ trigger.input.issueId }}",
+                "body", "{{ nodes.review.output.text }}", "author", "{{ trigger.input.reviewer }}",
+                "taskId", "{{ nodes.review.output.taskId }}"), 0, 340)),
+        "edges", List.of(edge("e1", "start", "out", "review"), edge("e2", "review", "out", "post")));
   }
 
   static Map<String, Object> reviewDefinition() {

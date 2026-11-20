@@ -62,6 +62,7 @@ final class CodexSession implements AgentSession {
   private volatile String turnId;
   private volatile CompletableFuture<Map<String, Object>> turnDone;
   private volatile String finalText;
+  private volatile String lastFinalEmitted;
   private volatile String lastMessage;
   private volatile Map<String, Object> usage = Map.of();
   private long baseline = -1;
@@ -210,6 +211,7 @@ final class CodexSession implements AgentSession {
     this.sink = eventSink;
     this.finalText = null;
     this.lastMessage = null;
+    this.lastFinalEmitted = null;
     this.usage = Map.of();
     this.turnId = null;
     this.turnDone = new CompletableFuture<>();
@@ -229,7 +231,18 @@ final class CodexSession implements AgentSession {
     if (turn.outputSchema() != null) {
       params.put("outputSchema", turn.outputSchema());
     }
-    Object started = conn.call("turn/start", params, timeout);
+    Object started;
+    if (turn.review() != null) {
+      // native review: the reviewer reads the diff itself; the text, if any, travels as custom instructions
+      Map<String, Object> target = new LinkedHashMap<>(turn.review());
+      target.remove("instructions");
+      if ("custom".equals(target.get("type"))) {
+        target.put("instructions", TurnSpec.reviewPrompt(turn.review(), turn.text()));
+      }
+      started = conn.call("review/start", Map.of("threadId", threadId, "delivery", "inline", "target", target), timeout);
+    } else {
+      started = conn.call("turn/start", params, timeout);
+    }
     String id = Json.str(Json.obj(started, "turn"), "id");
     turnId = id;
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", id));
@@ -365,6 +378,8 @@ final class CodexSession implements AgentSession {
           if ("final_answer".equals(Json.str(item, "phase"))) {
             finalText = text;
           }
+        } else if ("exitedReviewMode".equals(Json.str(item, "type"))) {
+          finalText = Json.str(item, "review");
         }
       }
       default -> {
@@ -372,6 +387,14 @@ final class CodexSession implements AgentSession {
       }
     }
     for (AgentEvent e : CodexEvents.map(method, params)) {
+      if (AgentEvent.MESSAGE.equals(e.type()) && "final_answer".equals(e.data().get("phase"))) {
+        // a review ends with both an agent message and an exitedReviewMode item carrying the same text
+        String text = String.valueOf(e.data().get("text"));
+        if (text.equals(lastFinalEmitted)) {
+          continue;
+        }
+        lastFinalEmitted = text;
+      }
       sink.accept(e);
     }
   }

@@ -68,7 +68,7 @@
 | 分类 | 类型 |
 |---|---|
 | 触发 | `trigger.manual`（带输入）、`trigger.issue`（assigned / commented / created / status_changed，可按 Agent、标签、状态、表达式过滤；默认忽略 Agent/工作流自己造成的变化，避免循环）、`trigger.schedule`（cron + 时区）、`trigger.webhook`（密钥校验） |
-| Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时<br>`agent.review_loop`：实现者与评审者在一个节点内轮转（实现者续接会话，评审者每轮新会话并给出结构化结论），通过走 `passed`，超过轮数走 `failed`——在 DAG 里表达“改到评审通过为止” |
+| Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时；评审模式（`mode=review`）下改为代码评审：Codex 用内置评审器 `review/start`，其他 CLI 用等价提示词<br>`agent.review_loop`：实现者与评审者在一个节点内轮转（实现者续接会话，评审者每轮新会话并给出结构化结论），通过走 `passed`，超过轮数走 `failed`——在 DAG 里表达“改到评审通过为止” |
 | 逻辑 | `logic.condition`（true/false）、`logic.set`、`logic.join` |
 | 人工 | `human.approval`（approved/rejected）、`human.input` |
 | 动作 | `issue.comment`（以 Agent 或系统身份）、`issue.update`、`issue.create`、`http.request`（主机白名单）、`notify.webhook`（飞书/钉钉/企微/Slack/Teams） |
@@ -77,6 +77,7 @@
 1. **Assigned issue → agent**：标记进行中 → Agent 执行（续接会话，失败重试 1 次）→ 以 Agent 身份发结果评论 → 移到审核中；失败走 error 分支发失败说明。
 2. **Comment → agent**：有人评论 Agent 负责的 Issue 或 `@Agent` 时，Agent 在同一会话继续并回复。
 3. **Template: implement → cross-review → approve**（手动运行）：实现 Agent → 评审 Agent 按 JSON Schema 给出 verdict → 条件判断 → 人工审批 → 完成 / 打回。可以 Codex 实现、TRAE 评审。
+5. **Template: review an issue branch**（手动运行）：评审 Agent 以评审模式审查 Issue 分支相对默认分支的改动，并把结论发到 Issue。
 4. **Template: implement ⇄ review loop → approve**（手动运行）：用 `agent.review_loop` 最多 3 轮，通过后人工审批并完成，未通过则把遗留问题发到 Issue。
 
 ## 5. 任务调度

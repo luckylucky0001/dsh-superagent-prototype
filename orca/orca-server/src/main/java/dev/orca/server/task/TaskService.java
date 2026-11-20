@@ -108,6 +108,16 @@ public class TaskService {
   // ---------------------------------------------------------------- creating work
 
   @Transactional
+  /** The branch an issue's work is compared against: its project's default branch, else {@code main}. */
+  public String defaultBranch(String issueRef) {
+    if (issueRef == null || issueRef.isBlank()) {
+      return "main";
+    }
+    Issue issue = issues.findById(issueRef).or(() -> issues.findByIssueKeyIgnoreCase(issueRef)).orElse(null);
+    Project p = issue == null ? null : projects.findById(issue.projectId).orElse(null);
+    return p == null || p.defaultBranch == null || p.defaultBranch.isBlank() ? "main" : p.defaultBranch;
+  }
+
   public Task enqueue(TaskRequest req) {
     Agent agent = agents.findById(req.agentId()).orElseThrow(() -> ApiException.notFound("agent " + req.agentId()));
     if (agent.archived) {
@@ -124,6 +134,7 @@ public class TaskService {
     t.originJson = JsonCols.write(req.origin());
     t.prompt = req.prompt();
     t.outputSchemaJson = JsonCols.write(req.outputSchema());
+    t.reviewJson = req.review() == null || req.review().isEmpty() ? null : JsonCols.write(req.review());
     t.status = TaskStatus.QUEUED;
     t.queuedAt = Ids.now();
     t.workspaceKey = workspaceKey(agent, issue, req.origin());
@@ -303,7 +314,8 @@ public class TaskService {
       images = images(t);
     }
     return new Wire.TaskAssign(t.id, t.provider, spec, t.workspaceKey, repo, t.prompt, t.recap, t.resumeRef, schema,
-        Math.max(60, a.timeoutMinutes * 60), mcp, images, token);
+        Math.max(60, a.timeoutMinutes * 60), mcp, images, token,
+        t.reviewJson == null ? null : JsonCols.map(t.reviewJson));
   }
 
   /**

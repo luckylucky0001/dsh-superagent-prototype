@@ -91,6 +91,23 @@ public final class FakeCodexAppServer {
             }
           });
         }
+        case "review/start" -> {
+          String turnId = "turn_" + (++turnCounter);
+          Map<?, ?> target = (Map<?, ?>) params.get("target");
+          reply(id, Map.of("turn", Map.of("id", turnId, "status", "inProgress", "items", List.of()), "reviewThreadId", THREAD));
+          Thread.ofVirtual().start(() -> {
+            try {
+              notify("turn/started", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "inProgress")));
+              String what = "baseBranch".equals(target.get("type")) ? "changes against " + target.get("branch") : String.valueOf(target.get("type"));
+              notify("item/started", item(turnId, Map.of("type", "enteredReviewMode", "id", turnId, "review", what)));
+              notify("item/completed", item(turnId, Map.of("type", "exitedReviewMode", "id", turnId,
+                  "review", "reviewed " + what + ": no issues found")));
+              notify("turn/completed", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "completed")));
+            } catch (Exception e) {
+              e.printStackTrace();
+            }
+          });
+        }
         case "turn/interrupt" -> {
           reply(id, Map.of());
           hangRelease.complete("__interrupt__");

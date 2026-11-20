@@ -168,4 +168,17 @@ class CodexDriverTest {
     assertThrows(AgentException.class, () -> broken.open(spec(), new RecordingHandler()));
     assertTrue(!broken.probe().installed());
   }
+
+  @Test
+  void nativeReviewUsesReviewStartAndReturnsTheReview() throws Exception {
+    try (AgentSession s = provider("echo").open(spec(), new RecordingHandler())) {
+      List<dev.orca.protocol.AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+      TurnResult r = s.runTurn(new TurnSpec("focus on rounding", List.of(), null, null,
+          Map.of("type", "baseBranch", "branch", "main")), events::add);
+      assertEquals(TurnResult.Status.COMPLETED, r.status());
+      assertEquals("reviewed changes against main: no issues found", r.finalText());
+      assertTrue(events.stream().anyMatch(e -> e.type().equals(dev.orca.protocol.AgentEvent.NOTICE)
+          && String.valueOf(e.data().get("message")).contains("review started")));
+    }
+  }
 }

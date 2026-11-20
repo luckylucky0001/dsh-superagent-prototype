@@ -106,6 +106,8 @@ final class CodexEvents {
           "title", Json.str(item, "query"));
       case "dynamicToolCall", "collabToolCall", "imageView" -> AgentEvent.of(AgentEvent.TOOL_STARTED, "itemId", id,
           "kind", "other", "title", firstNonNull(Json.str(item, "tool"), type));
+      case "enteredReviewMode" -> AgentEvent.of(AgentEvent.NOTICE, "level", "info",
+          "message", "Codex review started: " + Json.str(item, "review"));
       default -> null;
     };
   }
@@ -142,6 +144,8 @@ final class CodexEvents {
       case "dynamicToolCall", "collabToolCall", "imageView" -> AgentEvent.of(AgentEvent.TOOL_COMPLETED, "itemId", id,
           "kind", "other", "title", firstNonNull(Json.str(item, "tool"), type), "status", normaliseStatus(Json.str(item, "status")));
       case "contextCompaction" -> AgentEvent.of(AgentEvent.NOTICE, "level", "info", "message", "context compacted");
+      case "exitedReviewMode" -> AgentEvent.of(AgentEvent.MESSAGE, "itemId", id, "text", Json.str(item, "review"),
+          "phase", "final_answer");
       default -> null;
     };
   }

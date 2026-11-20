@@ -27,6 +27,7 @@
 | 续接 | `thread/resume {threadId, excludeTurns:true}` | ✅ 实测（续接后记得之前的文件） |
 | 一轮 | `turn/start {threadId, input:[text/localImage], effort, outputSchema}` | ✅ 实测 |
 | 结构化输出 | `turn/start.outputSchema`，最终消息即 JSON | ✅ 实测 |
+| 代码评审 | `review/start {threadId, delivery:"inline", target:{type:"baseBranch", branch}}` → `enteredReviewMode` / `exitedReviewMode`（结论在 `review` 字段） | ✅ 实测（该模式不上报 token 用量） |
 | 流式 | `item/started|completed`（agentMessage/reasoning/commandExecution/fileChange/mcpToolCall/webSearch…）、`item/agentMessage/delta`、`item/commandExecution/outputDelta`、`turn/plan/updated`、`turn/diff/updated`、`thread/tokenUsage/updated`、`turn/completed` | ✅ 实测（已录制报文） |
 | 交付结果 | `agentMessage.phase == "final_answer"` | ✅ 实测 |
 | 中断 | `turn/interrupt` → `turn/completed.status = interrupted` | ✅ 实测 |

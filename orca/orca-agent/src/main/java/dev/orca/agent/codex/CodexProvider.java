@@ -25,7 +25,8 @@ public final class CodexProvider implements AgentProvider {
 
   public static final String ID = "codex";
   static final Set<String> CAPABILITIES = Set.of(Capability.RESUME, Capability.FORK, Capability.STEER,
-      Capability.STRUCTURED_OUTPUT, Capability.IMAGES, Capability.USER_INPUT, Capability.MCP_HTTP, Capability.USAGE);
+      Capability.STRUCTURED_OUTPUT, Capability.IMAGES, Capability.USER_INPUT, Capability.MCP_HTTP, Capability.USAGE,
+      Capability.REVIEW);
 
   private final CodexConfig config;
 

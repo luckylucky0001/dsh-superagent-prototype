@@ -41,7 +41,15 @@ public class AgentRunComponent implements NodeComponent {
     return d("agent.run", "agent", "Run agent",
         "Gives a task to an agent and waits for it. With an output schema the result is structured JSON.", false,
         List.of(req("agent", "Agent", FieldKind.AGENT).withHelp("An agent, or a template such as {{trigger.agentId}}"),
-            req("prompt", "Prompt", FieldKind.TEMPLATE),
+            select("mode", "Mode", false, "work", "work", "review")
+                .withHelp("'review' runs a code review instead of a task: Codex uses its built-in reviewer "
+                    + "(review/start); other CLIs get an equivalent prompt."),
+            f("prompt", "Prompt", FieldKind.TEMPLATE)
+                .withHelp("The task. In review mode it is used by the custom target and by CLIs without a built-in reviewer."),
+            select("reviewTarget", "Review what", false, "baseBranch", "baseBranch", "uncommittedChanges", "custom")
+                .withHelp("baseBranch: the issue branch against the project's default branch."),
+            f("baseBranch", "Base branch", FieldKind.STRING)
+                .withHelp("Defaults to the project's default branch (main)."),
             f("issue", "Issue", FieldKind.STRING).withDefault("{{trigger.issue.id}}")
                 .withHelp("Ties the run to an issue: same workspace, and the session can continue."),
             select("session", "Session", false, "continue", "continue", "new")
@@ -81,14 +89,35 @@ public class AgentRunComponent implements NodeComponent {
         return NodeResult.fatal("output schema is not valid JSON");
       }
     }
+    Map<String, Object> review = null;
+    String prompt = ctx.string("prompt", "");
+    if ("review".equals(ctx.string("mode", "work"))) {
+      review = new LinkedHashMap<>();
+      String target = ctx.string("reviewTarget", "baseBranch");
+      review.put("type", target);
+      if ("baseBranch".equals(target)) {
+        String base = ctx.string("baseBranch", "");
+        review.put("branch", base == null || base.isBlank() ? tasks.defaultBranch(issue) : base);
+      }
+      if (prompt != null && !prompt.isBlank()) {
+        review.put("instructions", prompt);
+      }
+      if (schema != null) {
+        return NodeResult.fatal("review mode returns the reviewer's text; remove the output schema");
+      }
+    } else if (prompt == null || prompt.isBlank()) {
+      return NodeResult.fatal("a prompt is required");
+    }
     Map<String, Object> origin = new LinkedHashMap<>();
     origin.put("runId", ctx.runId());
     origin.put("workflowId", ctx.workflowId());
     origin.put("nodeId", ctx.node().id());
     origin.put("attempt", ctx.attempt());
     long timeout = ctx.number("timeoutMinutes", 0);
-    Task t = tasks.enqueue(new TaskRequest(agent.id, issue, ctx.string("prompt", ""), schema == null ? "run" : "structured",
-        schema, ctx.string("session", "continue"), origin, timeout > 0 ? (int) timeout : null));
+    Task t = tasks.enqueue(new TaskRequest(agent.id, issue, review != null && (prompt == null || prompt.isBlank())
+        ? "Review the changes." : prompt, review != null ? "review" : schema == null ? "run" : "structured",
+        schema, review != null ? "new" : ctx.string("session", "continue"), origin, timeout > 0 ? (int) timeout : null,
+        review));
     return new NodeResult.Waiting(t.id, Map.of("taskId", t.id, "agent", agent.name, "provider", agent.provider));
   }
 
