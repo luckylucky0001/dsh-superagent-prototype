@@ -77,7 +77,7 @@ ORCA_ADMIN_PASSWORD=... ORCA_PUBLIC_URL=https://orca.example.com ORCA_DOWNLOADS_
 java -jar orca-server.jar
 ```
 
-**Docker Compose**：
+**Docker Compose**（反向代理参考 `deploy/nginx.conf.example`：SSE 关闭缓冲、daemon WebSocket 升级）：
 
 ```bash
 cp deploy/.env.example deploy/.env          # 改密码和 ORCA_PUBLIC_URL

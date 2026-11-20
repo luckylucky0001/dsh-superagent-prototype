@@ -86,7 +86,7 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 | 任务卡在“等待审批” | 收件箱 | Agent 开启了“升级审批给人”，需要有人批准或拒绝；超时计时在等待期间暂停 |
 | 安装依赖失败（DNS / 网络错误） | Agent 是否开启“沙箱内联网”、daemon 是否带 `--allow-network` | 两处都开启后重试 |
 | 推送分支失败 | 运行记录中 `repo.push` 节点的输出 | 该机器的 git 凭证无权推送；只允许推送 `orca/*` 分支 |
-| 浏览器中实时更新不刷新 | 反向代理配置 | SSE 需要关闭缓冲（Nginx：`proxy_buffering off;`）并放宽读超时 |
+| 浏览器中实时更新不刷新，或 daemon 反复断线 | 反向代理配置 | `/api/stream`（SSE）需要关闭缓冲，`/api/daemon/ws` 需要 WebSocket 升级，两者都要放宽读超时；参考 `deploy/nginx.conf.example`（已在 Nginx 1.24 上实测 TLS、SSE 与 daemon 长连接） |
 | 附件在容器重建后丢失 | `ORCA_STORAGE_DIR` 是否在持久卷上 | 使用 1.0 的 compose 文件（已挂载 `orca-files` 卷） |
 
 ## 7. 监控
