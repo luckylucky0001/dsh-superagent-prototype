@@ -163,6 +163,8 @@ Agent 可开启 **Ask a person when blocked**（受阻时询问人）：策略�
 ```bash
 mvn test                         # 全部离线测试（引擎、驱动对假 CLI、daemon、server 端到端）
 ORCA_CODEX_BIN=$(which codex) mvn test -pl orca-agent -Dgroups=live -Dorca.excludedGroups=none   # 真实 Codex（默认 gpt-6-luna）
+ORCA_TEST_DB_URL=jdbc:postgresql://localhost:5432/orca_e2e ORCA_TEST_DB_USER=orca ORCA_TEST_DB_PASSWORD=... \
+  mvn test -pl orca-server        # 端到端测试跑在 PostgreSQL 上（CI 每次提交都跑）
 ```
 
 离线测试用 `FakeCodexAppServer` / `FakeTraeAcp`（按真实报文字段构造的脚本化假 CLI）；`EndToEndTest` 在一个 JVM 里起 server + 真实 daemon + 假 Codex，覆盖指派→执行→评论→审核、评论续接会话、审批节点、校验报错。

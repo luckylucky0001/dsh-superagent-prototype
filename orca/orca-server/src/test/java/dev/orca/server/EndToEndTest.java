@@ -29,7 +29,9 @@ import org.springframework.boot.test.web.server.LocalServerPort;
  * app-server process. No network, no account.
  */
 @SpringBootTest(webEnvironment = SpringBootTest.WebEnvironment.RANDOM_PORT, properties = {
-    "spring.datasource.url=jdbc:h2:mem:e2e;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1",
+    // H2 by default; ORCA_TEST_DB_URL / _USER / _PASSWORD run the same suite against PostgreSQL
+    "spring.datasource.url=${ORCA_TEST_DB_URL:jdbc:h2:mem:e2e;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;DB_CLOSE_DELAY=-1}",
+    "spring.datasource.username=${ORCA_TEST_DB_USER:sa}", "spring.datasource.password=${ORCA_TEST_DB_PASSWORD:}",
     "orca.admin.password=test-pass", "orca.admin.email=admin@test.local", "orca.heartbeat-seconds=2"})
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class EndToEndTest {
