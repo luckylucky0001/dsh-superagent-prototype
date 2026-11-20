@@ -285,4 +285,17 @@ class EndToEndTest {
     String reply = Json.str(((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).get(0), "body");
     assertTrue(reply.contains("[images:1]"), reply);
   }
+
+  @Test
+  void obfuscatedApiPathsDoNotBypassAuthentication() throws Exception {
+    HttpClient anon = HttpClient.newHttpClient();
+    for (String path : List.of("/api;/members", "/%61pi/members", "/api/;/members", "/api;x=1/issues", "/api/members;x=1",
+        "/API/members", "/api/./members", "/api//members")) {
+      int code = anon.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).build(),
+          HttpResponse.BodyHandlers.ofString()).statusCode();
+      assertTrue(code == 400 || code == 401 || code == 404, path + " -> " + code);
+    }
+    assertEquals(401, anon.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/members")).build(),
+        HttpResponse.BodyHandlers.ofString()).statusCode());
+  }
 }

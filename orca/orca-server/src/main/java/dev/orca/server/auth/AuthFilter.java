@@ -30,6 +30,8 @@ public class AuthFilter extends OncePerRequestFilter {
     return path.startsWith("/api/attachments/") && path.endsWith("/file");
   }
 
+  private static final org.springframework.web.util.UrlPathHelper PATHS = new org.springframework.web.util.UrlPathHelper();
+
   private final AuthService auth;
 
   public AuthFilter(AuthService auth) {
@@ -39,7 +41,19 @@ public class AuthFilter extends OncePerRequestFilter {
   @Override
   protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
       throws ServletException, IOException {
-    String path = req.getRequestURI();
+    String raw = req.getRequestURI();
+    // Decide on the same decoded, normalised path Spring routes on; refuse ambiguous API paths outright.
+    String path = PATHS.getLookupPathForRequest(req);
+    String lower = raw.toLowerCase(java.util.Locale.ROOT);
+    if ((path.startsWith("/api") || lower.startsWith("/api") || lower.contains("%"))
+        && (raw.contains(";") || lower.contains("%2f") || lower.contains("%5c") || lower.contains("%2e")
+        || !raw.equals(req.getContextPath() + path) && path.startsWith("/api"))) {
+      res.setStatus(400);
+      res.setContentType("application/json");
+      res.setCharacterEncoding("UTF-8");
+      res.getWriter().write("{\"error\":\"malformed path\"}");
+      return;
+    }
     if (!path.startsWith("/api/") || OPEN.stream().anyMatch(path::startsWith) || selfAuthenticated(path)) {
       chain.doFilter(req, res);
       return;
