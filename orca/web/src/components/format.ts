@@ -13,6 +13,13 @@ export function fmtDateTime(ms: number | null | undefined): string {
   return dayjs(ms).format('YYYY-MM-DD HH:mm:ss');
 }
 
+/** Minute precision, for times in the future such as a limit reset: "11-25 03:42". */
+export function fmtMinute(ms: number | null | undefined): string {
+  if (!ms) return '—';
+  const d = dayjs(ms);
+  return d.isSame(dayjs(), 'year') ? d.format('MM-DD HH:mm') : d.format('YYYY-MM-DD HH:mm');
+}
+
 export function fromNow(ms: number | null | undefined): string {
   if (!ms) return '—';
   return dayjs(ms).fromNow();

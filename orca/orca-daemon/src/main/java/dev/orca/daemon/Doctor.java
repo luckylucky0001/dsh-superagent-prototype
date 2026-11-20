@@ -14,6 +14,10 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardOpenOption;
 import java.time.Duration;
+import java.time.Instant;
+import java.time.ZoneId;
+import java.time.format.DateTimeFormatter;
+import java.util.Locale;
 import java.util.List;
 import java.util.Map;
 
@@ -24,6 +28,8 @@ import java.util.Map;
 final class Doctor {
 
   private final DaemonConfig cfg;
+  private static final DateTimeFormatter RESET_TIME = DateTimeFormatter.ofPattern("EEE d MMM HH:mm", Locale.ENGLISH);
+
   private final PrintStream out;
   private int failures;
   private int warnings;
@@ -123,6 +129,11 @@ final class Doctor {
       warn(p.loggedIn(), name + (p.loggedIn() ? ": logged in" + (p.plan() != null ? " (" + p.plan() + ")" : "") : ": not logged in"),
           "codex".equals(p.provider()) ? "run codex login (headless: codex login --device-auth)"
               : "run traecli login, or TRAECLI_PERSONAL_ACCESS_TOKEN=<pat> traecli login --with-trae-pat");
+      for (ProviderStatus.UsageWindow w : p.usage()) {
+        String reset = w.resetsAt() == null ? "" : ", resets " + RESET_TIME.format(Instant.ofEpochMilli(w.resetsAt()).atZone(ZoneId.systemDefault()));
+        warn(w.usedPercent() < 90 && !w.reached(), name + " " + window(w.windowMinutes()) + " usage: " + w.usedPercent() + "% used" + reset,
+            "agents on this machine stop when the plan limit is reached; spread work over more accounts or wait for the reset");
+      }
     }
 
     check(usable, usable ? "at least one agent CLI is ready" : "no agent CLI is installed and logged in",
@@ -148,6 +159,20 @@ final class Doctor {
     out.println(failures == 0 ? (warnings == 0 ? "All good." : "Ready, with " + warnings + " warning(s).")
         : failures + " problem(s) to fix before this machine can run tasks.");
     return failures == 0 ? 0 : 1;
+  }
+
+  /** 300 minutes reads "5-hour", 10080 "weekly". */
+  static String window(Long minutes) {
+    if (minutes == null) {
+      return "plan";
+    }
+    if (minutes == 10080) {
+      return "weekly";
+    }
+    if (minutes % 1440 == 0) {
+      return (minutes / 1440) + "-day";
+    }
+    return minutes % 60 == 0 ? (minutes / 60) + "-hour" : minutes + "-minute";
   }
 
   private String mark(String symbol, String ascii) {

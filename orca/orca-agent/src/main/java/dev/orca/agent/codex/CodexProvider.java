@@ -97,8 +97,9 @@ public final class CodexProvider implements AgentProvider {
                 Json.str(o, "description"), Json.bool(o, "isDefault"), efforts, Json.str(o, "defaultReasoningEffort")));
           }
         }
+        List<ProviderStatus.UsageWindow> usage = loggedIn ? usage(c, t) : List.of();
         return new ProviderStatus(ID, true, version, path, loggedIn, authMode, plan, models, CAPABILITIES,
-            loggedIn ? null : "not logged in: run `codex login` (or `codex login --device-auth`) on this machine");
+            loggedIn ? null : "not logged in: run `codex login` (or `codex login --device-auth`) on this machine", usage);
       }
     } catch (AgentException | IOException e) {
       return new ProviderStatus(ID, true, version, path, false, null, null, List.of(), CAPABILITIES,
@@ -129,6 +130,36 @@ public final class CodexProvider implements AgentProvider {
 
   Process start(List<String> base, Path cwd, Map<String, String> extraEnv) throws IOException {
     return start(base, cwd, extraEnv, List.of());
+  }
+
+  /**
+   * The plan's usage windows ({@code account/rateLimits/read}): used percentage and reset time only. The
+   * account id and credit balance in the same answer are deliberately not passed on. Older CLIs without the
+   * method, and API-key logins, report nothing.
+   */
+  static List<ProviderStatus.UsageWindow> usage(JsonRpcConnection c, Duration t) {
+    try {
+      return usageWindows(c.call("account/rateLimits/read", null, t));
+    } catch (AgentException | RuntimeException e) {
+      return List.of();
+    }
+  }
+
+  static List<ProviderStatus.UsageWindow> usageWindows(Object result) {
+    Map<String, Object> limits = Json.obj(result, "rateLimits");
+    boolean reached = Json.str(limits, "rateLimitReachedType") != null;
+    List<ProviderStatus.UsageWindow> out = new ArrayList<>();
+    for (String key : List.of("primary", "secondary")) {
+      Map<String, Object> w = Json.obj(limits, key);
+      if (w.isEmpty() || !(w.get("usedPercent") instanceof Number used)) {
+        continue;
+      }
+      Long minutes = w.get("windowDurationMins") instanceof Number n ? n.longValue() : null;
+      Long resets = w.get("resetsAt") instanceof Number n ? n.longValue() * 1000 : null;
+      int pct = Math.max(0, Math.min(100, used.intValue()));
+      out.add(new ProviderStatus.UsageWindow(pct, minutes, resets, reached && pct >= 100));
+    }
+    return out;
   }
 
   void initialize(JsonRpcConnection c, Duration timeout) throws AgentException, IOException {

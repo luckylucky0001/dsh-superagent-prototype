@@ -159,6 +159,14 @@ export interface ModelInfo {
   defaultEffort: string | null;
 }
 
+export interface UsageWindow {
+  usedPercent: number;
+  /** 300 = 5 hours, 10080 = a week */
+  windowMinutes: number | null;
+  resetsAt: number | null;
+  reached: boolean;
+}
+
 export interface ProviderStatus {
   provider: Provider | string;
   installed: boolean;
@@ -168,6 +176,8 @@ export interface ProviderStatus {
   authMode: string | null;
   plan: string | null;
   models: ModelInfo[];
+  /** plan usage limits (Codex with a ChatGPT plan) */
+  usage?: UsageWindow[];
   capabilities: string[];
   error: string | null;
 }

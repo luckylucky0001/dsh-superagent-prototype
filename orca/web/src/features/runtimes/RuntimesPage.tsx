@@ -4,13 +4,13 @@ import { Alert, Badge, Button, Card, Col, Descriptions, Flex, Modal, Popconfirm,
 import { CheckCircleFilled, CloseCircleFilled, DeleteOutlined, PlusOutlined, ReloadOutlined, WarningFilled } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useRuntimes } from '@/api/queries';
-import type { ProviderStatus, RegistrationCode, Runtime } from '@/api/types';
+import type { ProviderStatus, RegistrationCode, Runtime, UsageWindow } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { PROVIDER_LABELS } from '@/components/AgentAvatar';
 import { PageHeader } from '@/components/PageHeader';
 import { EmptyState, QueryState } from '@/components/QueryState';
 import { StatusTag } from '@/components/StatusTag';
-import { fmtDateTime, fromNow } from '@/components/format';
+import { fmtDateTime, fmtMinute, fromNow } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
 
 function Check({ ok, label }: { ok: boolean; label: string }) {
@@ -19,6 +19,31 @@ function Check({ ok, label }: { ok: boolean; label: string }) {
       {ok ? <CheckCircleFilled style={{ color: '#52c41a' }} /> : <CloseCircleFilled style={{ color: '#bfbfbf' }} />}
       <span>{label}</span>
     </Space>
+  );
+}
+
+function windowLabel(t: ReturnType<typeof useT>, minutes: number | null): string {
+  if (minutes === 10080) return t('runtimes.usageWeekly');
+  if (minutes && minutes % 60 === 0 && minutes < 1440) return t('runtimes.usageHours', { n: minutes / 60 });
+  if (minutes && minutes % 1440 === 0) return t('runtimes.usageDays', { n: minutes / 1440 });
+  return t('runtimes.usagePlan');
+}
+
+/** One plan limit: how much is used and when it resets. Amber from 70 %, red from 90 % or when reached. */
+function UsageBar({ w }: { w: UsageWindow }) {
+  const t = useT();
+  const pct = Math.max(0, Math.min(100, w.usedPercent));
+  const status = w.reached || pct >= 90 ? 'exception' : 'normal';
+  const color = w.reached || pct >= 90 ? undefined : pct >= 70 ? '#d97706' : undefined;
+  return (
+    <Flex align="center" gap={10} style={{ marginTop: 8, fontSize: 12 }}>
+      <Typography.Text type="secondary" style={{ width: 120, flex: 'none' }}>{windowLabel(t, w.windowMinutes)}</Typography.Text>
+      <Progress percent={pct} size="small" status={status} strokeColor={color} style={{ flex: 1, margin: 0 }}
+        format={() => `${pct}%`} />
+      {w.resetsAt && (
+        <Typography.Text type="secondary" style={{ flex: 'none' }}>{t('runtimes.usageResets', { at: fmtMinute(w.resetsAt) })}</Typography.Text>
+      )}
+    </Flex>
   );
 }
 
@@ -49,6 +74,7 @@ function ProviderPanel({ p }: { p: ProviderStatus }) {
           </span>
         )}
       </Flex>
+      {(p.usage ?? []).map((w, i) => <UsageBar key={i} w={w} />)}
       {p.capabilities.length > 0 && (
         <Flex gap={4} wrap="wrap" style={{ marginTop: 8 }}>
           {[...p.capabilities].sort().map((c) => (
