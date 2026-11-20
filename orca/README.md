@@ -77,6 +77,16 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
 | `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
 
+## 功能一览
+
+- **看板与 Issue**：多项目、Issue key（如 `APP-12`）、评论（支持 `@Agent`）、指派给 Agent 或成员。
+- **执行记录**：实时转录（消息、思考摘要、命令与输出、文件 diff、计划、用量），运行中可**取消**或**插话**（Codex 原生 steer；不支持时排到下一轮）。
+- **工作流**：画布编排、组件面板、自动表单、变量助手、版本历史；内置「指派即执行」「评论续聊」，模板「实现 → 交叉评审 → 审批」「实现 ⇄ 评审循环 → 审批」。
+- **收件箱**：审批、Agent 提问、工作流表单、失败提醒。
+- **MCP 回写**：Agent 运行中可通过 Orca 的 MCP 工具读 Issue、发进展、改状态（每个任务一个短期 token）。
+- **Git**：项目配置仓库后，每个 Issue 一个分支 `orca/<key>`，同一 Issue 的 Agent 共享工作目录；遗留改动自动提交。
+- **成员与用量**：成员/角色管理，按 Agent、按天的运行与 token 统计。
+
 ## Agent 权限档位
 
 | 档位 | Codex | TRAE CLI | daemon 对审批请求 |
@@ -84,6 +94,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `read_only` | `sandbox=read-only` | `default_permissions=":read-only"` | 全部拒绝 |
 | `workspace`（默认） | `sandbox=workspace-write`, `approvalPolicy=on-request` | `default_permissions=":workspace"`，白名单命令转 `--allowed-tool Bash(...)` | 工作区内改文件放行；白名单命令放行；其余拒绝 |
 | `full` | `danger-full-access` | `--yolo` | 仅在标记为 `--isolated` 的运行时生效，否则降级为 `workspace` |
+
+工作区档位还内置放行 `git add/commit/status/diff/log`（Codex 沙箱把 `.git` 设为只读，提交会以审批请求出现）。Agent 配置里的附加 CLI 参数默认被 daemon 忽略，机器主人用 `orca-daemon start --allow-extra-args` 才会生效，且沙箱/审批相关参数始终被丢弃——运行时机器的主人始终掌握最终权限。
 
 ## 测试
 
