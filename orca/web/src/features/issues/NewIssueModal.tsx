@@ -85,7 +85,7 @@ export function NewIssueModal({ open, onClose, defaultStatus }: { open: boolean;
       okText={t('common.create')}
       confirmLoading={create.isPending}
       width={680}
-      destroyOnClose
+      destroyOnHidden
     >
       <Form form={form} layout="vertical" onFinish={(v) => create.mutate(v)} preserve={false}
         initialValues={{ priority: 'none', status: defaultStatus ?? 'todo' }}>

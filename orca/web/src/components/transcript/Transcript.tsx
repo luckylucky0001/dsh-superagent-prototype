@@ -284,8 +284,9 @@ export function Transcript({ task, maxHeight = 560, showControls = true }: Trans
   const events = useTaskEvents(task.id, qc);
   const transcript = useMemo(() => buildTranscript(events.data ?? []), [events.data]);
   const scroller = useRef<HTMLDivElement>(null);
-  const stick = useRef(true);
   const active = ACTIVE_TASK_STATUSES.includes(task.status);
+  // follow the end of live transcripts; finished ones open at the prompt
+  const stick = useRef(active || task.status === 'queued');
   const lastSeq = events.data?.length ? events.data[events.data.length - 1].seq : 0;
 
   // the task row knows the last stored seq; catch up if realtime missed something

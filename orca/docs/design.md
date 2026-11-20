@@ -1,0 +1,116 @@
+# Orca 设计说明
+
+本文描述已实现的设计。对接两种 CLI 的协议细节与实测记录见 [providers.md](providers.md)。
+
+## 1. 目标与边界
+
+- 把 AI 编码智能体当作团队成员：Issue 指派给 Agent → Agent 在客户自己的机器上工作 → 结果回到 Issue，交给人审。
+- 同时支持 **OpenAI Codex** 与 **TRAE CLI 2.x**，内部统一为一套会话接口与事件模型。
+- 所有自动化都是**组件化、可编排的工作流**；“指派即执行”“评论续聊”只是两条内置工作流。
+- 代码与 CLI 凭证只留在运行时机器上；server 不接触仓库凭证和模型账号。
+- 面向新加坡客户自托管（单租户），界面英文为主、可切中文，默认时区 Asia/Singapore。
+- 参考 Multica 的产品概念，净室实现，不使用其代码、UI 与素材。
+
+## 2. 组件
+
+```
+┌──────────── Web ────────────┐
+│ 看板 / Issue / 收件箱 / 编排 │
+└──────┬──────────────▲───────┘
+   REST │          SSE │（事务提交后推送）
+┌──────▼──────────────┴──────────────────────────────┐
+│ orca-server                                         │
+│  Issue/Comment/Project · Agent · Runtime · Inbox    │
+│  WorkflowService（引擎宿主）· TriggerService        │
+│  TaskService（队列、路由、租约、上下文）             │
+│  DaemonGateway（WebSocket）                          │
+└──────▲─────────────────────────────────────────────┘
+       │ WebSocket /api/daemon/ws（daemon 主动连，Bearer 运行时 token）
+┌──────┴─────────────────────────────────────────────┐
+│ orca-daemon：探测 · 工作目录 · 审批策略 · 事件缓冲  │
+│   CodexProvider → codex app-server (stdio)          │
+│   TraeProvider  → traecli acp serve (stdio)         │
+└────────────────────────────────────────────────────┘
+```
+
+## 3. 领域模型
+
+| 实体 | 要点 |
+|---|---|
+| Member / ApiToken | 只存 token 的 SHA-256；会话 token（Web）、运行时 token（daemon）、一次性注册码 |
+| Runtime | 一台跑 daemon 的机器；`providers[]` 记录每个 CLI 的版本、登录、套餐、模型、能力、错误 |
+| Agent | 名称（即 @ 提及名）、provider、绑定运行时、模型/推理强度、指令、权限档位、命令白名单、并发、超时 |
+| Project / Issue / Comment | Issue key 形如 `ORCA-12`；状态 backlog → todo → in_progress → in_review → done（可 cancelled） |
+| Task | 一次 Agent 执行：queued → dispatched → running ⇄ waiting_input → succeeded / failed / cancelled / timed_out；记录 provider 会话（Codex thread / ACP session）、工作目录键、结果、结构化输出、错误码、用量 |
+| TaskEvent | `(task_id, seq)` 唯一的统一事件，重放幂等 |
+| Workflow / WorkflowVersion / WorkflowRun | 定义每次修改生成不可变版本；运行锁定启动时的版本；运行状态以 JSON 快照持久化 |
+| InboxItem | 需要人处理的事：approval（审批节点）、input（问人节点）、question（Agent 提问）、alert（运行失败） |
+
+## 4. 工作流
+
+### 4.1 定义与组件
+
+- 定义是 JSON：节点 `{id, type, name, config, retries, timeoutSeconds, onError, ui}`，连线 `{id, source, sourcePort, target, condition}`。
+- 组件 SPI：`descriptor()`（类型、分类、端口、配置字段、输出声明 → 前端自动生成表单和变量提示）、`execute()` → Completed / Waiting / Failed、`onSignal()`（异步恢复）、`cancel()`。内置组件是 Spring Bean，外部组件通过 `ServiceLoader` 加载。
+- 配置值支持 `{{ trigger.issue.title }}`、`{{ nodes.review.output.structured.verdict }}`；整段只有一个占位符时保留原始类型。表达式语言自研、无副作用（路径、比较、逻辑、三元、少量函数），不能调用 Java 方法。
+
+### 4.2 执行语义
+
+- 图必须是 DAG（保存时校验：环、端口、必填项、未连接节点、表达式语法；问题定位到节点/连线）。
+- 节点在所有入边都有结果、且至少一条被激活时执行；全部未激活则跳过并向下传播（死路径消除），条件分支能正确汇合。
+- 异步节点（Agent、审批、问人）返回 Waiting + 等待键，状态落库；任务结束或人回答后用 `signal(runId, nodeId, waitKey, payload)` 恢复，等待键不匹配的旧信号被忽略。
+- 节点级 `retries`（按错误码判断是否可重试）、`timeoutSeconds`、`onError`（FAIL 终止运行 / CONTINUE 走 `error` 端口）；运行可取消（连带取消等待中的任务）、失败节点可重跑。
+- 引擎无状态、不依赖 Spring；server 对同一运行串行化（单实例内锁 + 事务），扩容时换成行锁。
+
+### 4.3 内置组件
+
+| 分类 | 类型 |
+|---|---|
+| 触发 | `trigger.manual`（带输入）、`trigger.issue`（assigned / commented / created / status_changed，可按 Agent、标签、状态、表达式过滤；默认忽略 Agent/工作流自己造成的变化，避免循环）、`trigger.schedule`（cron + 时区）、`trigger.webhook`（密钥校验） |
+| Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时 |
+| 逻辑 | `logic.condition`（true/false）、`logic.set`、`logic.join` |
+| 人工 | `human.approval`（approved/rejected）、`human.input` |
+| 动作 | `issue.comment`（以 Agent 或系统身份）、`issue.update`、`issue.create`、`http.request`（主机白名单）、`notify.webhook`（飞书/钉钉/企微/Slack/Teams） |
+
+内置工作流：
+1. **Assigned issue → agent**：标记进行中 → Agent 执行（续接会话，失败重试 1 次）→ 以 Agent 身份发结果评论 → 移到审核中；失败走 error 分支发失败说明。
+2. **Comment → agent**：有人评论 Agent 负责的 Issue 或 `@Agent` 时，Agent 在同一会话继续并回复。
+3. **Template: implement → cross-review → approve**（手动运行）：实现 Agent → 评审 Agent 按 JSON Schema 给出 verdict → 条件判断 → 人工审批 → 完成 / 打回。可以 Codex 实现、TRAE 评审。
+
+## 5. 任务调度
+
+- **路由**：按 Agent 绑定的运行时派发，要求运行时在线、对应 CLI 已安装且已登录；不满足时任务留在队列并写明原因（“codex is not logged in on dev-box”）。
+- **并发**：运行时容量、Agent 并发上限、**同一工作目录同一时间只有一个任务**。
+- **工作目录**：同一 Issue 的所有 Agent 共享 `issues/<KEY>`（评审能看到实现的改动）；无 Issue 的运行共享 `runs/<runId>`。项目配置了仓库时，首次克隆并建分支 `orca/<key>`。
+- **会话续接**：按 (Agent, Issue) 找上次成功任务的 provider 会话并续接；续接失败（会话丢失、换了机器/CLI）则开新会话，并把 Issue 上下文（标题、描述、人和 Agent 的评论，不含系统通知）作为前情提要。新会话的 prompt 若没提到该 Issue，也会自动补上 Issue 上下文。
+- **租约**：派发和事件/心跳会续租；租约过期：未开始的任务重新排队，已开始的判 `RUNTIME_LOST`。daemon 重连时上报在跑任务，server 对账。
+- **控制**：取消（中断 → 宽限 → 杀进程树）、插话（支持则 steer，否则排到下一轮）、Agent 提问 → 收件箱 → 回答回送。
+
+## 6. server ↔ daemon 协议
+
+WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
+
+- daemon → server：`hello`（机器信息、各 CLI 探测结果、在跑任务及最后 seq）、`heartbeat`、`probe.result`、`task.accepted`、`task.started`、`task.events`（带 seq 的批量事件，增量合并）、`task.completed`
+- server → daemon：`welcome`、`task.assign`、`task.cancel`、`task.steer`、`task.input`、`probe`、`ack`
+
+接入：Web 上生成一次性注册码（1 小时有效）→ `orca-daemon register` 换取长期运行时 token。daemon 断线指数退避重连，未确认的事件重放，server 按 seq 去重。
+
+## 7. 安全
+
+- Web 会话 cookie（HttpOnly、SameSite=Lax）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较）。
+- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝，只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
+- 工作目录键严格校验，不能逃出工作根目录。
+- `http.request` 只允许 `ORCA_HTTP_ALLOWED_HOSTS` 中的主机，不跟随重定向；通知组件额外允许常见 IM webhook 主机。
+- MCP 回写 token 通过环境变量传给 CLI，不出现在命令行参数里。
+
+## 8. 前端
+
+React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板、Issue 详情（评论与执行记录时间线、实时转录、插话/取消）、收件箱、Agents、运行时（每个 CLI 的健康状态、接入命令）、工作流列表与画布编辑器（组件面板、自动表单、变量助手、校验定位）、运行记录（图上叠加节点状态）。一条 SSE 连接驱动缓存失效与转录追加。英文为主、可切中文。
+
+## 9. 后续
+
+- MCP 回写端点（`post_comment` / `set_issue_status` / `ask_human`），daemon 已支持注入。
+- git / PR 节点（GitHub/GitLab/Gitee）、`traecli review` / Codex review 节点、有轮数上限的循环子流程。
+- 权限升级转人工审批（目前由策略直接拒绝）。
+- 多实例（行锁、跨实例推送）、OIDC/SSO、RBAC、审计、用量报表。
+- TRAE CLI 登录后的实机联调（见 providers.md 待验证清单）；评估以 app-server 统一两种 CLI。

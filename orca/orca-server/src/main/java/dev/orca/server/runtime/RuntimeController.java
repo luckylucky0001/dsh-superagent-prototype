@@ -44,6 +44,7 @@ public class RuntimeController {
     String code = auth.issueRegistrationCode(CurrentUser.id(), "runtime registration");
     String server = props.publicUrl();
     return Map.of("code", code, "expiresInMinutes", 60, "server", server,
+        "download", "curl -fsSLO " + server + "/downloads/orca-daemon.jar",
         "register", "java -jar orca-daemon.jar register --server " + server + " --code " + code,
         "start", "java -jar orca-daemon.jar start");
   }

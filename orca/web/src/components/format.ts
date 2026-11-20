@@ -4,7 +4,8 @@ import dayjs from 'dayjs';
 export function fmtTime(ms: number | null | undefined): string {
   if (!ms) return '—';
   const d = dayjs(ms);
-  return d.isSame(dayjs(), 'day') ? d.format('HH:mm:ss') : d.format('YYYY-MM-DD HH:mm');
+  if (d.isSame(dayjs(), 'day')) return d.format('HH:mm:ss');
+  return d.isSame(dayjs(), 'year') ? d.format('MM-DD HH:mm') : d.format('YYYY-MM-DD HH:mm');
 }
 
 export function fmtDateTime(ms: number | null | undefined): string {

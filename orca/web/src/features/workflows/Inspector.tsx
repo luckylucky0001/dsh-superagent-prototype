@@ -49,7 +49,7 @@ export function NodeInspector({ node, groups, idEditable, takenIds, onChange, on
       {problems && problems.length > 0 && (
         <Alert type="error" showIcon style={{ marginBottom: 12 }} message={<ul style={{ margin: 0, paddingInlineStart: 16 }}>{problems.map((p) => <li key={p}>{p}</li>)}</ul>} />
       )}
-      <Form layout="vertical" size="small" requiredMark="optional" component="div">
+      <Form layout="vertical" size="small" component="div">
         <Form.Item label={t('wf.nodeName')}>
           <Input value={def.name ?? ''} onChange={(e) => set({ name: e.target.value })} placeholder={def.id} />
         </Form.Item>
@@ -60,7 +60,7 @@ export function NodeInspector({ node, groups, idEditable, takenIds, onChange, on
             onBlur={() => !idError && idDraft !== def.id && onRename(idDraft)}
             onPressEnter={() => !idError && idDraft !== def.id && onRename(idDraft)} />
         </Form.Item>
-        <Divider orientation="left" orientationMargin={0} plain style={{ margin: '8px 0 12px', fontSize: 12 }}>{t('wf.configuration')}</Divider>
+        <Divider orientation="left" orientationMargin={0} plain style={{ margin: '20px 0 12px', fontSize: 12 }}>{t('wf.configuration')}</Divider>
         {(descriptor?.fields ?? []).map((f) => (
           <Form.Item key={f.name} label={f.label} required={f.required} extra={f.help}
             validateStatus={f.required && (def.config[f.name] === undefined || def.config[f.name] === '') ? 'warning' : undefined}>
@@ -71,7 +71,7 @@ export function NodeInspector({ node, groups, idEditable, takenIds, onChange, on
         {descriptor && descriptor.fields.length === 0 && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('wf.noConfig')}</Typography.Text>}
         {!descriptor?.trigger && (
           <>
-            <Divider orientation="left" orientationMargin={0} plain style={{ margin: '8px 0 12px', fontSize: 12 }}>{t('wf.execution')}</Divider>
+            <Divider orientation="left" orientationMargin={0} plain style={{ margin: '20px 0 12px', fontSize: 12 }}>{t('wf.execution')}</Divider>
             <Flex gap={12}>
               <Form.Item label={t('wf.retries')} style={{ flex: 1 }}>
                 <InputNumber min={0} max={10} value={def.retries} onChange={(v) => set({ retries: v ?? 0 })} style={{ width: '100%' }} />

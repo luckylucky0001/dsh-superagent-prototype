@@ -103,7 +103,6 @@ function RunCanvas({ run, selected, onSelect }: { run: Run; selected: string | n
       onPaneClick={() => onSelect(null)}
       fitView
       fitViewOptions={{ padding: 0.25, maxZoom: 1.1 }}
-      proOptions={{ hideAttribution: true }}
     >
       <Background gap={20} color="#e5e7eb" />
       <Controls showInteractive={false} />

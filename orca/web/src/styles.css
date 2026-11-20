@@ -19,6 +19,10 @@ body {
 
 .orca-sider {
   border-inline-end: 1px solid #eef0f3;
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
 }
 
 .orca-sider .ant-layout-sider-trigger {
@@ -180,11 +184,12 @@ body {
 }
 
 .orca-column {
-  flex: 0 0 280px;
+  flex: 1 1 0;
+  min-width: 230px;
+  min-height: calc(100vh - 190px);
   background: #eef1f5;
   border-radius: 8px;
   padding: 8px;
-  min-height: 240px;
   transition: background 0.15s, box-shadow 0.15s;
 }
 

@@ -32,8 +32,11 @@ orca:
     password: ${ORCA_ADMIN_PASSWORD:}
     name: ${ORCA_ADMIN_NAME:Admin}
   default-timezone: ${ORCA_TIMEZONE:Asia/Singapore}
+  downloads-dir: ${ORCA_DOWNLOADS_DIR:}
   lease-seconds: 60
   heartbeat-seconds: 15
+  http:
+    allowed-hosts: ${ORCA_HTTP_ALLOWED_HOSTS:}
 logging:
   level:
     dev.orca: INFO

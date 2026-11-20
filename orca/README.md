@@ -1,0 +1,93 @@
+# Orca
+
+> 代号 Orca（可替换）。把 AI 编码智能体当作团队成员：Issue 指派给 Agent，Agent 在你自己的机器上用 **OpenAI Codex** 或 **TRAE CLI** 干活，边做边汇报，做完交给人审；所有自动化都是**可编排的工作流**。
+
+- 后端：Java 21 · Spring Boot 4.1 · PostgreSQL（开发用 H2）
+- 运行时：`orca-daemon`，跑在开发机 / 构建机上，驱动本机已登录的 Codex（app-server 协议）或 TRAE CLI 2.x（ACP 协议）
+- 前端：React · TypeScript · Ant Design · React Flow（见 [web/README.md](web/README.md)）
+
+设计说明见 [docs/design.md](docs/design.md)，两种 CLI 的对接细节与实测记录见 [docs/providers.md](docs/providers.md)。
+
+## 架构
+
+```
+Web (React) ──REST + SSE──> orca-server (Spring Boot) <──WebSocket(daemon 主动连)── orca-daemon
+                                │  工作流引擎 / 任务调度 / 收件箱              │
+                                └── PostgreSQL                               ├─ codex app-server   (JSON-RPC/stdio)
+                                                                              └─ traecli acp serve  (ACP/stdio)
+```
+
+| 模块 | 说明 |
+|---|---|
+| `orca-workflow` | 无依赖的 DAG 工作流引擎：定义、组件 SPI、安全表达式与模板、校验、无状态执行器（异步等待/恢复、重试、onError、死路径消除、取消、重跑） |
+| `orca-protocol` | 统一的 Agent 事件模型（`AgentEvent`）与 server↔daemon 线协议（`Wire`） |
+| `orca-agent` | 与 CLI 无关的会话接口 + Codex 驱动 + TRAE CLI 驱动 + 通用 JSON-RPC 连接 |
+| `orca-daemon` | 运行时：注册、长连、探测、工作目录、审批策略、事件合并与断线重放 |
+| `orca-server` | 业务（Issue/评论/项目/Agent/运行时/任务/收件箱）、工作流宿主与触发器、内置组件、REST/SSE/WebSocket |
+| `web` | 前端 |
+
+## 快速开始（本机开发）
+
+前置：JDK 21、Maven 3.9、Node 22；至少一台机器装好并登录 `codex`（或 TRAE CLI 2.x）。
+
+```bash
+cd orca
+mvn -q install -DskipTests                     # 构建全部模块
+ORCA_ADMIN_PASSWORD=dev-pass java -jar orca-server/target/orca-server.jar   # http://localhost:8080
+(cd web && npm ci && npm run dev)              # 前端开发服务器 http://localhost:5173（代理 /api）
+```
+
+1. 用 `admin@orca.local` / `dev-pass` 登录。
+2. **运行时 → 添加运行时**，复制弹窗里的两条命令到要跑 Agent 的机器上执行：
+   ```bash
+   java -jar orca-daemon/target/orca-daemon-exec.jar register --server http://localhost:8080 --code orca_r_...
+   java -jar orca-daemon/target/orca-daemon-exec.jar start
+   ```
+   daemon 会探测本机的 Codex / TRAE CLI（版本、登录状态、模型、能力）并上报。`orca-daemon probe` 可单独查看。
+3. **Agents → 新建**：选 provider（codex / trae）、运行时、模型、权限档位。
+4. 新建 Issue，负责人选这个 Agent。内置工作流「Assigned issue → agent」会把 Issue 改成进行中、让 Agent 干活、把结果发成评论、移到审核中。之后在 Issue 下评论（或 `@AgentName`），Agent 会在**同一个会话**里继续。
+
+## 生产部署
+
+```bash
+cp deploy/.env.example deploy/.env          # 改密码和 ORCA_PUBLIC_URL
+docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+```
+
+镜像里自带前端；daemon 安装包可从 `{ORCA_PUBLIC_URL}/downloads/orca-daemon.jar` 下载。daemon 需要 Java 21，可用 `dist-scripts/` 下的启动脚本和 systemd unit。
+
+主要配置（环境变量）：
+
+| 变量 | 默认 | 说明 |
+|---|---|---|
+| `ORCA_DB_URL` / `ORCA_DB_USER` / `ORCA_DB_PASSWORD` | H2 文件库 | 生产用 PostgreSQL |
+| `ORCA_ADMIN_EMAIL` / `ORCA_ADMIN_PASSWORD` | `admin@orca.local` / 随机（打印在日志） | 首次启动创建的管理员 |
+| `ORCA_PUBLIC_URL` | `http://localhost:8080` | 用于生成 daemon 接入命令 |
+| `ORCA_TIMEZONE` | `Asia/Singapore` | 定时触发器默认时区 |
+| `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
+| `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
+
+## Agent 权限档位
+
+| 档位 | Codex | TRAE CLI | daemon 对审批请求 |
+|---|---|---|---|
+| `read_only` | `sandbox=read-only` | `default_permissions=":read-only"` | 全部拒绝 |
+| `workspace`（默认） | `sandbox=workspace-write`, `approvalPolicy=on-request` | `default_permissions=":workspace"`，白名单命令转 `--allowed-tool Bash(...)` | 工作区内改文件放行；白名单命令放行；其余拒绝 |
+| `full` | `danger-full-access` | `--yolo` | 仅在标记为 `--isolated` 的运行时生效，否则降级为 `workspace` |
+
+## 测试
+
+```bash
+mvn test                         # 全部离线测试（引擎、驱动对假 CLI、daemon、server 端到端）
+ORCA_CODEX_BIN=$(which codex) mvn test -pl orca-agent -Dgroups=live -Dorca.excludedGroups=none   # 真实 Codex（默认 gpt-6-luna）
+```
+
+离线测试用 `FakeCodexAppServer` / `FakeTraeAcp`（按真实报文字段构造的脚本化假 CLI）；`EndToEndTest` 在一个 JVM 里起 server + 真实 daemon + 假 Codex，覆盖指派→执行→评论→审核、评论续接会话、审批节点、校验报错。
+
+## 许可与合规说明
+
+- 参考了 Multica 的产品概念，**未使用其代码、UI 或素材**（Multica 许可证限制托管/嵌入式商用与 UI 品牌）。
+- Codex CLI 与 TRAE CLI 由用户自行安装、登录，本项目不分发它们。产品名不使用 "Codex"/"Trae"。
+- Codex app-server 要求在 `clientInfo.name` 标识客户端（本项目为 `orca`）；面向企业正式分发前应联系 OpenAI 加入已知客户端名单。
+- TRAE CLI 2.0 仅对 TRAE 企业版旗舰版开放，客户需自备账号。
+- 依赖均为宽松许可（Apache-2.0 / MIT / BSD / EPL/MPL 的 H2 仅用于开发）。

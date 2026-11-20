@@ -388,7 +388,7 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
     <>
       <Flex justify="space-between" align="center" gap={12} wrap="wrap" style={{ marginBottom: 12 }}>
         <Flex align="center" gap={12} style={{ minWidth: 0, flex: 1 }}>
-          <Breadcrumb items={[{ title: <Link to="/workflows">{t('nav.workflows')}</Link> }, { title: workflow ? t('common.edit') : t('wf.new') }]} />
+          <Breadcrumb style={{ whiteSpace: 'nowrap', flex: 'none' }} items={[{ title: <Link to="/workflows">{t('nav.workflows')}</Link> }, { title: workflow ? t('common.edit') : t('wf.new') }]} />
           <Input value={name} onChange={(e) => setName(e.target.value)} placeholder={t('wf.namePlaceholder')} variant="borderless"
             style={{ fontSize: 17, fontWeight: 600, maxWidth: 360 }} />
           <Input value={description} onChange={(e) => setDescription(e.target.value)} placeholder={t('wf.descriptionPlaceholder')}
@@ -441,7 +441,6 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
             deleteKeyCode={['Backspace', 'Delete']}
             snapToGrid
             snapGrid={[10, 10]}
-            proOptions={{ hideAttribution: true }}
           >
             <Background gap={20} color="#e5e7eb" />
             <Controls showInteractive={false} />

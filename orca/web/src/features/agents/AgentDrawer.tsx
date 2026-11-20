@@ -101,7 +101,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
       onClose={onClose}
       width={560}
       title={agent ? t('agents.edit', { name: agent.name }) : t('agents.new')}
-      destroyOnClose
+      destroyOnHidden
       extra={
         <Space>
           <Button onClick={onClose}>{t('common.cancel')}</Button>
@@ -109,7 +109,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         </Space>
       }
     >
-      <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)} requiredMark="optional">
+      <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)} requiredMark>
         <Form.Item name="name" label={t('agents.name')} extra={t('agents.nameHelp')}
           rules={[
             { required: true, message: t('form.required') },
@@ -156,7 +156,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
               onChange={() => form.setFieldsValue({ effort: undefined })}
             />
           </Form.Item>
-          <Form.Item name="effort" label={t('agents.effort')} style={{ width: 170 }}>
+          <Form.Item name="effort" label={t('agents.effort')} style={{ width: 200 }}>
             <Select allowClear placeholder={modelInfo?.defaultEffort ?? t('agents.modelDefault')}
               options={(efforts.length ? efforts : ['low', 'medium', 'high']).map((e) => ({ value: e, label: e }))} />
           </Form.Item>

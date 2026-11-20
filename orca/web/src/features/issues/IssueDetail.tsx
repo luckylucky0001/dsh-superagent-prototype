@@ -28,7 +28,7 @@ import { AgentAvatar, MemberAvatar, ProviderTag } from '@/components/AgentAvatar
 import { Markdown } from '@/components/Markdown';
 import { EmptyState, QueryState } from '@/components/QueryState';
 import { PriorityIcon, StatusTag } from '@/components/StatusTag';
-import { fmtDateTime, fmtTime, fromNow } from '@/components/format';
+import { fmtDateTime, fromNow } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
 import { TaskCard } from '@/features/tasks/TaskCard';
 import { useAgentOptions, useLabelOptions } from './NewIssueModal';
@@ -191,7 +191,7 @@ function Properties({ issue, update }: { issue: Issue; update: (p: IssuePatch) =
         <Divider style={{ margin: '2px 0' }} />
         <Descriptions size="small" column={1} colon={false}
           items={[
-            { key: 'c', label: t('common.created'), children: fmtTime(issue.createdAt) },
+            { key: 'c', label: t('common.created'), children: fmtDateTime(issue.createdAt) },
             { key: 'u', label: t('common.updated'), children: fromNow(issue.updatedAt) },
           ]} />
         <div>

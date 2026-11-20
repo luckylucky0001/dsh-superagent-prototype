@@ -1,10 +1,11 @@
 import { useEffect, type ReactNode } from 'react';
 import { Navigate, useLocation, useNavigate } from 'react-router-dom';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { Flex, Spin } from 'antd';
+import { Button, Flex, Result, Spin } from 'antd';
 import { api, ApiError, onUnauthorized } from '@/api/client';
 import { qk } from '@/api/queries';
 import type { Member } from '@/api/types';
+import { useT } from './i18n';
 
 export function useMe() {
   return useQuery<Member, Error>({
@@ -21,6 +22,7 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   const location = useLocation();
   const navigate = useNavigate();
   const qc = useQueryClient();
+  const t = useT();
 
   useEffect(() => {
     onUnauthorized(() => {
@@ -38,6 +40,12 @@ export function RequireAuth({ children }: { children: ReactNode }) {
   }
   if (me.error instanceof ApiError && me.error.status === 401) {
     return <Navigate to="/login" replace state={{ from: location.pathname + location.search }} />;
+  }
+  if (me.error && !me.data) {
+    return (
+      <Result status="warning" title={t('common.unreachable')} subTitle={me.error.message}
+        extra={<Button type="primary" onClick={() => void me.refetch()}>{t('common.retry')}</Button>} style={{ marginTop: 96 }} />
+    );
   }
   return <>{children}</>;
 }
