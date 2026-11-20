@@ -93,6 +93,19 @@ public class AgentController {
     return AgentView.of(a);
   }
 
+  public record AskInput(String prompt) {}
+
+  /** A one-off task for the agent, without an issue; the transcript is at /tasks/{id}. */
+  @PostMapping("/{id}/ask")
+  public Views.TaskView ask(@PathVariable String id, @RequestBody AskInput in) {
+    if (in.prompt() == null || in.prompt().isBlank()) {
+      throw ApiException.bad("prompt is empty");
+    }
+    Agent a = find(id);
+    return Views.TaskView.of(tasks.enqueue(new dev.orca.server.task.TaskRequest(a.id, null, in.prompt(), "ask", null, "new",
+        java.util.Map.of("source", "ask", "by", dev.orca.server.auth.CurrentUser.id()), null)));
+  }
+
   @GetMapping("/{id}/tasks")
   public List<Views.TaskView> tasks(@PathVariable String id) {
     return tasks.forAgent(id).stream().limit(100).map(Views.TaskView::of).toList();

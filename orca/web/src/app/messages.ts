@@ -464,6 +464,11 @@ export const en = {
   'skills.agentHelp': "Skills are added to this agent's instructions. Manage them in Settings → Skills.",
   'issues.attach': "Attach",
   'issues.attachHint': "Paste or drop screenshots; agents receive images on their next task.",
+  'agents.ask': "Ask",
+  'agents.askTitle': "Ask {name}",
+  'agents.askSend': "Start",
+  'agents.askHelp': "A one-off task without an issue, in its own scratch directory. You can follow it live, steer it or cancel it.",
+  'agents.askPlaceholder': "e.g. Summarise how authentication works in this service",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -921,4 +926,9 @@ export const zh: Record<MessageKey, string> = {
   'skills.agentHelp': "技能会加入该 Agent 的指令。在 设置 → 技能 中管理。",
   'issues.attach': "附件",
   'issues.attachHint': "可直接粘贴或拖入截图；Agent 在下一个任务中会收到图片。",
+  'agents.ask': "直接提问",
+  'agents.askTitle': "向 {name} 提问",
+  'agents.askSend': "开始",
+  'agents.askHelp': "不关联 Issue 的一次性任务，在独立的临时目录中运行。可以实时查看、插话或取消。",
+  'agents.askPlaceholder': "例如：总结一下这个服务的鉴权是怎么实现的",
 };

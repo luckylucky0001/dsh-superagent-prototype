@@ -1,8 +1,8 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, Card, Col, Descriptions, Flex, Popconfirm, Row, Space, Tag, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined } from '@ant-design/icons';
+import { Breadcrumb, Button, Card, Col, Descriptions, Flex, Input, Modal, Popconfirm, Row, Space, Tag, Typography } from 'antd';
+import { DeleteOutlined, EditOutlined, MessageOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useRuntimeMap } from '@/api/queries';
 import { useT } from '@/app/i18n';
@@ -25,6 +25,17 @@ export function AgentDetail() {
   const agent = useQuery({ queryKey: qk.agent(id), queryFn: () => api.agent(id) });
   const tasks = useQuery({ queryKey: qk.agentTasks(id), queryFn: () => api.agentTasks(id) });
   const [editing, setEditing] = useState(false);
+  const [asking, setAsking] = useState(false);
+  const [prompt, setPrompt] = useState('');
+  const ask = useMutation({
+    mutationFn: () => api.askAgent(id, prompt),
+    onSuccess: (task) => {
+      setAsking(false);
+      setPrompt('');
+      navigate(`/tasks/${task.id}`);
+    },
+    onError: notify.error,
+  });
   const archive = useMutation({
     mutationFn: () => api.archiveAgent(id),
     onSuccess: () => {
@@ -55,6 +66,7 @@ export function AgentDetail() {
                 </div>
               </Flex>
               <Space>
+                <Button type="primary" icon={<MessageOutlined />} onClick={() => setAsking(true)}>{t('agents.ask')}</Button>
                 <Button icon={<EditOutlined />} onClick={() => setEditing(true)}>{t('common.edit')}</Button>
                 <Popconfirm title={t('agents.archiveConfirm')} onConfirm={() => archive.mutate()} okButtonProps={{ danger: true }}>
                   <Button danger icon={<DeleteOutlined />} loading={archive.isPending}>{t('agents.archive')}</Button>
@@ -62,6 +74,13 @@ export function AgentDetail() {
               </Space>
             </Flex>
           </Card>
+          <Modal open={asking} title={t('agents.askTitle', { name: a.name })} onCancel={() => setAsking(false)}
+            okText={t('agents.askSend')} okButtonProps={{ disabled: !prompt.trim() }} confirmLoading={ask.isPending}
+            onOk={() => ask.mutate()} destroyOnHidden>
+            <Typography.Paragraph type="secondary">{t('agents.askHelp')}</Typography.Paragraph>
+            <Input.TextArea value={prompt} onChange={(e) => setPrompt(e.target.value)} autoSize={{ minRows: 4, maxRows: 14 }}
+              autoFocus placeholder={t('agents.askPlaceholder')} />
+          </Modal>
           <Row gutter={16}>
             <Col xs={24} xl={8}>
               <Card size="small" title={t('agents.configuration')} style={{ marginBottom: 16 }}>
