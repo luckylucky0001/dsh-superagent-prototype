@@ -310,30 +310,41 @@ final class TaskRunner implements Runnable {
   }
 
   /**
-   * File changes are reported relative to the workspace: easier to read, and the machine's directory
-   * layout stays on the machine.
+   * Paths are reported relative to the workspace: file changes, and the workspace path inside tool titles
+   * and commands (TRAE puts absolute paths in titles such as "Search for '*.py' in /home/…/WMS-5"). Easier
+   * to read, and the machine's directory layout stays on the machine.
    */
   static AgentEvent relativize(AgentEvent e, Path dir) {
-    if (!(e.data().get("changes") instanceof List<?> changes) || changes.isEmpty()) {
-      return e;
-    }
-    String prefix = dir.toAbsolutePath().normalize() + java.io.File.separator;
+    String root = dir.toAbsolutePath().normalize().toString();
+    String prefix = root + java.io.File.separator;
+    boolean touched = false;
     Map<String, Object> data = new LinkedHashMap<>(e.data());
-    List<Object> out = new ArrayList<>();
-    for (Object c : changes) {
-      if (c instanceof Map<?, ?> m && m.get("path") instanceof String path && path.startsWith(prefix)) {
-        Map<Object, Object> copy = new LinkedHashMap<>(m);
-        copy.put("path", path.substring(prefix.length()));
-        out.add(copy);
-      } else {
-        out.add(c);
+    if (data.get("changes") instanceof List<?> changes && !changes.isEmpty()) {
+      List<Object> out = new ArrayList<>();
+      for (Object c : changes) {
+        if (c instanceof Map<?, ?> m && m.get("path") instanceof String path && path.startsWith(prefix)) {
+          Map<Object, Object> copy = new LinkedHashMap<>(m);
+          copy.put("path", path.substring(prefix.length()));
+          out.add(copy);
+        } else {
+          out.add(c);
+        }
+      }
+      data.put("changes", out);
+      touched = true;
+    }
+    for (String key : List.of("title", "command")) {
+      if (data.get(key) instanceof String text && text.contains(root)) {
+        data.put(key, shortenPaths(text, root, prefix));
+        touched = true;
       }
     }
-    data.put("changes", out);
-    if (data.get("title") instanceof String title) {
-      data.put("title", title.replace(prefix, ""));
-    }
-    return new AgentEvent(e.seq(), e.ts(), e.type(), data);
+    return touched ? new AgentEvent(e.seq(), e.ts(), e.type(), data) : e;
+  }
+
+  /** {@code /work/WMS-5/wms/x.py} becomes {@code wms/x.py}; the workspace itself becomes {@code .}. */
+  static String shortenPaths(String text, String root, String prefix) {
+    return text.replace(prefix, "").replaceAll(java.util.regex.Pattern.quote(root) + "(?![\\w./-])", ".");
   }
 
   /** Server paths are relative so they work from wherever this daemon reaches the server. */

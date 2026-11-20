@@ -194,4 +194,17 @@ class DaemonUnitTest {
     assertTrue(text.contains("Codex CLI: not installed"), text);
     assertTrue(text.contains("problem(s) to fix"), text);
   }
+
+  @Test
+  void toolTitlesShowWorkspacePathsRelative() {
+    Path dir = Path.of("/work/issues/WMS-5");
+    AgentEvent e = AgentEvent.of(AgentEvent.TOOL_STARTED, "title", "Search for '**/*.py' in /work/issues/WMS-5",
+        "command", "cd /work/issues/WMS-5 && python3 -m unittest /work/issues/WMS-5/tests/test_x.py");
+    AgentEvent r = TaskRunner.relativize(e, dir);
+    assertEquals("Search for '**/*.py' in .", r.data().get("title"));
+    assertEquals("cd . && python3 -m unittest tests/test_x.py", r.data().get("command"));
+    AgentEvent other = AgentEvent.of(AgentEvent.TOOL_STARTED, "title", "Read /work/issues/WMS-50/a.py");
+    assertEquals("Read /work/issues/WMS-50/a.py", TaskRunner.relativize(other, dir).data().get("title"),
+        "a sibling folder with a longer name is not touched");
+  }
 }

@@ -55,6 +55,7 @@ final class TraeSession implements AgentSession {
   private volatile boolean userCancelled;
   private volatile String declinedInTurn;
   private long taskTokens;
+  private String effortNotice;
 
   private volatile boolean streaming;
   private volatile AgentEventSink sink = e -> {};
@@ -231,10 +232,42 @@ final class TraeSession implements AgentSession {
       throw new AgentException(ErrorCodes.MODEL_NOT_FOUND, "TRAE CLI has no model " + wanted + "; available: "
           + String.join(", ", names));
     }
+    Object options = result;
     if (!id.equals(current)) {
-      conn.call("session/set_config_option", Map.of("sessionId", sessionId, "configId", "model", "value", id), timeout);
+      options = conn.call("session/set_config_option", Map.of("sessionId", sessionId, "configId", "model", "value", id),
+          timeout);
     }
+    selectEffort(options);
     return id;
+  }
+
+  /**
+   * Reasoning effort is a per-model config option in TRAE ({@code low/high/xhigh} for GLM-5.3, none for
+   * some fast models); a value the model does not offer would be ignored silently, so it is checked here.
+   */
+  private void selectEffort(Object configResult) throws AgentException {
+    String wanted = spec.effort();
+    if (wanted == null || wanted.isBlank()) {
+      return;
+    }
+    for (Object o : Json.list(configResult, "configOptions")) {
+      if (!"reasoning_effort".equals(Json.str(o, "id"))) {
+        continue;
+      }
+      for (Object v : Json.list(o, "options")) {
+        if (wanted.equalsIgnoreCase(Json.str(v, "value"))) {
+          if (!wanted.equalsIgnoreCase(Json.str(o, "currentValue"))) {
+            conn.call("session/set_config_option", Map.of("sessionId", sessionId, "configId", "reasoning_effort",
+                "value", Json.str(v, "value")), timeout);
+          }
+          return;
+        }
+      }
+      effortNotice = "reasoning effort " + wanted + " is not offered by this model; it uses "
+          + Json.str(o, "currentValue");
+      return;
+    }
+    effortNotice = "this model has no reasoning-effort setting; " + wanted + " is ignored";
   }
 
   @Override
@@ -289,6 +322,10 @@ final class TraeSession implements AgentSession {
     }
     String turnId = "turn-" + segmentNo;
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", turnId));
+    if (effortNotice != null) {
+      eventSink.accept(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message", effortNotice));
+      effortNotice = null;
+    }
     streaming = true;
     clock.reset();
     TurnResult.Status status = TurnResult.Status.COMPLETED;

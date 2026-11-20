@@ -121,3 +121,20 @@ export function useTaskEvents(taskId: string, qc: QueryClient) {
     staleTime: Infinity,
   });
 }
+
+/**
+ * The display name of an agent's model when its runtime reports one (TRAE model ids such as
+ * `Doubao_1_6` differ from their names, "Doubao-Seed-Code"); otherwise the id as configured.
+ */
+export function useModelLabel(): (agent: { provider: string; runtimeId: string | null; model: string | null }) => string | null {
+  const runtimes = useRuntimeMap();
+  return (agent) => {
+    if (!agent.model) return null;
+    const pick = agent.runtimeId ? [runtimes.get(agent.runtimeId)] : [...runtimes.values()];
+    for (const r of pick) {
+      const m = r?.providers.find((p) => p.provider === agent.provider)?.models.find((x) => x.id === agent.model);
+      if (m?.displayName) return m.displayName;
+    }
+    return agent.model;
+  };
+}

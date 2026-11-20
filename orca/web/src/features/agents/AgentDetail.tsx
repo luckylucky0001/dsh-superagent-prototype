@@ -4,7 +4,7 @@ import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Breadcrumb, Button, Card, Col, Descriptions, Flex, Input, Modal, Popconfirm, Row, Select, Space, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, MessageOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
-import { qk, useProjects, useRuntimeMap } from '@/api/queries';
+import { qk, useModelLabel, useProjects, useRuntimeMap } from '@/api/queries';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { QueryState } from '@/components/QueryState';
@@ -18,6 +18,7 @@ import { TaskTable } from './TaskTable';
 export function AgentDetail() {
   const { id = '' } = useParams();
   const t = useT();
+  const modelLabel = useModelLabel();
   const notify = useNotify();
   const qc = useQueryClient();
   const navigate = useNavigate();
@@ -95,7 +96,7 @@ export function AgentDetail() {
                 <Descriptions size="small" column={1}
                   items={[
                     { key: 'rt', label: t('common.runtime'), children: rt ? <Space size={6}>{rt.name}<StatusTag status={rt.status} /></Space> : t('agents.anyRuntime') },
-                    { key: 'model', label: t('agents.model'), children: <span className="orca-mono">{a.model ?? t('agents.modelDefault')}</span> },
+                    { key: 'model', label: t('agents.model'), children: <span className="orca-mono">{a.model ? (modelLabel(a) !== a.model ? `${modelLabel(a)} (${a.model})` : a.model) : t('agents.modelDefault')}</span> },
                     { key: 'effort', label: t('agents.effort'), children: a.effort ?? '—' },
                     { key: 'perm', label: t('agents.permission'), children: <Tag bordered={false} color={PERMISSION_COLORS[a.permission]}>{t.dyn(`agents.permShort.${a.permission}`, a.permission)}</Tag> },
                     { key: 'net', label: t('agents.network'), children: a.permission === 'workspace' && a.networkAccess ? t('agents.networkOn') : t('agents.networkOff') },

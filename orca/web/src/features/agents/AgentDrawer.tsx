@@ -201,7 +201,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
           </Form.Item>
           <Form.Item name="effort" label={t('agents.effort')} style={{ width: 200 }}>
             <Select allowClear placeholder={modelInfo?.defaultEffort ?? t('agents.modelDefault')}
-              options={(efforts.length ? efforts : ['low', 'medium', 'high']).map((e) => ({ value: e, label: e }))} />
+              options={(efforts.length ? efforts : provider === 'trae' ? ['low', 'high', 'xhigh'] : ['low', 'medium', 'high']).map((e) => ({ value: e, label: e }))} />
           </Form.Item>
         </Flex>
         <Form.Item name="permission" label={t('agents.permission')}>

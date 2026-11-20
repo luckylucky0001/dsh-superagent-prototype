@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { Button, Card, Col, Flex, Row, Space, Tag, Typography } from 'antd';
 import { PlusOutlined, RobotOutlined } from '@ant-design/icons';
-import { useAgents, useRuntimeMap } from '@/api/queries';
+import { useAgents, useModelLabel, useRuntimeMap } from '@/api/queries';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { PageHeader } from '@/components/PageHeader';
@@ -14,6 +14,7 @@ export const PERMISSION_COLORS: Record<string, string> = { read_only: 'green', w
 
 export function AgentsPage() {
   const t = useT();
+  const modelLabel = useModelLabel();
   const agents = useAgents();
   const runtimes = useRuntimeMap();
   const navigate = useNavigate();
@@ -48,7 +49,7 @@ export function AgentsPage() {
                           {a.description || '—'}
                         </Typography.Paragraph>
                         <Space size={[6, 6]} wrap>
-                          {a.model && <Tag bordered={false} className="orca-mono">{a.model}{a.effort ? ` · ${a.effort}` : ''}</Tag>}
+                          {a.model && <Tag bordered={false} className="orca-mono">{modelLabel(a)}{a.effort ? ` · ${a.effort}` : ''}</Tag>}
                           <Tag bordered={false} color={PERMISSION_COLORS[a.permission]}>{t.dyn(`agents.permShort.${a.permission}`, a.permission)}</Tag>
                           {rt ? <Space size={4}><Typography.Text type="secondary" style={{ fontSize: 12 }}>{rt.name}</Typography.Text><StatusTag status={rt.status} /></Space>
                             : <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('agents.anyRuntime')}</Typography.Text>}
