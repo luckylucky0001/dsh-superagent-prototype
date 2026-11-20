@@ -139,6 +139,11 @@ export const api = {
   createSkill: (input: SkillInput) => request<Skill>('POST', '/skills', input),
   updateSkill: (id: string, input: SkillInput) => request<Skill>('PUT', `/skills/${enc(id)}`, input),
   deleteSkill: (id: string) => request<unknown>('DELETE', `/skills/${enc(id)}`),
+  tokens: () => request<{ id: string; label: string; createdAt: number; expiresAt: number | null }[]>('GET', '/auth/tokens'),
+  createToken: (label: string, days: number) => request<{ token: string }>('POST', '/auth/tokens', { label, days }),
+  revokeToken: (id: string) => request<unknown>('DELETE', `/auth/tokens/${enc(id)}`),
+  skillLibrary: () => request<{ name: string; description: string | null; content: string; installed: boolean }[]>('GET', '/skills/library'),
+  installSkill: (name: string) => request<{ added: number }>('POST', `/skills/library/${enc(name)}`),
 
   // members
   members: () => request<Member[]>('GET', '/members'),

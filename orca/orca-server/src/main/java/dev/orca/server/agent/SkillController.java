@@ -22,10 +22,40 @@ import org.springframework.web.bind.annotation.RestController;
 public class SkillController {
   private final SkillRepo skills;
   private final Realtime realtime;
+  private final SkillLibrary library;
 
-  public SkillController(SkillRepo skills, Realtime realtime) {
+  public SkillController(SkillRepo skills, Realtime realtime, SkillLibrary library) {
     this.skills = skills;
     this.realtime = realtime;
+    this.library = library;
+  }
+
+  public record LibraryEntry(String name, String description, String content, boolean installed) {}
+
+  /** Skills shipped with Orca, and whether a skill of that name exists. */
+  @GetMapping("/library")
+  public List<LibraryEntry> library() {
+    return library.entries().stream().map(e -> new LibraryEntry(e.name(), e.description(), e.content(),
+        skills.findByNameIgnoreCase(e.name()).isPresent())).toList();
+  }
+
+  /** Adds one library skill (or all missing ones with {@code name = "*"}). */
+  @PostMapping("/library/{name}")
+  @Transactional
+  public Map<String, Object> install(@PathVariable String name) {
+    int added;
+    if (name.equals("*")) {
+      added = library.installMissing(skills);
+    } else {
+      SkillLibrary.Entry e = library.find(name).orElseThrow(() -> ApiException.notFound("library skill " + name));
+      if (skills.findByNameIgnoreCase(e.name()).isPresent()) {
+        throw ApiException.bad("a skill named " + e.name() + " exists");
+      }
+      skills.save(SkillLibrary.toSkill(e));
+      added = 1;
+    }
+    realtime.publish("skill.updated", Map.of("library", true));
+    return Map.of("added", added);
   }
 
   public record SkillInput(String name, String description, String content) {}

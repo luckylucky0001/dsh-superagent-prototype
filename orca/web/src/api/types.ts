@@ -445,7 +445,7 @@ export interface InboxForm {
   questions?: Question[];
   schema?: JsonSchema;
   /** Present when an agent asks to go beyond its runtime policy. */
-  approval?: { kind: string; command?: string; paths?: string[]; grantRoot?: string; reason?: string; cwd?: string };
+  approval?: { kind: string; command?: string; paths?: string[]; grantRoot?: string; reason?: string; cwd?: string; sessionAllowed?: boolean };
 }
 
 export interface InboxItem {

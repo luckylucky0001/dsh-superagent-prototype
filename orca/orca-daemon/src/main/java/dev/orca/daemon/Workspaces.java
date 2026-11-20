@@ -25,6 +25,10 @@ public final class Workspaces {
     this.root = root.toAbsolutePath().normalize();
   }
 
+  static boolean sameRepo(String a, String b) {
+    return a.replaceAll("(\\.git)?/*$", "").equals(b.replaceAll("(\\.git)?/*$", ""));
+  }
+
   public Path prepare(String key, Wire.RepoSpec repo) throws AgentException {
     if (key == null || !KEY.matcher(key).matches() || key.contains("..")) {
       throw new AgentException(ErrorCodes.PROTOCOL, "invalid workspace key: " + key);
@@ -39,6 +43,14 @@ public final class Workspaces {
         return dir;
       }
       if (!Files.isDirectory(dir.resolve(".git"))) {
+        if (Files.isDirectory(dir)) {
+          try (var entries = Files.list(dir)) {
+            if (entries.findAny().isPresent()) {
+              throw new AgentException(ErrorCodes.AGENT_ERROR, "workspace " + key + " already holds files that are not a "
+                  + "checkout of " + repo.url());
+            }
+          }
+        }
         Files.createDirectories(dir.getParent());
         git(dir.getParent(), "clone", "--quiet", repo.url(), dir.getFileName().toString());
         String base = repo.baseBranch();
@@ -50,6 +62,12 @@ public final class Workspaces {
         }
         excludeCaches(dir);
       } else {
+        Executables.Output origin = Executables.run(List.of("git", "-C", dir.toString(), "remote", "get-url", "origin"),
+            Map.of(), 30);
+        if (origin.exitCode() != 0 || !sameRepo(origin.stdout().trim(), repo.url())) {
+          throw new AgentException(ErrorCodes.AGENT_ERROR, "workspace " + key + " is a checkout of "
+              + origin.stdout().trim() + ", not " + repo.url());
+        }
         // keep local work; just refresh remote refs so the agent can rebase if it wants to
         Executables.run(List.of("git", "-C", dir.toString(), "fetch", "--quiet", "--all"), Map.of(), 120);
       }

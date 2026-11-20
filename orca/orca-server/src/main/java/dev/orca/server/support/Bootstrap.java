@@ -35,15 +35,20 @@ public class Bootstrap implements ApplicationRunner {
   private final WorkflowService workflows;
   private final WorkflowRepo workflowRepo;
   private final OrcaProperties props;
+  private final dev.orca.server.repo.SkillRepo skillRepo;
+  private final dev.orca.server.agent.SkillLibrary skillLibrary;
 
   public Bootstrap(MemberRepo members, AuthService auth, IssueService issues, WorkflowService workflows,
-      WorkflowRepo workflowRepo, OrcaProperties props) {
+      WorkflowRepo workflowRepo, OrcaProperties props, dev.orca.server.repo.SkillRepo skillRepo,
+      dev.orca.server.agent.SkillLibrary skillLibrary) {
     this.members = members;
     this.auth = auth;
     this.issues = issues;
     this.workflows = workflows;
     this.workflowRepo = workflowRepo;
     this.props = props;
+    this.skillRepo = skillRepo;
+    this.skillLibrary = skillLibrary;
   }
 
   @Override
@@ -68,6 +73,11 @@ public class Bootstrap implements ApplicationRunner {
     }
     if (issues.projects().isEmpty()) {
       issues.createProject("ORCA", "Default", "Default project", null, null);
+    }
+    if (skillRepo.count() == 0) {
+      // first start: ship the skill library; later additions are imported from Settings → Skills
+      int added = skillLibrary.installMissing(skillRepo);
+      log.info("added {} skills from the built-in library", added);
     }
     if (!workflowRepo.existsById(ASSIGN_WORKFLOW)) {
       workflows.save(ASSIGN_WORKFLOW, "Assigned issue → agent",

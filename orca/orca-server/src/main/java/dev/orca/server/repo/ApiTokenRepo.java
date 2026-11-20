@@ -11,4 +11,6 @@ public interface ApiTokenRepo extends JpaRepository<ApiToken, String> {
   List<ApiToken> findByRuntimeId(String runtimeId);
 
   List<ApiToken> findByKindAndLabel(String kind, String label);
+
+  List<ApiToken> findByKindAndMemberIdOrderByCreatedAtDesc(String kind, String memberId);
 }

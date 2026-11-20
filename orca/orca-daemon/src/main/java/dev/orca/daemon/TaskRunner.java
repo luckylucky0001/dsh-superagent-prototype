@@ -39,6 +39,8 @@ final class TaskRunner implements Runnable {
   private final boolean isolated;
   private final boolean allowExtraArgs;
   private final boolean allowNetwork;
+  /** This task's own directory, once prepared. */
+  private volatile Path taskDir;
   private final String server;
   private final Runnable onDone;
   private final EventBuffer buffer = new EventBuffer();
@@ -127,12 +129,17 @@ final class TaskRunner implements Runnable {
     }
     Wire.AgentSpec a = task.agent();
     Permission permission = Permission.parse(a == null ? null : a.permission());
+    if (task.review() != null && permission != Permission.READ_ONLY) {
+      // a reviewer reads; whatever it might change would be committed by the next implementer
+      permission = Permission.READ_ONLY;
+    }
     if (permission == Permission.FULL && !isolated) {
       buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn",
           "message", "full access is only allowed on isolated runtimes; using workspace permissions"));
       permission = Permission.WORKSPACE;
     }
     Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
+    taskDir = dir;
     List<String> allowed = ApprovalPolicy.sanitize(a == null ? List.of() : a.allowedCommands());
     ApprovalPolicy policy = new ApprovalPolicy(permission, dir, allowed);
     boolean escalate = a != null && a.escalateApprovals() && permission != Permission.READ_ONLY;
@@ -418,7 +425,9 @@ final class TaskRunner implements Runnable {
     List<String> paths = r.paths() == null ? List.of() : r.paths();
     boolean command = r.kind() == Interaction.ApprovalKind.COMMAND && r.command() != null;
     String shown = command ? dev.orca.agent.core.Executables.unwrapShell(r.command()) : null;
-    String grantRoot = !command && r.cwd() != null ? relativeCwd(r.cwd()) : null;
+    String grantRoot = !command && r.cwd() != null ? shownPath(r.cwd()) : null;
+    // "for this task" only for grants inside the task's own folder; anything wider is decided once at a time
+    boolean sessionAllowed = command || grantRoot == null || !Path.of(grantRoot).isAbsolute();
     String what = command ? shown
         : grantRoot != null ? "write access under " + grantRoot + (paths.isEmpty() ? "" : " (" + String.join(", ", paths) + ")")
             : !paths.isEmpty() ? String.join(", ", paths) : String.valueOf(r.title());
@@ -431,17 +440,23 @@ final class TaskRunner implements Runnable {
     approval.put("paths", paths.isEmpty() ? null : paths);
     approval.put("grantRoot", grantRoot);
     approval.put("reason", r.reason());
-    approval.put("cwd", command && r.cwd() != null ? relativeCwd(r.cwd()) : null);
+    approval.put("cwd", command && r.cwd() != null ? shownPath(r.cwd()) : null);
+    approval.put("sessionAllowed", sessionAllowed);
     approval.values().removeIf(java.util.Objects::isNull);
     Map<String, Object> question = new LinkedHashMap<>();
     question.put("id", "decision");
     question.put("header", "Approval");
     question.put("question", (r.reason() == null || r.reason().isBlank() ? "" : r.reason() + "\n\n") + what);
-    question.put("options", List.of(Map.of("label", APPROVE_ONCE), Map.of("label", APPROVE_TASK), Map.of("label", DENY)));
+    question.put("options", sessionAllowed
+        ? List.of(Map.of("label", APPROVE_ONCE), Map.of("label", APPROVE_TASK), Map.of("label", DENY))
+        : List.of(Map.of("label", APPROVE_ONCE), Map.of("label", DENY)));
     buffer.add(AgentEvent.of(AgentEvent.INPUT_REQUESTED, "requestId", requestId, "title", title,
         "questions", List.of(question), "approval", approval));
     Interaction.InputReply reply = awaitInput(new Interaction.InputRequest(requestId, title, List.of(question), null));
     Interaction.Decision d = decisionFrom(reply);
+    if (d == Interaction.Decision.ACCEPT_FOR_SESSION && !sessionAllowed) {
+      d = Interaction.Decision.ACCEPT;
+    }
     buffer.add(AgentEvent.of(AgentEvent.INPUT_RESOLVED, "requestId", requestId, "declined", reply.declined(),
         "answers", reply.answers()));
     if (!reply.declined()) {
@@ -468,13 +483,21 @@ final class TaskRunner implements Runnable {
     };
   }
 
-  private String relativeCwd(String cwd) {
+  /**
+   * A path as a person should see it: relative to this task's folder ({@code .} for the folder itself),
+   * absolute for anything outside it, so a grant wider than the task is never disguised.
+   */
+  private String shownPath(String path) {
     try {
-      Path root = workspaces.root().toAbsolutePath().normalize();
-      Path p = Path.of(cwd).toAbsolutePath().normalize();
-      return p.startsWith(root) ? root.relativize(p).toString() : cwd;
+      Path p = Path.of(path).toAbsolutePath().normalize();
+      Path dir = taskDir == null ? null : taskDir.toAbsolutePath().normalize();
+      if (dir != null && p.startsWith(dir)) {
+        String rel = dir.relativize(p).toString();
+        return rel.isEmpty() ? "." : rel;
+      }
+      return p.toString();
     } catch (RuntimeException e) {
-      return cwd;
+      return path;
     }
   }
 

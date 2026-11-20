@@ -85,15 +85,17 @@ function TaskApprovalForm({ item }: { item: InboxItem }) {
       {a.paths && a.paths.length > 0 && (
         <pre className="orca-mono orca-approval-cmd">{a.paths.join('\n')}</pre>
       )}
-      {a.grantRoot && <Typography.Text strong>{t('inbox.approvalGrant', { path: a.grantRoot })}</Typography.Text>}
+      {a.grantRoot != null && <Typography.Text strong>{t('inbox.approvalGrant', { path: a.grantRoot })}</Typography.Text>}
       {a.cwd && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('inbox.approvalCwd', { cwd: a.cwd })}</Typography.Text>}
       <Space wrap>
         <Button type="primary" icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow once'} onClick={() => send('Allow once')}>
           {t('inbox.allowOnce')}
         </Button>
-        <Button icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow for this task'} onClick={() => send('Allow for this task')}>
-          {t('inbox.allowTask')}
-        </Button>
+        {a.sessionAllowed !== false && (
+          <Button icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow for this task'} onClick={() => send('Allow for this task')}>
+            {t('inbox.allowTask')}
+          </Button>
+        )}
         <Button danger icon={<CloseOutlined />} loading={answer.isPending && which === 'Deny'} onClick={() => send('Deny')}>
           {t('inbox.deny')}
         </Button>

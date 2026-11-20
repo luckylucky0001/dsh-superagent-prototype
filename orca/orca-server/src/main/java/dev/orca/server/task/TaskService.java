@@ -109,12 +109,17 @@ public class TaskService {
 
   /** A project by id or key. */
   Project project(String ref) {
-    return projects.findById(ref).or(() -> projects.findByKeyPrefix(ref.toUpperCase(java.util.Locale.ROOT)))
+    String r = ref.trim();
+    return projects.findById(r).or(() -> projects.findByKeyPrefix(r.toUpperCase(java.util.Locale.ROOT)))
         .orElseThrow(() -> ApiException.bad("project " + ref + " does not exist"));
   }
 
   /** The branch an issue's work is compared against: its project's default branch, else {@code main}. */
-  public String defaultBranch(String issueRef) {
+  public String defaultBranch(String issueRef, String projectRef) {
+    if ((issueRef == null || issueRef.isBlank()) && projectRef != null && !projectRef.isBlank()) {
+      Project p = project(projectRef);
+      return p.defaultBranch == null || p.defaultBranch.isBlank() ? "main" : p.defaultBranch;
+    }
     if (issueRef == null || issueRef.isBlank()) {
       return "main";
     }
@@ -123,7 +128,9 @@ public class TaskService {
     return p == null || p.defaultBranch == null || p.defaultBranch.isBlank() ? "main" : p.defaultBranch;
   }
 
-  @Transactional
+  // a refused request must not mark a calling workflow's transaction rollback-only: the engine records the
+  // failure as a failed node, and the rest of the run's progress has to be committed with it
+  @Transactional(noRollbackFor = ApiException.class)
   public Task enqueue(TaskRequest req) {
     Agent agent = agents.findById(req.agentId()).orElseThrow(() -> ApiException.notFound("agent " + req.agentId()));
     if (agent.archived) {
@@ -151,6 +158,11 @@ public class TaskService {
     t.status = TaskStatus.QUEUED;
     t.queuedAt = Ids.now();
     t.workspaceKey = workspaceKey(agent, issue, req.origin());
+    if (t.projectId != null) {
+      // its own checkout: other no-issue nodes of the run, or other projects, never share it
+      String key = projects.findById(t.projectId).map(p -> p.keyPrefix).orElse("project");
+      t.workspaceKey = t.workspaceKey + "/" + key.replaceAll("[^A-Za-z0-9._-]", "-");
+    }
     if ("continue".equals(req.sessionMode()) && issue != null) {
       for (Task prev : tasks.findByAgentIdAndIssueIdAndStatusOrderByFinishedAtDesc(agent.id, issue.id, TaskStatus.SUCCEEDED)) {
         if (prev.sessionRef != null && prev.provider.equals(agent.provider)
@@ -190,10 +202,12 @@ public class TaskService {
     origin.put("by", by);
     origin.put("followUpOf", prev.id);
     Task t = enqueue(new TaskRequest(agent.id, null, prompt, "ask", null, "new", origin, null));
-    t.workspaceKey = prev.workspaceKey;
-    if (prev.provider.equals(agent.provider) && (agent.runtimeId == null || agent.runtimeId.equals(prev.runtimeId))) {
-      t.resumeRef = prev.sessionRef;
+    if (!prev.provider.equals(agent.provider) || (agent.runtimeId != null && !agent.runtimeId.equals(prev.runtimeId))) {
+      throw ApiException.bad("the agent moved to another runtime or CLI since this answer, so the conversation cannot "
+          + "continue; ask again instead");
     }
+    t.workspaceKey = prev.workspaceKey;
+    t.resumeRef = prev.sessionRef;
     tasks.save(t);
     return t;
   }
@@ -368,8 +382,7 @@ public class TaskService {
       // a fresh checkout of the default branch, on a branch of its own so nothing lands on main
       Project p = projects.findById(t.projectId).orElse(null);
       if (p != null && p.repoUrl != null && !p.repoUrl.isBlank()) {
-        String leaf = t.workspaceKey.substring(t.workspaceKey.lastIndexOf('/') + 1).toLowerCase();
-        repo = new Wire.RepoSpec(p.repoUrl, "orca/" + leaf, p.defaultBranch);
+        repo = new Wire.RepoSpec(p.repoUrl, "orca/" + t.workspaceKey.replace('/', '-').toLowerCase(), p.defaultBranch);
       }
     }
     @SuppressWarnings("unchecked")
@@ -378,7 +391,8 @@ public class TaskService {
     String token = null;
     List<Wire.FileRef> images = new ArrayList<>();
     if (t.issueId != null) {
-      token = auth.issueTaskToken(t.id, java.time.Duration.ofMinutes(Math.max(60, a.timeoutMinutes) + 60L));
+      // the turn clock stops while a person answers (up to 12 h per question); the token is revoked when the task ends
+      token = auth.issueTaskToken(t.id, java.time.Duration.ofMinutes(Math.max(60, a.timeoutMinutes) + 26 * 60L));
       if (mcpEnabled) {
         mcp = new Wire.McpSpec("/api/mcp", token); // relative: the daemon resolves it against its server URL
       }

@@ -16,6 +16,7 @@
     <module>orca-protocol</module>
     <module>orca-agent</module>
     <module>orca-daemon</module>
+    <module>orca-cli</module>
     <module>orca-server</module>
   </modules>
 
@@ -44,6 +45,11 @@
       <dependency>
         <groupId>dev.orca</groupId>
         <artifactId>orca-protocol</artifactId>
+        <version>${project.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>dev.orca</groupId>
+        <artifactId>orca-cli</artifactId>
         <version>${project.version}</version>
       </dependency>
       <dependency>

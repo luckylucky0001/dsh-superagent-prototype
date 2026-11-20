@@ -117,6 +117,10 @@ public class IssueComponents {
         Optional<Agent> a = agent(agents, ctx.string("assignee"));
         String labels = ctx.string("labels");
         String project = ctx.string("project");
+        if (AgentRunComponent.configured(ctx, "project") && (project == null || project.isBlank() || project.equals("null"))) {
+          // never fall back to the default project when the configured one rendered empty
+          return NodeResult.fatal("the project is empty: '" + ctx.node().config().get("project") + "' rendered to nothing");
+        }
         Issue i = issues.create(new IssueService.IssueInput(project == null || project.isBlank() ? null : project,
             ctx.string("title"), ctx.string("description"), "todo", null, a.isPresent() ? "agent" : null,
             a.map(x -> x.id).orElse(null), labels == null || labels.isBlank() ? List.of()

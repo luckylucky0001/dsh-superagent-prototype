@@ -23,6 +23,8 @@ public class AuthService {
   public static final String DAEMON = "daemon";
   public static final String REGISTRATION = "registration";
   public static final String TASK = "task";
+  /** Personal access token for the CLI and scripts; acts as its member. */
+  public static final String PERSONAL = "personal";
 
   private static final Duration SESSION_TTL = Duration.ofDays(14);
   private static final Duration REGISTRATION_TTL = Duration.ofHours(1);
@@ -127,6 +129,7 @@ public class AuthService {
       case SESSION -> "orca_s_";
       case DAEMON -> "orca_d_";
       case REGISTRATION -> "orca_r_";
+      case PERSONAL -> "orca_p_";
       default -> "orca_t_";
     };
   }

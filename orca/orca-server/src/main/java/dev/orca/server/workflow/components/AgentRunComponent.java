@@ -95,6 +95,10 @@ public class AgentRunComponent implements NodeComponent {
         return NodeResult.fatal("output schema is not valid JSON");
       }
     }
+    // a project that was configured but rendered empty (e.g. a missing run input) must not silently mean "none"
+    if (issue == null && configured(ctx, "project") && blankToNull(ctx.string("project", "")) == null) {
+      return NodeResult.fatal("the project is empty: '" + ctx.node().config().get("project") + "' rendered to nothing");
+    }
     Map<String, Object> review = null;
     String prompt = ctx.string("prompt", "");
     if ("review".equals(ctx.string("mode", "work"))) {
@@ -103,7 +107,8 @@ public class AgentRunComponent implements NodeComponent {
       review.put("type", target);
       if ("baseBranch".equals(target)) {
         String base = ctx.string("baseBranch", "");
-        review.put("branch", base == null || base.isBlank() ? tasks.defaultBranch(issue) : base);
+        review.put("branch", base == null || base.isBlank()
+            ? tasks.defaultBranch(issue, issue == null ? blankToNull(ctx.string("project", "")) : null) : base);
       }
       // review mode returns the reviewer's text: a schema or session setting left over from work mode is ignored
       schema = null;
@@ -121,6 +126,11 @@ public class AgentRunComponent implements NodeComponent {
         schema, review != null ? "new" : ctx.string("session", "continue"), origin, timeout > 0 ? (int) timeout : null,
         review, issue == null ? blankToNull(ctx.string("project", "")) : null));
     return new NodeResult.Waiting(t.id, Map.of("taskId", t.id, "agent", agent.name, "provider", agent.provider));
+  }
+
+  static boolean configured(NodeContext ctx, String field) {
+    Object raw = ctx.node().config().get(field);
+    return raw instanceof String s ? !s.isBlank() : raw != null;
   }
 
   private static String blankToNull(String s) {

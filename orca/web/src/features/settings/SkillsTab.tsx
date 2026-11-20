@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Button, Card, Form, Input, Modal, Popconfirm, Space, Table, Typography } from 'antd';
-import { DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Button, Card, Form, Input, List, Modal, Popconfirm, Space, Table, Tag, Typography } from 'antd';
+import { AppstoreAddOutlined, DeleteOutlined, EditOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useAgents, useSkills } from '@/api/queries';
 import type { Skill, SkillInput } from '@/api/types';
@@ -19,6 +19,7 @@ export function SkillsTab() {
   const notify = useNotify();
   const qc = useQueryClient();
   const [editing, setEditing] = useState<Skill | 'new' | null>(null);
+  const [browsing, setBrowsing] = useState(false);
   const remove = useMutation({
     mutationFn: (id: string) => api.deleteSkill(id),
     onSuccess: () => void qc.invalidateQueries({ queryKey: qk.skills }),
@@ -30,7 +31,12 @@ export function SkillsTab() {
     <QueryState isLoading={skills.isLoading} error={skills.error} onRetry={() => void skills.refetch()}>
       <Typography.Paragraph type="secondary">{t('skills.intro')}</Typography.Paragraph>
       <Card size="small" styles={{ body: { padding: 0 } }} title={t('skills.count', { n: skills.data?.length ?? 0 })}
-        extra={<Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setEditing('new')}>{t('skills.new')}</Button>}>
+        extra={
+          <Space>
+            <Button size="small" icon={<AppstoreAddOutlined />} onClick={() => setBrowsing(true)}>{t('skills.library')}</Button>
+            <Button type="primary" size="small" icon={<PlusOutlined />} onClick={() => setEditing('new')}>{t('skills.new')}</Button>
+          </Space>
+        }>
         <Table<Skill>
           rowKey="id"
           dataSource={skills.data ?? []}
@@ -73,6 +79,7 @@ export function SkillsTab() {
         />
       </Card>
       <SkillModal skill={editing} onClose={() => setEditing(null)} />
+      <SkillLibraryModal open={browsing} onClose={() => setBrowsing(false)} />
     </QueryState>
   );
 }
@@ -111,6 +118,41 @@ function SkillModal({ skill, onClose }: { skill: Skill | 'new' | null; onClose: 
           <Input.TextArea className="orca-mono" autoSize={{ minRows: 10, maxRows: 24 }} />
         </Form.Item>
       </Form>
+    </Modal>
+  );
+}
+
+/** Skills shipped with Orca: add the ones you want, or all that are missing. */
+function SkillLibraryModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+  const t = useT();
+  const notify = useNotify();
+  const qc = useQueryClient();
+  const library = useQuery({ queryKey: ['skills', 'library'], queryFn: api.skillLibrary, enabled: open });
+  const install = useMutation({
+    mutationFn: (name: string) => api.installSkill(name),
+    onSuccess: (r) => {
+      notify.success(t('skills.libraryAdded', { n: r.added }));
+      void qc.invalidateQueries({ queryKey: qk.skills });
+      void qc.invalidateQueries({ queryKey: ['skills', 'library'] });
+    },
+    onError: notify.error,
+  });
+  const missing = (library.data ?? []).filter((e) => !e.installed).length;
+  return (
+    <Modal open={open} onCancel={onClose} title={t('skills.library')} width={720} destroyOnHidden
+      footer={<Space><Button onClick={onClose}>{t('common.close')}</Button>
+        <Button type="primary" disabled={missing === 0} loading={install.isPending && install.variables === '*'}
+          onClick={() => install.mutate('*')}>{t('skills.libraryAddAll', { n: missing })}</Button></Space>}>
+      <Typography.Paragraph type="secondary">{t('skills.libraryIntro')}</Typography.Paragraph>
+      <QueryState isLoading={library.isLoading} error={library.error} onRetry={() => void library.refetch()}>
+        <List dataSource={library.data ?? []} renderItem={(e) => (
+          <List.Item actions={[e.installed
+            ? <Tag key="i" bordered={false} color="green">{t('skills.installed')}</Tag>
+            : <Button key="a" size="small" loading={install.isPending && install.variables === e.name} onClick={() => install.mutate(e.name)}>{t('skills.add')}</Button>]}>
+            <List.Item.Meta title={<span className="orca-mono">{e.name}</span>} description={e.description} />
+          </List.Item>
+        )} />
+      </QueryState>
     </Modal>
   );
 }

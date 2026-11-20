@@ -58,7 +58,10 @@ public class AuthFilter extends OncePerRequestFilter {
       chain.doFilter(req, res);
       return;
     }
-    Optional<Member> m = auth.verify(token(req), AuthService.SESSION).flatMap(t -> auth.member(t.memberId));
+    String presented = token(req);
+    Optional<Member> m = auth.verify(presented, AuthService.SESSION)
+        .or(() -> auth.verify(presented, AuthService.PERSONAL))
+        .flatMap(t -> auth.member(t.memberId));
     if (m.isEmpty()) {
       res.setStatus(401);
       res.setContentType("application/json");

@@ -427,8 +427,16 @@ final class CodexSession implements AgentSession {
         // the policy judges the command that will actually run (unwrapping it once itself), not Codex's
         // display summary of it
         String rawCommand = Json.str(p, "command");
-        String command = rawCommand != null ? rawCommand : actions.isEmpty() ? null : String.join(" && ", actions);
-        ApprovalRequest r = new ApprovalRequest(nextRequestId(), network ? ApprovalKind.NETWORK : ApprovalKind.COMMAND,
+        // without the raw command there is nothing exact to judge: the summary is shown, but as OTHER, which the
+        // policy declines and never sends to a person
+        String command = rawCommand;
+        ApprovalKind kind = network ? ApprovalKind.NETWORK : rawCommand == null ? ApprovalKind.OTHER : ApprovalKind.COMMAND;
+        if (rawCommand == null && !network) {
+          ApprovalRequest r = new ApprovalRequest(nextRequestId(), kind, actions.isEmpty() ? "command" : String.join(" && ", actions),
+              null, Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);
+          yield Map.of("decision", commandDecision(decide(r)));
+        }
+        ApprovalRequest r = new ApprovalRequest(nextRequestId(), kind,
             network ? "network access to " + Json.str(p, "networkApprovalContext.host")
                 : dev.orca.agent.core.Executables.unwrapShell(command), command,
             Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);

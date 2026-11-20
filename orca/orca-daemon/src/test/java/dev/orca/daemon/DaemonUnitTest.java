@@ -164,4 +164,11 @@ class DaemonUnitTest {
     org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("/bin/bash -lc 'git status --short'"));
     org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("/bin/bash -lc \"git add a.py && git commit -m 'Add GST'\""));
   }
+
+  @org.junit.jupiter.api.Test
+  void existingCheckoutsMustComeFromTheSameRepository() {
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("git@host:a/b.git", "git@host:a/b"));
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("/srv/git/wms/", "/srv/git/wms"));
+    org.junit.jupiter.api.Assertions.assertFalse(Workspaces.sameRepo("git@host:a/b.git", "git@host:a/c.git"));
+  }
 }

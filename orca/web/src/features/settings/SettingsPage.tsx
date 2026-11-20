@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
+import { Alert, Button, Card, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { BranchesOutlined, DeleteOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useMembers, useProjects } from '@/api/queries';
@@ -82,7 +82,60 @@ function MyAccount() {
           </Button>
         </Form>
       </Card>
+      <TokensCard />
     </Space>
+  );
+}
+
+/** Personal access tokens for the orca CLI and scripts; a new token is shown once. */
+function TokensCard() {
+  const t = useT();
+  const notify = useNotify();
+  const qc = useQueryClient();
+  const tokens = useQuery({ queryKey: ['tokens'], queryFn: api.tokens });
+  const [label, setLabel] = useState('CLI');
+  const [days, setDays] = useState(90);
+  const [created, setCreated] = useState<string | null>(null);
+  const create = useMutation({
+    mutationFn: () => api.createToken(label.trim() || 'CLI', days),
+    onSuccess: (r) => {
+      setCreated(r.token);
+      void qc.invalidateQueries({ queryKey: ['tokens'] });
+    },
+    onError: notify.error,
+  });
+  const revoke = useMutation({
+    mutationFn: (id: string) => api.revokeToken(id),
+    onSuccess: () => void qc.invalidateQueries({ queryKey: ['tokens'] }),
+    onError: notify.error,
+  });
+  return (
+    <Card size="small" title={t('settings.tokens')}>
+      <Typography.Paragraph type="secondary">{t('settings.tokensIntro')}</Typography.Paragraph>
+      <Space.Compact style={{ marginBottom: 12 }}>
+        <Input value={label} onChange={(e) => setLabel(e.target.value)} style={{ width: 200 }} placeholder={t('settings.tokenLabel')} />
+        <InputNumber value={days} min={1} max={365} onChange={(v) => setDays(Number(v ?? 90))} addonAfter={t('settings.tokenDays')} style={{ width: 150 }} />
+        <Button type="primary" icon={<KeyOutlined />} loading={create.isPending} onClick={() => create.mutate()}>{t('settings.tokenCreate')}</Button>
+      </Space.Compact>
+      {created && (
+        <Alert type="success" showIcon style={{ marginBottom: 12 }} closable onClose={() => setCreated(null)}
+          message={t('settings.tokenOnce')}
+          description={<Typography.Paragraph copyable={{ text: created }} className="orca-mono" style={{ margin: 0 }}>{created}</Typography.Paragraph>} />
+      )}
+      <Table size="small" rowKey="id" pagination={false} dataSource={tokens.data ?? []} loading={tokens.isLoading}
+        columns={[
+          { title: t('settings.tokenLabel'), dataIndex: 'label' },
+          { title: t('common.created'), key: 'c', render: (_, r) => fmtDateTime(r.createdAt) },
+          { title: t('settings.tokenExpires'), key: 'e', render: (_, r) => (r.expiresAt ? fmtDateTime(r.expiresAt) : '—') },
+          {
+            key: 'x', width: 48, render: (_, r) => (
+              <Popconfirm title={t('settings.tokenRevokeConfirm')} onConfirm={() => revoke.mutate(r.id)} okButtonProps={{ danger: true }}>
+                <Button type="text" size="small" danger icon={<DeleteOutlined />} />
+              </Popconfirm>
+            ),
+          },
+        ]} />
+    </Card>
   );
 }
 

@@ -367,9 +367,9 @@ class EndToEndTest {
     await("check done", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
     String taskId = String.valueOf(Json.get(call("GET", "/api/runs/" + run, null), "state.nodes.check.output.taskId"));
     String cwd = Json.str(Json.obj(sessionEvent(taskId), "data"), "cwd");
-    assertTrue(cwd.contains("/runs/" + run), cwd);
+    assertTrue(cwd.endsWith("/runs/" + run + "/CHK"), cwd);
     Process branch = new ProcessBuilder("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").start();
-    assertEquals("orca/" + run.toLowerCase(), new String(branch.getInputStream().readAllBytes()).trim(),
+    assertEquals("orca/runs-" + run.toLowerCase() + "-chk", new String(branch.getInputStream().readAllBytes()).trim(),
         "a branch of its own, so nothing lands on main");
   }
 
@@ -400,4 +400,53 @@ class EndToEndTest {
     assertTrue(new String(branches.getInputStream().readAllBytes()).contains("orca/" + key.toLowerCase()),
         "the branch reached the remote");
   }
+
+  @Test
+  void theCliWorksWithAPersonalAccessToken() throws Exception {
+    String pat = Json.str(call("POST", "/api/auth/tokens", Map.of("label", "ci", "days", 7)), "token");
+    assertTrue(pat.startsWith("orca_p_"), pat);
+    Path config = Files.createTempFile("orca-cli", ".json");
+    Map<String, String> env = Map.of("ORCA_SERVER", "http://localhost:" + port, "ORCA_TOKEN", pat,
+        "ORCA_CLI_CONFIG", config.toString());
+    assertEquals(0, cli(env, "whoami").code(), "the token signs the CLI in");
+    String created = cli(env, "issue", "create", "--title", "From the CLI", "--description", "hello",
+        "--assign", "Builder").out();
+    String key = created.split(" ")[1].replace(";", "").trim();
+    await("worked on", quietly(() -> "in_review".equals(Json.str(call("GET", "/api/issues/" + key, null), "status"))));
+    Cli show = cli(env, "issue", "show", key);
+    assertTrue(show.out().contains("From the CLI") && show.out().contains("Builder"), show.out());
+    Cli ask = cli(env, "ask", "Builder", "hello");
+    assertEquals(0, ask.code(), ask.err());
+    assertTrue(cli(env, "agents", "--json").out().contains("\"Builder\""));
+    assertEquals(1, cli(Map.of("ORCA_SERVER", "http://localhost:" + port, "ORCA_TOKEN", "orca_p_wrong",
+        "ORCA_CLI_CONFIG", config.toString()), "whoami").code(), "a wrong token is refused");
+  }
+
+  record Cli(int code, String out, String err) {}
+
+  private static Cli cli(Map<String, String> env, String... args) {
+    java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+    java.io.ByteArrayOutputStream err = new java.io.ByteArrayOutputStream();
+    int code = new dev.orca.cli.Main(new java.io.PrintStream(out, true), new java.io.PrintStream(err, true), env).run(args);
+    return new Cli(code, out.toString(), err.toString());
+  }
+
+  @Test
+  void aMissingProjectFailsTheNodeInsteadOfLosingTheRun() throws Exception {
+    for (Object[] c : List.of(new Object[] {"NOPE", "NOPE"}, new Object[] {"{{ trigger.input.project }}", "rendered to nothing"})) {
+      Map<String, Object> def = Map.of(
+          "nodes", List.of(
+              Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+              Map.of("id", "check", "type", "agent.run", "config", Map.of("agent", "Builder", "project", c[0],
+                  "issue", "", "prompt", "hello"))),
+          "edges", List.of(Map.of("id", "e1", "source", "start", "target", "check")));
+      String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Bad project " + c[1], "definition", def)), "id");
+      String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of("input", Map.of())), "id");
+      Object r = call("GET", "/api/runs/" + run, null);
+      assertEquals("failed", Json.str(r, "status"), String.valueOf(Json.get(r, "state.nodes")));
+      assertTrue(String.valueOf(Json.get(r, "state.nodes.check.error")).contains(String.valueOf(c[1])),
+          String.valueOf(Json.get(r, "state.nodes.check")));
+    }
+  }
+
 }
