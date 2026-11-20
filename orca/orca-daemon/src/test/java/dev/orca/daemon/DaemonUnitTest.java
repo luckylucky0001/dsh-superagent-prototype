@@ -203,6 +203,8 @@ class DaemonUnitTest {
     AgentEvent r = TaskRunner.relativize(e, dir);
     assertEquals("Search for '**/*.py' in .", r.data().get("title"));
     assertEquals("cd . && python3 -m unittest tests/test_x.py", r.data().get("command"));
+    AgentEvent msg = AgentEvent.of(AgentEvent.MESSAGE, "text", "- [P2] Fix it — /work/issues/WMS-5/wms/counting.py:72-76");
+    assertEquals("- [P2] Fix it — wms/counting.py:72-76", TaskRunner.relativize(msg, dir).data().get("text"));
     AgentEvent other = AgentEvent.of(AgentEvent.TOOL_STARTED, "title", "Read /work/issues/WMS-50/a.py");
     assertEquals("Read /work/issues/WMS-50/a.py", TaskRunner.relativize(other, dir).data().get("title"),
         "a sibling folder with a longer name is not touched");

@@ -333,7 +333,9 @@ final class TaskRunner implements Runnable {
       data.put("changes", out);
       touched = true;
     }
-    for (String key : List.of("title", "command")) {
+    // whole messages too (Codex review comments cite /abs/path/file.py:72); streamed deltas may split a path
+    List<String> keys = AgentEvent.MESSAGE.equals(e.type()) ? List.of("title", "command", "text") : List.of("title", "command");
+    for (String key : keys) {
       if (data.get(key) instanceof String text && text.contains(root)) {
         data.put(key, shortenPaths(text, root, prefix));
         touched = true;
