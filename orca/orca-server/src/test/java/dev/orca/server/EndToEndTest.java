@@ -258,4 +258,31 @@ class EndToEndTest {
     assertTrue(body.contains("You ship releases.") && body.contains("## Skill: release-rules")
         && body.contains("Always bump the CHANGELOG") && body.contains("You are Releaser"), body);
   }
+
+  @Test
+  void issueImagesReachTheAgent() throws Exception {
+    String key = Json.str(call("POST", "/api/issues", Map.of("title", "Fix the button", "description", "see screenshot")), "key");
+    String boundary = "orcaboundary";
+    byte[] png = java.util.Base64.getDecoder().decode(
+        "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg==");
+    java.io.ByteArrayOutputStream body = new java.io.ByteArrayOutputStream();
+    body.write(("--" + boundary + "\r\nContent-Disposition: form-data; name=\"file\"; filename=\"shot.png\"\r\n"
+        + "Content-Type: image/png\r\n\r\n").getBytes());
+    body.write(png);
+    body.write(("\r\n--" + boundary + "--\r\n").getBytes());
+    HttpResponse<String> up = http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/issues/" + key + "/attachments"))
+        .header("Content-Type", "multipart/form-data; boundary=" + boundary)
+        .POST(HttpRequest.BodyPublishers.ofByteArray(body.toByteArray())).build(), HttpResponse.BodyHandlers.ofString());
+    assertEquals(200, up.statusCode(), up.body());
+    String url = Json.str(Json.readMap(up.body()), "url");
+    assertEquals(200, http.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + url)).build(),
+        HttpResponse.BodyHandlers.ofByteArray()).statusCode(), "members can read attachments");
+    assertEquals(401, HttpClient.newHttpClient().send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + url)).build(),
+        HttpResponse.BodyHandlers.ofByteArray()).statusCode(), "anonymous requests are refused");
+
+    call("PATCH", "/api/issues/" + key, Map.of("assigneeType", "agent", "assigneeId", agentId));
+    await("reply", quietly(() -> !((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).isEmpty()));
+    String reply = Json.str(((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).get(0), "body");
+    assertTrue(reply.contains("[images:1]"), reply);
+  }
 }

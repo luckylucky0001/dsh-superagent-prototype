@@ -67,7 +67,12 @@ public final class Wire {
       String sessionRef,
       Map<String, Object> outputSchema,
       int timeoutSeconds,
-      McpSpec mcp) {}
+      McpSpec mcp,
+      List<FileRef> images,
+      String taskToken) {}
+
+  /** A file the daemon downloads (with the task token) before the first turn, e.g. a screenshot on the issue. */
+  public record FileRef(String id, String name, String url) {}
 
   public record AgentSpec(String id, String name, String model, String effort, String instructions,
       String permission, List<String> allowedCommands, List<String> extraArgs, Map<String, String> env) {}

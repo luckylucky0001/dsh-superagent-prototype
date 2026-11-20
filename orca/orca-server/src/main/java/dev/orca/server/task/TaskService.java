@@ -77,16 +77,19 @@ public class TaskService {
   private final ApplicationEventPublisher publisher;
   private final OrcaProperties props;
   private final dev.orca.server.repo.SkillRepo skills;
+  private final dev.orca.server.repo.AttachmentRepo attachments;
   private final dev.orca.server.auth.AuthService auth;
   private final boolean mcpEnabled;
 
   public TaskService(TaskRepo tasks, TaskEventRepo events, AgentRepo agents, IssueRepo issues, ProjectRepo projects,
       CommentRepo comments, RuntimeService runtimes, DaemonGateway gateway, InboxService inbox, Realtime realtime,
       ApplicationEventPublisher publisher, OrcaProperties props, dev.orca.server.repo.SkillRepo skills,
+      dev.orca.server.repo.AttachmentRepo attachments,
       dev.orca.server.auth.AuthService auth,
       @org.springframework.beans.factory.annotation.Value("${orca.mcp.enabled:true}") boolean mcpEnabled) {
     this.auth = auth;
     this.skills = skills;
+    this.attachments = attachments;
     this.mcpEnabled = mcpEnabled;
     this.tasks = tasks;
     this.events = events;
@@ -290,12 +293,39 @@ public class TaskService {
     @SuppressWarnings("unchecked")
     Map<String, Object> schema = t.outputSchemaJson == null ? null : JsonCols.map(t.outputSchemaJson);
     Wire.McpSpec mcp = null;
-    if (mcpEnabled && t.issueId != null) {
-      String token = auth.issueTaskToken(t.id, java.time.Duration.ofMinutes(Math.max(60, a.timeoutMinutes) + 60L));
-      mcp = new Wire.McpSpec(props.publicUrl() + "/api/mcp", token);
+    String token = null;
+    List<Wire.FileRef> images = new ArrayList<>();
+    if (t.issueId != null) {
+      token = auth.issueTaskToken(t.id, java.time.Duration.ofMinutes(Math.max(60, a.timeoutMinutes) + 60L));
+      if (mcpEnabled) {
+        mcp = new Wire.McpSpec("/api/mcp", token); // relative: the daemon resolves it against its server URL
+      }
+      images = images(t);
     }
     return new Wire.TaskAssign(t.id, t.provider, spec, t.workspaceKey, repo, t.prompt, t.recap, t.resumeRef, schema,
-        Math.max(60, a.timeoutMinutes * 60), mcp);
+        Math.max(60, a.timeoutMinutes * 60), mcp, images, token);
+  }
+
+  /**
+   * Image attachments the agent has not seen: all of them for a new session, otherwise those added since
+   * this agent's previous task on the issue. At most five, newest last.
+   */
+  private List<Wire.FileRef> images(Task t) {
+    long since = 0;
+    if (t.resumeRef != null) {
+      for (Task prev : tasks.findByAgentIdAndIssueIdAndStatusOrderByFinishedAtDesc(t.agentId, t.issueId, TaskStatus.SUCCEEDED)) {
+        since = prev.queuedAt;
+        break;
+      }
+    }
+    long after = since;
+    List<Wire.FileRef> out = new ArrayList<>();
+    for (dev.orca.server.model.Attachment att : attachments.findByIssueIdOrderByCreatedAtAsc(t.issueId)) {
+      if (att.createdAt > after && att.contentType.startsWith("image/") && !att.contentType.contains("svg")) {
+        out.add(new Wire.FileRef(att.id, att.name, "/api/attachments/" + att.id + "/file"));
+      }
+    }
+    return out.size() > 5 ? out.subList(out.size() - 5, out.size()) : out;
   }
 
   // ---------------------------------------------------------------- daemon reports

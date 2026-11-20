@@ -482,3 +482,13 @@ export interface SkillInput {
   description?: string;
   content: string;
 }
+
+export interface Attachment {
+  id: string;
+  issueId: string;
+  name: string;
+  contentType: string;
+  size: number;
+  url: string;
+  createdAt: number;
+}

@@ -462,6 +462,8 @@ export const en = {
   'skills.saved': "Skill saved",
   'skills.pick': "Choose skills",
   'skills.agentHelp': "Skills are added to this agent's instructions. Manage them in Settings → Skills.",
+  'issues.attach': "Attach",
+  'issues.attachHint': "Paste or drop screenshots; agents receive images on their next task.",
 } as const;
 
 export type MessageKey = keyof typeof en;
@@ -917,4 +919,6 @@ export const zh: Record<MessageKey, string> = {
   'skills.saved': "技能已保存",
   'skills.pick': "选择技能",
   'skills.agentHelp': "技能会加入该 Agent 的指令。在 设置 → 技能 中管理。",
+  'issues.attach': "附件",
+  'issues.attachHint': "可直接粘贴或拖入截图；Agent 在下一个任务中会收到图片。",
 };

@@ -25,6 +25,11 @@ public class AuthFilter extends OncePerRequestFilter {
   private static final List<String> OPEN = List.of("/api/auth/login", "/api/daemon/register", "/api/daemon/ws",
       "/api/hooks/", "/api/health", "/api/mcp");
 
+  /** Authenticated inside the controller (session or task token). */
+  private static boolean selfAuthenticated(String path) {
+    return path.startsWith("/api/attachments/") && path.endsWith("/file");
+  }
+
   private final AuthService auth;
 
   public AuthFilter(AuthService auth) {
@@ -35,7 +40,7 @@ public class AuthFilter extends OncePerRequestFilter {
   protected void doFilterInternal(HttpServletRequest req, HttpServletResponse res, FilterChain chain)
       throws ServletException, IOException {
     String path = req.getRequestURI();
-    if (!path.startsWith("/api/") || OPEN.stream().anyMatch(path::startsWith)) {
+    if (!path.startsWith("/api/") || OPEN.stream().anyMatch(path::startsWith) || selfAuthenticated(path)) {
       chain.doFilter(req, res);
       return;
     }

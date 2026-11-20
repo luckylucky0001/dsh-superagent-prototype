@@ -78,7 +78,10 @@ public final class FakeCodexAppServer {
           String turnId = "turn_" + (++turnCounter);
           activeTurn = turnId;
           reply(id, Map.of("turn", Map.of("id", turnId, "status", "inProgress", "items", List.of())));
-          String text = String.valueOf(((Map<?, ?>) ((List<?>) params.get("input")).get(0)).get("text"));
+          List<?> inputs = (List<?>) params.get("input");
+          long imgs = inputs.stream().filter(x -> "localImage".equals(((Map<?, ?>) x).get("type"))
+              && java.nio.file.Files.exists(java.nio.file.Path.of(String.valueOf(((Map<?, ?>) x).get("path"))))).count();
+          String text = String.valueOf(((Map<?, ?>) inputs.get(0)).get("text")) + (imgs > 0 ? " [images:" + imgs + "]" : "");
           boolean structured = params.containsKey("outputSchema");
           Thread.ofVirtual().start(() -> {
             try {

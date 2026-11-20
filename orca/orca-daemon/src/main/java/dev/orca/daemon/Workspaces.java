@@ -98,7 +98,7 @@ public final class Workspaces {
     Files.createDirectories(exclude.getParent());
     String existing = Files.exists(exclude) ? Files.readString(exclude) : "";
     if (!existing.contains("# orca")) {
-      Files.writeString(exclude, existing + "\n# orca: build and tool caches\n__pycache__/\n*.pyc\n.pytest_cache/\n"
+      Files.writeString(exclude, existing + "\n# orca: build and tool caches\n.orca/\n__pycache__/\n*.pyc\n.pytest_cache/\n"
           + "node_modules/\n.venv/\n.mypy_cache/\n.ruff_cache/\n.gradle/\n.DS_Store\n");
     }
   }

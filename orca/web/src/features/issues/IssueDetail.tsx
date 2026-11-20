@@ -17,8 +17,9 @@ import {
   Tag,
   Tooltip,
   Typography,
+  Upload,
 } from 'antd';
-import { EditOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
+import { EditOutlined, PaperClipOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useAgentMap, useAgents, useMemberMap, useProjectMap } from '@/api/queries';
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, type Comment, type Issue, type IssuePatch, type Task } from '@/api/types';
@@ -92,6 +93,24 @@ function CommentBox({ issue }: { issue: Issue }) {
   const qc = useQueryClient();
   const agents = useAgents();
   const [body, setBody] = useState('');
+  const [uploading, setUploading] = useState(false);
+  const attach = async (files: File[]) => {
+    const images = files.filter((f) => f.size > 0);
+    if (!images.length) return;
+    setUploading(true);
+    try {
+      const links: string[] = [];
+      for (const f of images) {
+        const a = await api.uploadAttachment(issue.id, f);
+        links.push(a.contentType.startsWith('image/') ? `![${a.name}](${a.url})` : `[${a.name}](${a.url})`);
+      }
+      setBody((b) => (b.trim() ? `${b.trimEnd()}\n\n` : '') + links.join('\n'));
+    } catch (e) {
+      notify.error(e);
+    } finally {
+      setUploading(false);
+    }
+  };
   const post = useMutation({
     mutationFn: () => api.addComment(issue.id, body),
     onSuccess: (c) => {
@@ -102,7 +121,22 @@ function CommentBox({ issue }: { issue: Issue }) {
     onError: notify.error,
   });
   return (
-    <Card size="small">
+    <Card size="small"
+      onPaste={(e) => {
+        const files = Array.from(e.clipboardData?.files ?? []);
+        if (files.length) {
+          e.preventDefault();
+          void attach(files);
+        }
+      }}
+      onDrop={(e) => {
+        const files = Array.from(e.dataTransfer?.files ?? []);
+        if (files.length) {
+          e.preventDefault();
+          void attach(files);
+        }
+      }}
+      onDragOver={(e) => e.preventDefault()}>
       <Mentions
         value={body}
         onChange={setBody}
@@ -118,10 +152,15 @@ function CommentBox({ issue }: { issue: Issue }) {
         variant="borderless"
       />
       <Flex justify="space-between" align="center" style={{ marginTop: 8 }} gap={8} wrap="wrap">
-        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('issues.mentionHint')}</Typography.Text>
-        <Button type="primary" icon={<SendOutlined />} disabled={!body.trim()} loading={post.isPending} onClick={() => post.mutate()}>
-          {t('issues.comment')}
-        </Button>
+        <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('issues.mentionHint')} {t('issues.attachHint')}</Typography.Text>
+        <Space>
+          <Upload showUploadList={false} multiple beforeUpload={(f) => { void attach([f]); return false; }}>
+            <Button icon={<PaperClipOutlined />} loading={uploading}>{t('issues.attach')}</Button>
+          </Upload>
+          <Button type="primary" icon={<SendOutlined />} disabled={!body.trim() || uploading} loading={post.isPending} onClick={() => post.mutate()}>
+            {t('issues.comment')}
+          </Button>
+        </Space>
       </Flex>
     </Card>
   );

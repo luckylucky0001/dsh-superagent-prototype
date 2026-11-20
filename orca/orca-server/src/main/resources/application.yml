@@ -22,6 +22,10 @@ spring:
   web:
     resources:
       static-locations: ${ORCA_WEB_DIR:classpath:/static/}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
   mvc:
     async:
       request-timeout: -1

@@ -38,6 +38,7 @@ final class TaskRunner implements Runnable {
   private final Link link;
   private final boolean isolated;
   private final boolean allowExtraArgs;
+  private final String server;
   private final Runnable onDone;
   private final EventBuffer buffer = new EventBuffer();
   private final Map<String, CompletableFuture<Interaction.InputReply>> inputs = new ConcurrentHashMap<>();
@@ -48,8 +49,9 @@ final class TaskRunner implements Runnable {
   private volatile Wire.Frame completion;
 
   TaskRunner(Wire.TaskAssign task, AgentProvider provider, Workspaces workspaces, Link link, boolean isolated,
-      boolean allowExtraArgs, Runnable onDone) {
+      boolean allowExtraArgs, String server, Runnable onDone) {
     this.allowExtraArgs = allowExtraArgs;
+    this.server = server == null ? "" : server.replaceAll("/+$", "");
     this.task = task;
     this.provider = provider;
     this.workspaces = workspaces;
@@ -127,7 +129,7 @@ final class TaskRunner implements Runnable {
     }
     SessionSpec spec = new SessionSpec(dir, a == null ? null : a.model(), a == null ? null : a.effort(),
         a == null ? null : a.instructions(), permission, task.sessionRef(),
-        task.mcp() == null ? null : task.mcp().url(), task.mcp() == null ? null : task.mcp().token(),
+        task.mcp() == null ? null : absolute(task.mcp().url()), task.mcp() == null ? null : task.mcp().token(),
         a == null ? null : a.allowedCommands(), extra, a == null ? null : a.env());
     String prompt = task.prompt();
     try {
@@ -152,8 +154,10 @@ final class TaskRunner implements Runnable {
         "model", session.model(), "resumed", session.resumed(), "cwd", dir.toString()));
     Duration timeout = Duration.ofSeconds(task.timeoutSeconds() > 0 ? task.timeoutSeconds() : 3600);
 
-    buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", task.prompt()));
-    TurnResult r = session.runTurn(new TurnSpec(prompt, List.of(), task.outputSchema(), timeout), buffer::add);
+    List<Path> images = download(dir);
+    buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", task.prompt(),
+        "images", images.isEmpty() ? null : images.stream().map(p -> p.getFileName().toString()).toList()));
+    TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout), buffer::add);
     Map<String, Object> usage = new LinkedHashMap<>(r.usage());
     while (r.ok() && !cancelRequested && !followUps.isEmpty()) {
       List<String> texts = new ArrayList<>();
@@ -175,6 +179,40 @@ final class TaskRunner implements Runnable {
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";
     };
     return completed(status, r.finalText(), r.structured(), session.sessionRef(), r.errorCode(), r.error(), usage);
+  }
+
+  /** Server paths are relative so they work from wherever this daemon reaches the server. */
+  private String absolute(String url) {
+    return url != null && url.startsWith("/") ? server + url : url;
+  }
+
+  /** Fetches the issue's new images into {@code .orca/attachments} with the task token. */
+  private List<Path> download(Path dir) {
+    if (task.images() == null || task.images().isEmpty() || task.taskToken() == null) {
+      return List.of();
+    }
+    List<Path> out = new ArrayList<>();
+    java.net.http.HttpClient http = java.net.http.HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
+    try {
+      Path folder = dir.resolve(".orca/attachments");
+      java.nio.file.Files.createDirectories(folder);
+      for (Wire.FileRef f : task.images()) {
+        Path target = folder.resolve(f.id() + "-" + f.name().replaceAll("[^A-Za-z0-9._-]", "_"));
+        java.net.http.HttpResponse<Path> res = http.send(java.net.http.HttpRequest.newBuilder(java.net.URI.create(absolute(f.url())))
+            .timeout(Duration.ofSeconds(60)).header("Authorization", "Bearer " + task.taskToken()).GET().build(),
+            java.net.http.HttpResponse.BodyHandlers.ofFile(target));
+        if (res.statusCode() == 200) {
+          out.add(target);
+        } else {
+          java.nio.file.Files.deleteIfExists(target);
+          buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message",
+              "could not download " + f.name() + ": HTTP " + res.statusCode()));
+        }
+      }
+    } catch (Exception e) {
+      buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message", "could not download attachments: " + e));
+    }
+    return out;
   }
 
   /**

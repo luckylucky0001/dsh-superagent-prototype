@@ -27,6 +27,7 @@ import type {
   WorkflowVersion,
   Skill,
   SkillInput,
+  Attachment,
 } from './types';
 
 /** An error response from the API; {@code message} is the server's {@code error} text. */
@@ -95,6 +96,29 @@ async function request<T>(method: Method, path: string, body?: unknown): Promise
   return json as T;
 }
 
+/** Uploads a file to an issue; returns the attachment with its URL for Markdown. */
+async function upload(issueId: string, file: File): Promise<Attachment> {
+  const form = new FormData();
+  form.append('file', file, file.name || 'pasted.png');
+  const res = await fetch(`/api/issues/${encodeURIComponent(issueId)}/attachments`, {
+    method: 'POST',
+    credentials: 'same-origin',
+    body: form,
+  });
+  const text = await res.text();
+  if (!res.ok) {
+    let msg = `${res.status} ${res.statusText}`;
+    try {
+      msg = (JSON.parse(text) as { error?: string }).error ?? msg;
+    } catch {
+      // keep the status text
+    }
+    if (res.status === 401) unauthorizedHandler?.();
+    throw new ApiError(res.status, msg);
+  }
+  return JSON.parse(text) as Attachment;
+}
+
 const q = (params: Record<string, string | number | undefined | null>) => {
   const s = new URLSearchParams();
   for (const [k, v] of Object.entries(params)) if (v !== undefined && v !== null && v !== '') s.set(k, String(v));
@@ -134,6 +158,8 @@ export const api = {
   updateIssue: (id: string, patch: IssuePatch) => request<Issue>('PATCH', `/issues/${enc(id)}`, patch),
   comments: (issueId: string) => request<Comment[]>('GET', `/issues/${enc(issueId)}/comments`),
   addComment: (issueId: string, body: string) => request<Comment>('POST', `/issues/${enc(issueId)}/comments`, { body }),
+  uploadAttachment: upload,
+  attachments: (issueId: string) => request<Attachment[]>('GET', `/issues/${enc(issueId)}/attachments`),
   issueTasks: (issueId: string) => request<Task[]>('GET', `/issues/${enc(issueId)}/tasks`),
   issueRuns: (issueId: string) => request<Run[]>('GET', `/issues/${enc(issueId)}/runs`),
 
