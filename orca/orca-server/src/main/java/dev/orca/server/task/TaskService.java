@@ -324,6 +324,9 @@ public class TaskService {
     if (t.reviewJson != null && olderThan(r.daemonVersion, "0.2.0")) {
       return "review tasks need orca-daemon 0.2.0 or later on " + r.name;
     }
+    if ("push".equals(t.kind) && olderThan(r.daemonVersion, "0.3.0")) {
+      return "pushing needs orca-daemon 0.3.0 or later on " + r.name;
+    }
     if (tasks.countByRuntimeIdAndStatusIn(r.id, TaskStatus.ACTIVE) >= r.capacity) {
       return "runtime " + r.name + " is busy";
     }
@@ -383,7 +386,7 @@ public class TaskService {
     }
     return new Wire.TaskAssign(t.id, t.provider, spec, t.workspaceKey, repo, t.prompt, t.recap, t.resumeRef, schema,
         Math.max(60, a.timeoutMinutes * 60), mcp, images, token,
-        t.reviewJson == null ? null : JsonCols.map(t.reviewJson));
+        t.reviewJson == null ? null : JsonCols.map(t.reviewJson), "push".equals(t.kind) ? "git.push" : null);
   }
 
   /**

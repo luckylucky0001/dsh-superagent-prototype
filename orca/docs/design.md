@@ -71,7 +71,7 @@
 | Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时；评审模式（`mode=review`）下改为代码评审：Codex 用内置评审器 `review/start`，其他 CLI 用等价提示词<br>`agent.review_loop`：实现者与评审者在一个节点内轮转（实现者续接会话，评审者每轮新会话并给出结构化结论），通过走 `passed`，超过轮数走 `failed`——在 DAG 里表达“改到评审通过为止” |
 | 逻辑 | `logic.condition`（true/false）、`logic.set`、`logic.join` |
 | 人工 | `human.approval`（approved/rejected）、`human.input` |
-| 动作 | `issue.comment`（以 Agent 或系统身份）、`issue.update`、`issue.create`、`http.request`（主机白名单）、`notify.webhook`（飞书/钉钉/企微/Slack/Teams） |
+| 动作 | `issue.comment`（以 Agent 或系统身份）、`issue.update`、`issue.create`、`repo.push`（工作过的机器推送 Issue 分支，只推 `orca/*`、不强推）、`http.request`（主机白名单）、`notify.webhook`（飞书/钉钉/企微/Slack/Teams） |
 
 内置工作流：
 1. **Assigned issue → agent**：标记进行中 → Agent 执行（续接会话，失败重试 1 次）→ 以 Agent 身份发结果评论 → 移到审核中；失败走 error 分支发失败说明。

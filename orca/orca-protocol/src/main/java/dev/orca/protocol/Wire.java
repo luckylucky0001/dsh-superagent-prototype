@@ -70,7 +70,8 @@ public final class Wire {
       McpSpec mcp,
       List<FileRef> images,
       String taskToken,
-      Map<String, Object> review) {}
+      Map<String, Object> review,
+      String action) {}
 
   /** A file the daemon downloads (with the task token) before the first turn, e.g. a screenshot on the issue. */
   public record FileRef(String id, String name, String url) {}

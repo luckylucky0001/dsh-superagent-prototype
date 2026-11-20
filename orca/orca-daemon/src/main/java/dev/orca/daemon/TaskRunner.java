@@ -122,6 +122,9 @@ final class TaskRunner implements Runnable {
 
   private Wire.TaskCompleted execute() throws AgentException {
     link.send(Wire.frame(Wire.TASK_ACCEPTED, new Wire.TaskAccepted(task.taskId())));
+    if (PUSH.equals(task.action())) {
+      return push();
+    }
     Wire.AgentSpec a = task.agent();
     Permission permission = Permission.parse(a == null ? null : a.permission());
     if (permission == Permission.FULL && !isolated) {
@@ -242,6 +245,51 @@ final class TaskRunner implements Runnable {
       case "commit" -> "Review commit " + review.get("sha") + ".";
       default -> TurnSpec.reviewPrompt(review, null);
     };
+  }
+
+  static final String PUSH = "git.push";
+
+  /**
+   * Pushes the issue's own branch with this machine's git credentials: only {@code orca/*} branches,
+   * never main, never forced. No agent session is involved. Git hosts print a merge-request link on push;
+   * it is returned so the workflow can post it.
+   */
+  private Wire.TaskCompleted push() throws AgentException {
+    if (task.repo() == null || task.repo().branch() == null || !task.repo().branch().startsWith("orca/")) {
+      return completed("failed", null, null, null, ErrorCodes.AGENT_ERROR, "nothing to push: the task has no orca branch",
+          Map.of());
+    }
+    String branch = task.repo().branch();
+    Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
+    link.send(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), null, null, false)));
+    Executables.Output head = Executables.run(List.of("git", "-C", dir.toString(), "rev-parse", "--abbrev-ref", "HEAD"),
+        Map.of(), 30);
+    if (head.exitCode() != 0 || !branch.equals(head.stdout().trim())) {
+      return completed("failed", null, null, null, ErrorCodes.AGENT_ERROR,
+          "the workspace is on " + head.stdout().trim() + ", not " + branch + "; not pushing", Map.of());
+    }
+    String shown = "git push -u origin " + branch;
+    buffer.add(AgentEvent.of(AgentEvent.TOOL_STARTED, "itemId", "push", "kind", "command", "title", shown,
+        "input", Map.of("command", shown)));
+    Executables.Output out = Executables.run(List.of("git", "-C", dir.toString(), "push", "--porcelain", "-u", "origin",
+        "refs/heads/" + branch + ":refs/heads/" + branch), Map.of("GIT_TERMINAL_PROMPT", "0"), 300);
+    String output = (out.stdout() + "\n" + out.stderr()).strip();
+    buffer.add(AgentEvent.of(AgentEvent.TOOL_COMPLETED, "itemId", "push", "kind", "command", "title", shown,
+        "status", out.exitCode() == 0 ? "completed" : "failed", "exitCode", out.exitCode(),
+        "output", dev.orca.agent.core.Truncate.middle(Executables.plain(output), 4000)));
+    if (out.exitCode() != 0) {
+      return completed("failed", null, null, null, ErrorCodes.AGENT_ERROR, "git push failed: " + Executables.plain(out.stderr()),
+          Map.of());
+    }
+    List<String> links = new ArrayList<>();
+    java.util.regex.Matcher m = java.util.regex.Pattern.compile("https?://\\S+").matcher(output);
+    while (m.find()) {
+      links.add(m.group());
+    }
+    String text = "Pushed `" + branch + "` to origin." + (links.isEmpty() ? ""
+        : "\n\nOpen a merge request: " + String.join(" ", links));
+    buffer.add(AgentEvent.of(AgentEvent.MESSAGE, "itemId", "push-result", "text", text, "phase", "final_answer"));
+    return completed("succeeded", text, Map.of("branch", branch, "links", links), null, null, null, Map.of());
   }
 
   /** Approvals a person decided are reported as such rather than as the policy's. */

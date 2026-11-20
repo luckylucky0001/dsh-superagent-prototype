@@ -372,4 +372,32 @@ class EndToEndTest {
     assertEquals("orca/" + run.toLowerCase(), new String(branch.getInputStream().readAllBytes()).trim(),
         "a branch of its own, so nothing lands on main");
   }
+
+  @Test
+  void theIssueBranchIsPushedFromTheRuntimeThatWorkedOnIt() throws Exception {
+    Path origin = Files.createTempDirectory("orca-e2e-origin");
+    for (List<String> cmd : List.of(List.of("git", "init", "-q", "-b", "main"),
+        List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"))) {
+      assertEquals(0, new ProcessBuilder(cmd).directory(origin.toFile()).inheritIO().start().waitFor());
+    }
+    String project = Json.str(call("POST", "/api/projects", Map.of("key", "PSH", "name", "Push", "repoUrl", origin.toString())), "id");
+    Object issue = call("POST", "/api/issues", Map.of("projectId", project, "title", "Ship it", "description", "hello",
+        "assigneeType", "agent", "assigneeId", agentId));
+    String key = Json.str(issue, "key");
+    await("worked on", quietly(() -> "in_review".equals(Json.str(call("GET", "/api/issues/" + key, null), "status"))));
+    Map<String, Object> def = Map.of(
+        "nodes", List.of(
+            Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+            Map.of("id", "push", "type", "repo.push", "config", Map.of("issue", key, "agent", "Builder"))),
+        "edges", List.of(Map.of("id", "e1", "source", "start", "target", "push")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Push", "definition", def)), "id");
+    String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of("input", Map.of())), "id");
+    await("pushed", quietly(() -> !"waiting".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
+    Object done = call("GET", "/api/runs/" + run, null);
+    assertEquals("succeeded", Json.str(done, "status"), String.valueOf(Json.get(done, "state.nodes.push")));
+    assertEquals("orca/" + key.toLowerCase(), Json.get(done, "state.nodes.push.output.branch"));
+    Process branches = new ProcessBuilder("git", "-C", origin.toString(), "branch", "--list", "orca/*").start();
+    assertTrue(new String(branches.getInputStream().readAllBytes()).contains("orca/" + key.toLowerCase()),
+        "the branch reached the remote");
+  }
 }

@@ -27,6 +27,7 @@ public class Bootstrap implements ApplicationRunner {
   public static final String LOOP_TEMPLATE = "wf_template_review_loop";
   public static final String CODEX_REVIEW_TEMPLATE = "wf_template_codex_review";
   public static final String HEALTH_TEMPLATE = "wf_template_health_check";
+  public static final String PUSH_TEMPLATE = "wf_template_push_branch";
 
   private final MemberRepo members;
   private final AuthService auth;
@@ -83,6 +84,12 @@ public class Bootstrap implements ApplicationRunner {
           "Run by hand: the implementer works, the reviewer checks; requested changes go back until the review "
               + "passes (max 3 rounds); then a person approves and the issue is done.",
           false, loopDefinition(), false, null);
+    }
+    if (!workflowRepo.existsById(PUSH_TEMPLATE)) {
+      workflows.save(PUSH_TEMPLATE, "Template: push an issue branch",
+          "Run by hand (or add it after an approval): the runtime that worked on the issue pushes its branch with its "
+              + "own git credentials and the result, with the git host's merge-request link, is posted on the issue.",
+          false, pushDefinition(), false, null);
     }
     if (!workflowRepo.existsById(HEALTH_TEMPLATE)) {
       workflows.save(HEALTH_TEMPLATE, "Template: nightly health check of a project",
@@ -174,6 +181,21 @@ public class Bootstrap implements ApplicationRunner {
                     + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 150, 340)),
         "edges", List.of(edge("e1", "start", "out", "loop"), edge("e2", "loop", "passed", "approve"),
             edge("e3", "approve", "approved", "done"), edge("e4", "loop", "failed", "report")));
+  }
+
+  static Map<String, Object> pushDefinition() {
+    return Map.of(
+        "nodes", List.of(
+            node("start", "trigger.manual", "Run by hand", Map.of("inputs", "issueId, agent"), 0, 0),
+            node("push", "repo.push", "Push the branch", Map.of("issue", "{{ trigger.input.issueId }}",
+                "agent", "{{ trigger.input.agent }}"), 0, 170, 0, "CONTINUE"),
+            node("posted", "issue.comment", "Share the link", Map.of("issue", "{{ trigger.input.issueId }}",
+                "body", "{{ nodes.push.output.text }}", "taskId", "{{ nodes.push.output.taskId }}"), -130, 340),
+            node("failed", "issue.comment", "Report the failure", Map.of("issue", "{{ trigger.input.issueId }}",
+                "body", "Pushing the branch failed: {{ nodes.push.output.error }}", "taskId", "{{ nodes.push.output.taskId }}"),
+                150, 340)),
+        "edges", List.of(edge("e1", "start", "out", "push"), edge("e2", "push", "out", "posted"),
+            edge("e3", "push", "error", "failed")));
   }
 
   static Map<String, Object> healthCheckDefinition() {
