@@ -173,19 +173,39 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
     (d: NodeDescriptor, position?: { x: number; y: number }) => {
       const id = nextNodeId(d.type, nodes.map((n) => n.id));
       let pos = position;
-      if (!pos) {
+      // clicked in the palette: chain below the selected node (and connect it), else below the lowest node
+      const anchor = !position && selection?.kind === 'node' ? nodes.find((n) => n.id === selection.id) : undefined;
+      if (!pos && anchor) {
+        const below = nodes.filter((n) => Math.abs(n.position.x - anchor.position.x) < 200 && n.position.y > anchor.position.y);
+        pos = { x: anchor.position.x, y: anchor.position.y + 130 };
+        if (below.some((n) => Math.abs(n.position.y - pos!.y) < 90)) pos = { x: anchor.position.x + 260, y: pos.y };
+      } else if (!pos && nodes.length > 0) {
+        const lowest = nodes.reduce((a, b) => (b.position.y > a.position.y ? b : a));
+        pos = { x: lowest.position.x, y: lowest.position.y + 130 };
+      } else if (!pos) {
         const rect = wrapper.current?.getBoundingClientRect();
-        pos = rect
-          ? flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + rect.height / 3 })
-          : { x: 0, y: 0 };
-        pos = { x: pos.x - 110 + (nodes.length % 4) * 16, y: pos.y + (nodes.length % 4) * 16 };
+        const c = rect ? flow.screenToFlowPosition({ x: rect.left + rect.width / 2, y: rect.top + 80 }) : { x: 0, y: 0 };
+        pos = { x: c.x - 110, y: c.y };
       }
       const def: NodeDef = { id, type: d.type, name: d.label, config: defaultConfig(d), retries: 0, timeoutSeconds: 0, onError: 'FAIL', ui: {} };
       setNodes((ns) => [...ns.map((n) => ({ ...n, selected: false })), { id, type: 'orca', position: pos!, data: { def, descriptor: d }, selected: true }]);
+      if (anchor && !d.trigger) {
+        const ports = portsOf(anchor.data.def, anchor.data.descriptor);
+        setEdges((es) => [...es, {
+          id: nextEdgeId(es.map((x) => x.id)),
+          source: anchor.id,
+          target: id,
+          sourceHandle: ports[0],
+          targetHandle: 'in',
+          label: edgeLabel({ sourcePort: ports[0] }, ports.length > 1),
+          data: { condition: null },
+        }]);
+      }
       setNewIds((s) => new Set(s).add(id));
       setSelection({ kind: 'node', id });
+      if (!position) window.requestAnimationFrame(() => void flow.fitView({ padding: 0.25, maxZoom: 1.1, duration: 250 }));
     },
-    [nodes, flow, setNodes],
+    [nodes, flow, setNodes, setEdges, selection],
   );
 
   const onDrop = (e: DragEvent) => {

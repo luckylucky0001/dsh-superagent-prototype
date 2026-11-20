@@ -9,4 +9,6 @@ public interface ApiTokenRepo extends JpaRepository<ApiToken, String> {
   Optional<ApiToken> findByTokenHash(String hash);
 
   List<ApiToken> findByRuntimeId(String runtimeId);
+
+  List<ApiToken> findByKindAndLabel(String kind, String label);
 }

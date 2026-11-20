@@ -103,13 +103,16 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 - `http.request` 只允许 `ORCA_HTTP_ALLOWED_HOSTS` 中的主机，不跟随重定向；通知组件额外允许常见 IM webhook 主机。
 - MCP 回写 token 通过环境变量传给 CLI，不出现在命令行参数里。
 
-## 8. 前端
+## 8. MCP 回写
+
+`POST /api/mcp` 是一个精简的 MCP 服务器（Streamable HTTP，JSON 响应）。派发任务时为每个关联了 Issue 的任务签发只在任务期间有效的 token（任务结束即吊销），daemon 通过环境变量把它交给 CLI。工具：`orca_get_issue`、`orca_post_comment`（以 Agent 身份发进展，不触发工作流）、`orca_set_issue_status`。最终回复仍由工作流节点发出，避免重复。可用 `orca.mcp.enabled=false` 关闭。
+
+## 9. 前端
 
 React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板、Issue 详情（评论与执行记录时间线、实时转录、插话/取消）、收件箱、Agents、运行时（每个 CLI 的健康状态、接入命令）、工作流列表与画布编辑器（组件面板、自动表单、变量助手、校验定位）、运行记录（图上叠加节点状态）。一条 SSE 连接驱动缓存失效与转录追加。英文为主、可切中文。
 
-## 9. 后续
+## 10. 后续
 
-- MCP 回写端点（`post_comment` / `set_issue_status` / `ask_human`），daemon 已支持注入。
 - git / PR 节点（GitHub/GitLab/Gitee）、`traecli review` / Codex review 节点、有轮数上限的循环子流程。
 - 权限升级转人工审批（目前由策略直接拒绝）。
 - 多实例（行锁、跨实例推送）、OIDC/SSO、RBAC、审计、用量报表。

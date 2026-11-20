@@ -43,6 +43,7 @@ public class AuthFilter extends OncePerRequestFilter {
     if (m.isEmpty()) {
       res.setStatus(401);
       res.setContentType("application/json");
+      res.setCharacterEncoding("UTF-8");
       res.getWriter().write("{\"error\":\"not signed in\"}");
       return;
     }

@@ -57,6 +57,8 @@ public class TaskService {
       - Your final reply is posted to the team, so make it a short, concrete summary of what you did and what is left.
       - If you are blocked or need a decision, say exactly what you need in your final reply.
       - Refer to files by paths relative to the working directory; do not use absolute paths or file:// links.
+      - If the orca tools are available, you may read the issue with orca_get_issue and, for long tasks, post a brief
+        progress note with orca_post_comment. Do not post your final reply with it; it is posted for you.
       - Never print secrets such as tokens or passwords.""";
 
   private final TaskRepo tasks;
@@ -71,10 +73,15 @@ public class TaskService {
   private final Realtime realtime;
   private final ApplicationEventPublisher publisher;
   private final OrcaProperties props;
+  private final dev.orca.server.auth.AuthService auth;
+  private final boolean mcpEnabled;
 
   public TaskService(TaskRepo tasks, TaskEventRepo events, AgentRepo agents, IssueRepo issues, ProjectRepo projects,
       CommentRepo comments, RuntimeService runtimes, DaemonGateway gateway, InboxService inbox, Realtime realtime,
-      ApplicationEventPublisher publisher, OrcaProperties props) {
+      ApplicationEventPublisher publisher, OrcaProperties props, dev.orca.server.auth.AuthService auth,
+      @org.springframework.beans.factory.annotation.Value("${orca.mcp.enabled:true}") boolean mcpEnabled) {
+    this.auth = auth;
+    this.mcpEnabled = mcpEnabled;
     this.tasks = tasks;
     this.events = events;
     this.agents = agents;
@@ -267,8 +274,13 @@ public class TaskService {
     }
     @SuppressWarnings("unchecked")
     Map<String, Object> schema = t.outputSchemaJson == null ? null : JsonCols.map(t.outputSchemaJson);
+    Wire.McpSpec mcp = null;
+    if (mcpEnabled && t.issueId != null) {
+      String token = auth.issueTaskToken(t.id, java.time.Duration.ofMinutes(Math.max(60, a.timeoutMinutes) + 60L));
+      mcp = new Wire.McpSpec(props.publicUrl() + "/api/mcp", token);
+    }
     return new Wire.TaskAssign(t.id, t.provider, spec, t.workspaceKey, repo, t.prompt, t.recap, t.resumeRef, schema,
-        Math.max(60, a.timeoutMinutes * 60), null);
+        Math.max(60, a.timeoutMinutes * 60), mcp);
   }
 
   // ---------------------------------------------------------------- daemon reports
@@ -392,6 +404,7 @@ public class TaskService {
     t.leaseUntil = null;
     tasks.save(t);
     inbox.closeTask(t.id);
+    auth.revokeTaskTokens(t.id);
     changed(t);
     publisher.publishEvent(new TaskFinished(t));
   }

@@ -41,8 +41,11 @@ public class TriggerService {
   private final AgentRepo agents;
   private final ScheduleRepo schedules;
   private final OrcaProperties props;
+  private final dev.orca.server.repo.IssueRepo issueRepo;
 
-  public TriggerService(WorkflowService workflows, AgentRepo agents, ScheduleRepo schedules, OrcaProperties props) {
+  public TriggerService(WorkflowService workflows, AgentRepo agents, ScheduleRepo schedules, OrcaProperties props,
+      dev.orca.server.repo.IssueRepo issueRepo) {
+    this.issueRepo = issueRepo;
     this.workflows = workflows;
     this.agents = agents;
     this.schedules = schedules;
@@ -136,6 +139,10 @@ public class TriggerService {
       String memberId) {
     Workflow w = workflows.get(workflowId);
     WorkflowDefinition def = WorkflowService.parse(w.definitionJson);
+    var problems = workflows.validate(def);
+    if (!problems.isEmpty()) {
+      throw new ApiException(HttpStatus.valueOf(422), "the workflow has problems; fix them before running it", problems);
+    }
     NodeDef node = nodeId != null ? def.requireNode(nodeId)
         : def.nodes().stream().filter(n -> n.type().equals("trigger.manual")).findFirst()
             .orElseThrow(() -> ApiException.bad("this workflow has no manual trigger"));
@@ -146,8 +153,14 @@ public class TriggerService {
     payload.put("event", "manual");
     payload.put("input", input == null ? Map.of() : input);
     payload.put("actor", Map.of("type", "member", "id", String.valueOf(memberId)));
-    Object issueId = input == null ? null : input.get("issueId");
-    return workflows.start(w, node.id(), payload, issueId == null ? null : String.valueOf(issueId));
+    Object issueRef = input == null ? null : input.get("issueId");
+    String issueId = null;
+    if (issueRef != null && !String.valueOf(issueRef).isBlank()) {
+      String ref = String.valueOf(issueRef);
+      issueId = issueRepo.findById(ref).or(() -> issueRepo.findByIssueKeyIgnoreCase(ref)).map(i -> i.id)
+          .orElseThrow(() -> ApiException.notFound("issue " + ref));
+    }
+    return workflows.start(w, node.id(), payload, issueId);
   }
 
   @Transactional

@@ -404,6 +404,15 @@ final class CodexSession implements AgentSession {
       }
       case "mcpServer/elicitation/request" -> {
         String mode = Json.str(p, "mode");
+        if ("orca".equals(Json.str(p, "serverName"))) {
+          // Orca's own MCP tools are scoped to this task's issue by their token; confirming them would only
+          // park the task in the inbox.
+          String id = nextRequestId();
+          sink.accept(AgentEvent.of(AgentEvent.APPROVAL_REQUESTED, "requestId", id, "kind", "tool",
+              "title", String.valueOf(Json.str(p, "message"))));
+          sink.accept(AgentEvent.of(AgentEvent.APPROVAL_RESOLVED, "requestId", id, "decision", "accept", "by", "policy"));
+          yield Map.of("action", "accept", "content", Map.of());
+        }
         if (mode == null || !mode.endsWith("form")) {
           yield Map.of("action", "decline");
         }

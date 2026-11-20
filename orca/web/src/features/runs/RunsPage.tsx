@@ -70,7 +70,7 @@ export function RunsPage() {
                   ) : <span className="orca-mono" style={{ fontSize: 12 }}>{id}</span>;
                 },
               },
-              { title: t('common.started'), dataIndex: 'startedAt', width: 150, render: (v: number) => <Tooltip title={fmtDateTime(v)}>{fmtTime(v)}</Tooltip> },
+              { title: t('common.started'), dataIndex: 'startedAt', width: 150, render: (v: number) => <Tooltip title={fmtDateTime(v)}><span>{fmtTime(v)}</span></Tooltip> },
               { title: t('common.duration'), key: 'dur', width: 110, render: (_, r) => fmtDuration(durationBetween(r.startedAt, r.finishedAt)) },
             ]}
           />

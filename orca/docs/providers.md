@@ -22,14 +22,15 @@
 | 探测登录 | `account/read` → `account.type`（`chatgpt`/`apikey`…）、`planType` | ✅ 实测 |
 | 模型列表 | `model/list` → `data[].id/displayName/description/isDefault/supportedReasoningEfforts` | ✅ 实测（10 个模型） |
 | 新会话 | `thread/start {cwd, model, sandbox, approvalPolicy, developerInstructions, config, serviceName}` | ✅ 实测 |
-| 按会话注入 MCP | `thread/start.config.mcp_servers.orca = {url, bearer_token_env_var}`，token 走环境变量 | ✅ 实测（Codex 会去连接该地址） |
+| 按会话注入 MCP | `thread/start.config.mcp_servers.orca = {url, bearer_token_env_var}`，token 走环境变量 | ✅ 实测：Agent 通过 Orca 的 MCP 工具读 Issue、发进展评论 |
+| MCP 工具确认 | Codex 调用 MCP 工具前发 `mcpServer/elicitation/request`；对 `serverName == "orca"` 自动同意，其他 MCP 服务器转人工 | ✅ 实测 |
 | 续接 | `thread/resume {threadId, excludeTurns:true}` | ✅ 实测（续接后记得之前的文件） |
 | 一轮 | `turn/start {threadId, input:[text/localImage], effort, outputSchema}` | ✅ 实测 |
 | 结构化输出 | `turn/start.outputSchema`，最终消息即 JSON | ✅ 实测 |
 | 流式 | `item/started|completed`（agentMessage/reasoning/commandExecution/fileChange/mcpToolCall/webSearch…）、`item/agentMessage/delta`、`item/commandExecution/outputDelta`、`turn/plan/updated`、`turn/diff/updated`、`thread/tokenUsage/updated`、`turn/completed` | ✅ 实测（已录制报文） |
 | 交付结果 | `agentMessage.phase == "final_answer"` | ✅ 实测 |
 | 中断 | `turn/interrupt` → `turn/completed.status = interrupted` | ✅ 实测 |
-| 插话 | `turn/steer {threadId, expectedTurnId, input}` | 🟡 按 schema 实现，假 CLI 测试通过，未实机验证 |
+| 插话 | `turn/steer {threadId, expectedTurnId, input}` | ✅ 实测（运行中改指令，最终回复按新指令） |
 | 审批 | `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | 🟡 按 schema 实现；`workspace-write` 下普通命令不触发审批 |
 | 向人提问 | `item/tool/requestUserInput`、`mcpServer/elicitation/request` | 🟡 按 schema 实现 |
 | 错误分类 | `turn.error.codexErrorInfo`：unauthorized / usageLimitExceeded / contextWindowExceeded / sandboxError / httpConnectionFailed… | 🟡 按文档实现 |

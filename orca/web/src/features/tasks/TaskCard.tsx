@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, Card, Flex, Space, Tooltip, Typography } from 'antd';
 import { DownOutlined, ExportOutlined, RightOutlined } from '@ant-design/icons';
@@ -44,8 +44,11 @@ export function TaskMeta({ task }: { task: Task }) {
 export function TaskCard({ task }: { task: Task }) {
   const t = useT();
   const active = ACTIVE_TASK_STATUSES.includes(task.status) || task.status === 'queued';
-  const [open, setOpen] = useState<boolean | null>(null);
-  const expanded = open ?? active;
+  // open while the agent works and stay open when it finishes, so the reader keeps their place
+  const [expanded, setOpen] = useState(active);
+  useEffect(() => {
+    if (active) setOpen(true);
+  }, [active]);
   const runId = typeof task.origin?.runId === 'string' ? task.origin.runId : null;
 
   return (

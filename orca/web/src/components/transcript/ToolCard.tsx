@@ -91,7 +91,7 @@ export function ToolCard({ item }: { item: ToolItem }) {
           )}
           {!!item.durationMs && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{fmtDuration(item.durationMs)}</Typography.Text>}
           <Tooltip title={t.dyn(`transcript.toolStatus.${item.status}`, item.status)}>
-            <StatusIcon status={item.status} />
+            <span><StatusIcon status={item.status} /></span>
           </Tooltip>
           {hasBody && (expanded ? <DownOutlined style={{ fontSize: 10 }} /> : <RightOutlined style={{ fontSize: 10 }} />)}
         </Space>

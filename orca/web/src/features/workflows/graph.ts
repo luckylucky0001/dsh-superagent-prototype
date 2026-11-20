@@ -217,6 +217,10 @@ export function variablesFor(nodeId: string, nodes: FlowNode[], edges: FlowEdge[
         for (const k of Object.keys(schema?.properties ?? {})) vars.push({ expr: `nodes.${id}.output.structured.${k}` });
       }
     }
+    if (d?.type === 'human.input' && typeof n.data.def.config.questions === 'string') {
+      n.data.def.config.questions.split('\n').filter((l) => l.trim()).forEach((q, i) =>
+        vars.push({ expr: `nodes.${id}.output.answers.q${i + 1}`, description: q.trim() }));
+    }
     if (n.data.def.onError === 'CONTINUE') vars.push({ expr: `nodes.${id}.output.error`, description: 'error message (error port)' });
     groups.push({ key: id, title: n.data.def.name || id, vars });
   }

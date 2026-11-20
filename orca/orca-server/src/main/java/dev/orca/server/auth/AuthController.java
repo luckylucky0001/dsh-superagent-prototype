@@ -28,7 +28,7 @@ public class AuthController {
   public record LoginRequest(String email, String password) {}
 
   public record MemberView(String id, String email, String name, String role) {
-    static MemberView of(Member m) {
+    public static MemberView of(Member m) {
       return new MemberView(m.id, m.email, m.name, m.role);
     }
   }

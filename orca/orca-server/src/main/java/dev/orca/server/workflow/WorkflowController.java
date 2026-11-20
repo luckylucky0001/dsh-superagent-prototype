@@ -85,8 +85,21 @@ public class WorkflowController {
 
   @GetMapping("/workflows/{id}/versions")
   public List<Map<String, Object>> versions(@PathVariable String id) {
-    return workflows.versions(id).stream().map(v -> Map.<String, Object>of("version", v.version, "createdAt", v.createdAt,
-        "createdBy", String.valueOf(v.createdBy))).toList();
+    return workflows.versions(id).stream().map(v -> {
+      Map<String, Object> m = new java.util.LinkedHashMap<>();
+      m.put("version", v.version);
+      m.put("createdAt", v.createdAt);
+      m.put("createdBy", v.createdBy);
+      return m;
+    }).toList();
+  }
+
+  @GetMapping("/workflows/{id}/versions/{version}")
+  public Map<String, Object> version(@PathVariable String id, @PathVariable int version) {
+    return workflows.versions(id).stream().filter(v -> v.version == version).findFirst()
+        .map(v -> Map.<String, Object>of("version", v.version, "createdAt", v.createdAt,
+            "definition", JsonCols.any(v.definitionJson)))
+        .orElseThrow(() -> dev.orca.server.support.ApiException.notFound("version"));
   }
 
   public record RunInput(String nodeId, Map<String, Object> input) {}

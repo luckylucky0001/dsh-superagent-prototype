@@ -94,6 +94,17 @@ public class AuthService {
     tokens.findByTokenHash(hash(plain)).ifPresent(tokens::delete);
   }
 
+  /** A token for the MCP endpoint, bound to one task through its label. */
+  @Transactional
+  public String issueTaskToken(String taskId, Duration ttl) {
+    return issue(TASK, null, null, taskId, ttl);
+  }
+
+  @Transactional
+  public void revokeTaskTokens(String taskId) {
+    tokens.deleteAll(tokens.findByKindAndLabel(TASK, taskId));
+  }
+
   @Transactional
   public void revokeRuntime(String runtimeId) {
     tokens.deleteAll(tokens.findByRuntimeId(runtimeId));

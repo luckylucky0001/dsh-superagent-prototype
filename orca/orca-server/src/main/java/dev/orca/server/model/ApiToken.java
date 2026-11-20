@@ -16,4 +16,8 @@ public class ApiToken {
   public Long expiresAt;
   public Long usedAt;
   public long createdAt;
+
+  public String getLabel() {
+    return label;
+  }
 }

@@ -109,7 +109,7 @@ function RuntimeCard({ r }: { r: Runtime }) {
           { key: 'host', label: t('runtimes.hostname'), children: r.hostname ?? '—' },
           { key: 'os', label: t('runtimes.os'), children: r.os ?? '—' },
           { key: 'ver', label: t('runtimes.daemon'), children: r.daemonVersion ? <span className="orca-mono">{r.daemonVersion}</span> : '—' },
-          { key: 'seen', label: t('runtimes.lastSeen'), children: <Tooltip title={fmtDateTime(r.lastSeenAt)}>{fromNow(r.lastSeenAt)}</Tooltip> },
+          { key: 'seen', label: t('runtimes.lastSeen'), children: <Tooltip title={fmtDateTime(r.lastSeenAt)}><span>{fromNow(r.lastSeenAt)}</span></Tooltip> },
           {
             key: 'cap',
             label: t('runtimes.capacity'),

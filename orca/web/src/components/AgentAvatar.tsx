@@ -6,7 +6,7 @@ const PALETTE = ['#0f5fd7', '#7a3ff2', '#0b8a6f', '#c2410c', '#be185d', '#4d7c0f
 
 function colorFor(s: string): string {
   let h = 0;
-  for (let i = 0; i < s.length; i++) h = (h * 31 + s.charCodeAt(i)) | 0;
+  for (let i = 0; i < s.length; i++) h = Math.imul(h ^ s.charCodeAt(i), 2654435761) >>> 0;
   return PALETTE[Math.abs(h) % PALETTE.length];
 }
 

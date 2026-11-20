@@ -119,4 +119,28 @@ class CodexLiveTest {
       assertFalse(events.isEmpty());
     }
   }
+
+  @Test
+  void steerReachesTheRunningTurn() throws Exception {
+    Path dir = Files.createTempDirectory("orca-live-steer");
+    List<AgentEvent> events = new CopyOnWriteArrayList<>();
+    try (AgentSession s = provider().open(new SessionSpec(dir, MODEL, "low", null, Permission.WORKSPACE, null, null, null,
+        null, null, null), ACCEPT_ALL)) {
+      Thread steerer = Thread.ofVirtual().start(() -> {
+        try {
+          for (int i = 0; i < 600 && events.stream().noneMatch(e -> e.type().equals(AgentEvent.TOOL_STARTED)); i++) {
+            Thread.sleep(100);
+          }
+          s.steer("Change of plan: do not create any file. Reply with exactly the word STEERED.");
+        } catch (Exception e) {
+          System.out.println("steer failed: " + e);
+        }
+      });
+      TurnResult r = s.runTurn(TurnSpec.text("Run `sleep 8`, then create notes.txt containing hello, then reply DONE."), events::add);
+      steerer.join();
+      System.out.println("steer: " + r.status() + " text=" + r.finalText() + " notes=" + Files.exists(dir.resolve("notes.txt")));
+      assertEquals(TurnResult.Status.COMPLETED, r.status());
+      assertTrue(r.finalText().contains("STEERED"), r.finalText());
+    }
+  }
 }

@@ -1,13 +1,55 @@
-import { useEffect, useMemo } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, AutoComplete, Button, Drawer, Flex, Form, Input, InputNumber, Radio, Select, Space, Typography } from 'antd';
+import { Alert, Button, Drawer, Flex, Form, Input, InputNumber, Radio, Select, Space, Typography } from 'antd';
 import { api } from '@/api/client';
 import { qk, useRuntimes } from '@/api/queries';
-import type { Agent, AgentInput, Permission, Provider } from '@/api/types';
+import type { Agent, AgentInput, ModelInfo, Permission, Provider } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { PROVIDER_LABELS } from '@/components/AgentAvatar';
 import { StatusTag } from '@/components/StatusTag';
 import { useNotify } from '@/components/useNotify';
+
+/** Model picker filled from the runtime's model list; any other id can be typed in. */
+function ModelSelect({ value, onChange, models, placeholder, onPicked }: {
+  value?: string; onChange?: (v: string | undefined) => void; models: ModelInfo[]; placeholder: string; onPicked: () => void;
+}) {
+  const t = useT();
+  const [search, setSearch] = useState('');
+  const known = new Set(models.map((m) => m.id));
+  const extra = [search.trim(), value].filter((v): v is string => !!v && !known.has(v));
+  const options = [
+    ...models.map((m) => ({
+      value: m.id,
+      search: `${m.id} ${m.displayName ?? ''}`,
+      label: (
+        <Space size={6}>
+          <span>{m.displayName ?? m.id}</span>
+          <Typography.Text type="secondary" className="orca-mono" style={{ fontSize: 11 }}>{m.id}</Typography.Text>
+          {m.isDefault && <Typography.Text type="success" style={{ fontSize: 11 }}>{t('agents.default')}</Typography.Text>}
+        </Space>
+      ),
+    })),
+    ...[...new Set(extra)].map((v) => ({ value: v, search: v, label: <span className="orca-mono">{v}</span> })),
+  ];
+  return (
+    <Select
+      showSearch
+      allowClear
+      value={value}
+      placeholder={placeholder}
+      searchValue={search}
+      onSearch={setSearch}
+      optionFilterProp="search"
+      options={options}
+      onChange={(v?: string) => {
+        onChange?.(v);
+        setSearch('');
+        onPicked();
+      }}
+      notFoundContent={null}
+    />
+  );
+}
 
 interface Values {
   name: string;
@@ -139,21 +181,10 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         )}
         <Flex gap={12}>
           <Form.Item name="model" label={t('agents.model')} style={{ flex: 1 }} extra={modelInfo?.description ?? (models.length ? undefined : t('agents.modelFree'))}>
-            <AutoComplete
-              allowClear
+            <ModelSelect
+              models={models}
               placeholder={models.find((m) => m.isDefault)?.id ?? t('agents.modelDefault')}
-              options={models.map((m) => ({
-                value: m.id,
-                label: (
-                  <Space size={6}>
-                    <span>{m.displayName ?? m.id}</span>
-                    <Typography.Text type="secondary" className="orca-mono" style={{ fontSize: 11 }}>{m.id}</Typography.Text>
-                    {m.isDefault && <Typography.Text type="success" style={{ fontSize: 11 }}>{t('agents.default')}</Typography.Text>}
-                  </Space>
-                ),
-              }))}
-              filterOption={(input, opt) => String(opt?.value ?? '').toLowerCase().includes(input.toLowerCase())}
-              onChange={() => form.setFieldsValue({ effort: undefined })}
+              onPicked={() => form.setFieldsValue({ effort: undefined })}
             />
           </Form.Item>
           <Form.Item name="effort" label={t('agents.effort')} style={{ width: 200 }}>
