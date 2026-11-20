@@ -1,6 +1,9 @@
 dev/orca/agent/fake/FakeCodexAppServer.class
-dev/orca/agent/CodexDriverTest$RecordingHandler.class
 dev/orca/agent/CodexLiveTest.class
+dev/orca/agent/TraeDriverTest$Handler.class
 dev/orca/agent/CodexDriverTest.class
 dev/orca/agent/fake/FakeCodexAppServer$Path.class
+dev/orca/agent/fake/FakeTraeAcp.class
+dev/orca/agent/CodexDriverTest$RecordingHandler.class
 dev/orca/agent/CodexLiveTest$1.class
+dev/orca/agent/TraeDriverTest.class

@@ -1,5 +1,5 @@
 <?xml version="1.0" encoding="UTF-8"?>
-<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="dev.orca.agent.CodexDriverTest" time="4.002" tests="7" errors="0" skipped="0" failures="0">
+<testsuite xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance" xsi:noNamespaceSchemaLocation="https://maven.apache.org/surefire/maven-surefire-plugin/xsd/surefire-test-report-3.0.xsd" version="3.0" name="dev.orca.agent.CodexDriverTest" time="3.514" tests="7" errors="0" skipped="0" failures="0">
   <properties>
     <property name="java.specification.version" value="21"/>
     <property name="sun.jnu.encoding" value="ANSI_X3.4-1968"/>
@@ -13,7 +13,7 @@
     <property name="sun.java.launcher" value="SUN_STANDARD"/>
     <property name="user.country" value="US"/>
     <property name="sun.boot.library.path" value="/usr/lib/jvm/java-21-openjdk-amd64/lib"/>
-    <property name="sun.java.command" value="/home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire/surefirebooter-20261120173840476_3.jar /home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire 2026-11-20T17-38-40_394-jvmRun1 surefire-20261120173840476_1tmp surefire_0-20261120173840476_2tmp"/>
+    <property name="sun.java.command" value="/home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire/surefirebooter-20261120180126955_3.jar /home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire 2026-11-20T18-01-26_885-jvmRun1 surefire-20261120180126955_1tmp surefire_0-20261120180126955_2tmp"/>
     <property name="http.nonProxyHosts" value="localhost|127.0.0.1|::1|127.*|0.*|::|169.254.*|api.anthropic.com|api-staging.anthropic.com|api-pr-preview.anthropic.com|mcp-proxy.anthropic.com|mcp-proxy-staging.anthropic.com|registry.npmjs.org|jsr.io|npm.jsr.io|pypi.org|files.pythonhosted.org|index.crates.io|proxy.golang.org|host.docker.internal|10.*|172.16.*|172.17.*|172.18.*|172.19.*|172.20.*|172.21.*|172.22.*|172.23.*|172.24.*|172.25.*|172.26.*|172.27.*|172.28.*|172.29.*|172.30.*|172.31.*|192.168.*|100.64.0.0/10|*.svc.cluster.local|*.svc.cluster.local"/>
     <property name="jdk.debug" value="release"/>
     <property name="surefire.test.class.path" value="/home/user/dsh-superagent-prototype/orca/orca-agent/target/test-classes:/home/user/dsh-superagent-prototype/orca/orca-agent/target/classes:/root/.m2/repository/dev/orca/orca-protocol/0.1.0-SNAPSHOT/orca-protocol-0.1.0-SNAPSHOT.jar:/root/.m2/repository/tools/jackson/core/jackson-databind/3.1.8/jackson-databind-3.1.8.jar:/root/.m2/repository/com/fasterxml/jackson/core/jackson-annotations/2.21/jackson-annotations-2.21.jar:/root/.m2/repository/tools/jackson/core/jackson-core/3.1.8/jackson-core-3.1.8.jar:/root/.m2/repository/org/slf4j/slf4j-api/2.0.20/slf4j-api-2.0.20.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter/6.0.3/junit-jupiter-6.0.3.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-api/6.0.3/junit-jupiter-api-6.0.3.jar:/root/.m2/repository/org/opentest4j/opentest4j/1.3.0/opentest4j-1.3.0.jar:/root/.m2/repository/org/junit/platform/junit-platform-commons/6.0.3/junit-platform-commons-6.0.3.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-params/6.0.3/junit-jupiter-params-6.0.3.jar:/root/.m2/repository/org/junit/jupiter/junit-jupiter-engine/6.0.3/junit-jupiter-engine-6.0.3.jar:/root/.m2/repository/org/junit/platform/junit-platform-launcher/6.0.3/junit-platform-launcher-6.0.3.jar:/root/.m2/repository/org/junit/platform/junit-platform-engine/6.0.3/junit-platform-engine-6.0.3.jar:/root/.m2/repository/org/apiguardian/apiguardian-api/1.1.2/apiguardian-api-1.1.2.jar:/root/.m2/repository/org/jspecify/jspecify/1.0.1/jspecify-1.0.1.jar:/root/.m2/repository/org/slf4j/slf4j-simple/2.0.20/slf4j-simple-2.0.20.jar:"/>
@@ -32,7 +32,7 @@
     <property name="java.vm.specification.vendor" value="Oracle Corporation"/>
     <property name="java.specification.name" value="Java Platform API Specification"/>
     <property name="jdk.http.auth.proxying.disabledSchemes" value=""/>
-    <property name="surefire.real.class.path" value="/home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire/surefirebooter-20261120173840476_3.jar"/>
+    <property name="surefire.real.class.path" value="/home/user/dsh-superagent-prototype/orca/orca-agent/target/surefire/surefirebooter-20261120180126955_3.jar"/>
     <property name="javax.net.ssl.trustStore" value="/etc/ssl/certs/java/cacerts"/>
     <property name="sun.management.compiler" value="HotSpot 64-Bit Tiered Compilers"/>
     <property name="java.runtime.version" value="21.0.13.0.3+1-1-24.04.1-Ubuntu"/>
@@ -60,11 +60,11 @@
     <property name="sun.io.unicode.encoding" value="UnicodeLittle"/>
     <property name="java.class.version" value="65.0"/>
   </properties>
-  <testcase name="approvalsGoThroughTheHandler" classname="dev.orca.agent.CodexDriverTest" time="1.238"/>
-  <testcase name="probeReadsVersionAccountAndModels" classname="dev.orca.agent.CodexDriverTest" time="0.447"/>
-  <testcase name="failuresCarryErrorCodes" classname="dev.orca.agent.CodexDriverTest" time="0.872"/>
-  <testcase name="userInputIsForwarded" classname="dev.orca.agent.CodexDriverTest" time="0.452"/>
-  <testcase name="steerAndInterruptReachTheRunningTurn" classname="dev.orca.agent.CodexDriverTest" time="0.503"/>
+  <testcase name="approvalsGoThroughTheHandler" classname="dev.orca.agent.CodexDriverTest" time="1.091"/>
+  <testcase name="probeReadsVersionAccountAndModels" classname="dev.orca.agent.CodexDriverTest" time="0.456"/>
+  <testcase name="failuresCarryErrorCodes" classname="dev.orca.agent.CodexDriverTest" time="0.778"/>
+  <testcase name="userInputIsForwarded" classname="dev.orca.agent.CodexDriverTest" time="0.366"/>
+  <testcase name="steerAndInterruptReachTheRunningTurn" classname="dev.orca.agent.CodexDriverTest" time="0.452"/>
   <testcase name="startupFailureIsReported" classname="dev.orca.agent.CodexDriverTest" time="0.006"/>
-  <testcase name="mapsEventsAndParsesStructuredOutput" classname="dev.orca.agent.CodexDriverTest" time="0.44"/>
+  <testcase name="mapsEventsAndParsesStructuredOutput" classname="dev.orca.agent.CodexDriverTest" time="0.345"/>
 </testsuite>
