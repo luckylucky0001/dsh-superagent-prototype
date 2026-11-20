@@ -52,6 +52,9 @@ final class TraeSession implements AgentSession {
   private String model;
   private boolean resumed;
   private boolean instructionsSent;
+  private volatile boolean userCancelled;
+  private volatile String declinedInTurn;
+  private long taskTokens;
 
   private volatile boolean streaming;
   private volatile AgentEventSink sink = e -> {};
@@ -67,6 +70,15 @@ final class TraeSession implements AgentSession {
     this.timeout = timeout;
     this.capabilities = capabilities;
   }
+
+  /** Name of the permission profile Orca defines for the workspace tier. */
+  static final String WORKSPACE_PROFILE = "orca_workspace";
+
+  /** Internal capability: {@code session/new} accepts {@code systemPrompt}. */
+  static final String SYSTEM_PROMPT = "system_prompt";
+
+  /** How often a turn that TRAE ended because a request was declined is continued automatically. */
+  private static final int MAX_DECLINE_CONTINUATIONS = 3;
 
   static TraeSession open(TraeProvider provider, SessionSpec spec, Interaction.Handler handler) throws AgentException {
     List<String> args = new ArrayList<>();
@@ -85,17 +97,19 @@ final class TraeSession implements AgentSession {
     args.add("projects.\"" + cwd.replace("\"", "") + "\".trust_level=\"trusted\"");
     switch (spec.permission()) {
       case READ_ONLY -> {
+        // verified: no writes anywhere, no network
         args.add("-c");
         args.add("default_permissions=\":read-only\"");
       }
       case WORKSPACE -> {
+        // TRAE's built-in :workspace profile allows network; a profile of our own extends it and turns
+        // the network off unless the agent asks for it and the machine owner allows it (verified live)
         args.add("-c");
-        args.add("default_permissions=\":workspace\"");
-        if (spec.network()) {
-          // TRAE CLI 2.x shares Codex's configuration keys
-          args.add("-c");
-          args.add("sandbox_workspace_write.network_access=true");
-        }
+        args.add("default_permissions=\"" + WORKSPACE_PROFILE + "\"");
+        args.add("-c");
+        args.add("permissions." + WORKSPACE_PROFILE + ".extends=\":workspace\"");
+        args.add("-c");
+        args.add("permissions." + WORKSPACE_PROFILE + ".network.enabled=" + spec.network());
         for (String allowed : spec.allowedCommands()) {
           args.add("--allowed-tool");
           args.add("Bash(" + allowed.replace(")", "") + ")");
@@ -133,6 +147,10 @@ final class TraeSession implements AgentSession {
       if (e.getMessage() != null && e.getMessage().contains("Authentication required")) {
         throw new AgentException(ErrorCodes.AUTH_REQUIRED, "TRAE CLI is not logged in on this runtime", e);
       }
+      if (e.getMessage() != null && e.getMessage().contains("is unavailable because its metadata")) {
+        throw new AgentException(ErrorCodes.MODEL_NOT_FOUND, "TRAE CLI cannot use model " + spec.model()
+            + " with this account; pick one from the runtime's model list", e);
+      }
       throw new AgentException(e.code(), e.getMessage() + (tail.isBlank() ? "" : "\n" + tail), e);
     }
   }
@@ -167,16 +185,56 @@ final class TraeSession implements AgentSession {
       resumed = true;
       instructionsSent = true;
     } else {
+      if (capabilities.contains(SYSTEM_PROMPT) && spec.instructions() != null && !spec.instructions().isBlank()) {
+        // the agent's instructions and skills become part of the system prompt (verified live)
+        params.put("systemPrompt", Map.of("mode", "append",
+            "content", List.of(Map.of("type", "text", "text", spec.instructions()))));
+        instructionsSent = true;
+      }
       result = conn.call("session/new", params, timeout);
       sessionId = Json.str(result, "sessionId");
     }
     if (sessionId == null) {
       throw new AgentException(ErrorCodes.PROTOCOL, "traecli returned no session id");
     }
-    model = Json.str(result, "models.currentModelId");
-    if (model == null) {
-      model = spec.model();
+    model = selectModel(result);
+  }
+
+  /**
+   * Picks the agent's model through {@code session/set_config_option}. TRAE model ids differ from their
+   * display names ({@code Doubao_1_6} is "Doubao-Seed-Code"); either is accepted here.
+   */
+  private String selectModel(Object result) throws AgentException {
+    Map<String, Object> option = null;
+    for (Object o : Json.list(result, "configOptions")) {
+      if ("model".equals(Json.str(o, "id")) && o instanceof Map<?, ?>) {
+        option = Json.obj(Map.of("o", o), "o");
+      }
     }
+    String current = option == null ? Json.str(result, "models.currentModelId") : Json.str(option, "currentValue");
+    String wanted = spec.model();
+    if (wanted == null || wanted.isBlank() || option == null) {
+      return current != null ? current : wanted;
+    }
+    String id = null;
+    for (Object o : Json.list(option, "options")) {
+      String value = Json.str(o, "value");
+      if (wanted.equalsIgnoreCase(value) || wanted.equalsIgnoreCase(Json.str(o, "name"))) {
+        id = value;
+      }
+    }
+    if (id == null) {
+      List<String> names = new ArrayList<>();
+      for (Object o : Json.list(option, "options")) {
+        names.add(Json.str(o, "name"));
+      }
+      throw new AgentException(ErrorCodes.MODEL_NOT_FOUND, "TRAE CLI has no model " + wanted + "; available: "
+          + String.join(", ", names));
+    }
+    if (!id.equals(current)) {
+      conn.call("session/set_config_option", Map.of("sessionId", sessionId, "configId", "model", "value", id), timeout);
+    }
+    return id;
   }
 
   @Override
@@ -233,13 +291,31 @@ final class TraeSession implements AgentSession {
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", turnId));
     streaming = true;
     clock.reset();
-    CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
     TurnResult.Status status = TurnResult.Status.COMPLETED;
     String code = null;
     String error = null;
+    userCancelled = false;
     try {
-      Object result = clock.await(f, turn.timeout());
-      String stop = Json.str(result, "stopReason");
+      Object result = null;
+      String stop = null;
+      for (int attempt = 0; ; attempt++) {
+        declinedInTurn = null;
+        CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
+        result = clock.await(f, turn.timeout());
+        stop = Json.str(result, "stopReason");
+        recordUsage(result);
+        // TRAE ends the whole turn when a request is declined ("No, and tell TRAE CLI what to do
+        // differently"); Codex keeps going. Continue the same session so both behave alike.
+        if ("cancelled".equals(stop) && declinedInTurn != null && !userCancelled && attempt < MAX_DECLINE_CONTINUATIONS) {
+          eventSink.accept(AgentEvent.of(AgentEvent.NOTICE, "level", "info", "message",
+              "the request was declined; asking TRAE CLI to continue without it"));
+          prompt = List.of(Map.of("type", "text", "text", "Your request to run `" + declinedInTurn
+              + "` was declined and will not be approved. Continue the task without it: find another way within your"
+              + " permissions, or finish and explain clearly what you could not do and why."));
+          continue;
+        }
+        break;
+      }
       if ("cancelled".equals(stop)) {
         status = TurnResult.Status.INTERRUPTED;
         code = ErrorCodes.CANCELLED;
@@ -289,18 +365,58 @@ final class TraeSession implements AgentSession {
         error = "the final answer is not valid JSON: " + e.getMessage();
       }
     }
+    if (!usage.isEmpty()) {
+      eventSink.accept(new AgentEvent(0, System.currentTimeMillis(), AgentEvent.USAGE, usage));
+    }
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_COMPLETED, "turnId", turnId, "status",
         status.name().toLowerCase(), "errorCode", code, "error", error));
     return new TurnResult(status, finalText, structured, code, error, usage);
   }
 
+  /**
+   * Token usage from a prompt result ({@code _meta._trae/tokenUsage}): session totals in the Codex field
+   * names, plus {@code taskTokens}, the tokens of this task's turns only (a resumed session's earlier
+   * turns are not counted again).
+   */
+  private void recordUsage(Object result) {
+    Map<String, Object> meta = Json.obj(Json.obj(result, "_meta"), "_trae/tokenUsage");
+    Map<String, Object> total = Json.obj(meta, "sessionTotal");
+    Map<String, Object> turnUsage = meta.isEmpty() ? Json.obj(result, "usage") : Json.obj(meta, "turn");
+    if (total.isEmpty()) {
+      total = Json.obj(result, "usage");
+    }
+    if (total.isEmpty()) {
+      return;
+    }
+    taskTokens += Json.num(turnUsage, "totalTokens", 0);
+    Map<String, Object> u = new LinkedHashMap<>();
+    u.put("inputTokens", Json.num(total, "inputTokens", 0));
+    u.put("cachedInputTokens", Json.num(total, "cachedReadTokens", 0));
+    u.put("outputTokens", Json.num(total, "outputTokens", 0));
+    u.put("reasoningTokens", Json.num(total, "thoughtTokens", 0));
+    u.put("totalTokens", Json.num(total, "totalTokens", 0));
+    u.put("taskTokens", taskTokens);
+    long window = Json.num(Json.obj(meta, "contextWindow"), "size", 0);
+    if (window > 0) {
+      u.put("contextWindow", window);
+      u.put("contextUsed", Json.num(Json.obj(meta, "contextWindow"), "used", 0));
+    }
+    usage = u;
+  }
+
+  /**
+   * Not available: TRAE CLI 0.216 declares {@code steering.supported} but has no ACP method for it
+   * ({@code _session/steer} is "Method not found") and refuses a second {@code session/prompt} while one
+   * runs. Orca therefore sends steering text with the next turn (verified live).
+   */
   @Override
   public void steer(String text) {
-    throw new UnsupportedOperationException("steering is not verified for TRAE CLI yet");
+    throw new UnsupportedOperationException("TRAE CLI does not accept steering over ACP; the text is sent next turn");
   }
 
   @Override
   public void interrupt() {
+    userCancelled = true;
     if (sessionId != null && conn.alive()) {
       try {
         conn.notify("session/cancel", Map.of("sessionId", sessionId));
@@ -376,20 +492,14 @@ final class TraeSession implements AgentSession {
         sink.accept(AgentEvent.of(AgentEvent.PLAN, "entries", entries));
       }
       case "usage_update" -> {
-        Map<String, Object> m = new LinkedHashMap<>();
-        u.forEach((k, v) -> {
-          if (v instanceof Number) {
-            m.put(k, v);
-          }
-        });
-        Json.obj(u, "usage").forEach((k, v) -> {
-          if (v instanceof Number) {
-            m.put(k, v);
-          }
-        });
-        if (!m.isEmpty()) {
+        // context-window occupancy while the turn runs; token counts arrive with the prompt result
+        long used = Json.num(u, "used", -1);
+        long size = Json.num(u, "size", 0);
+        if (used >= 0 && size > 0) {
+          Map<String, Object> m = new LinkedHashMap<>(usage);
+          m.put("contextUsed", used);
+          m.put("contextWindow", size);
           usage = m;
-          sink.accept(new AgentEvent(0, System.currentTimeMillis(), AgentEvent.USAGE, m));
         }
       }
       default -> {
@@ -421,6 +531,8 @@ final class TraeSession implements AgentSession {
         };
         Object raw = call.get("rawInput");
         String command = ak == ApprovalKind.COMMAND ? firstString(raw, "command", "cmd") : null;
+        String cwd = firstString(raw, "cwd");
+        String reason = firstString(raw, "reason");
         List<String> paths = new ArrayList<>();
         for (Object l : Json.list(call, "locations")) {
           if (Json.str(l, "path") != null) {
@@ -429,7 +541,7 @@ final class TraeSession implements AgentSession {
         }
         String title = Json.str(call, "title");
         Interaction.ApprovalRequest r = new Interaction.ApprovalRequest("req-" + requestIds.incrementAndGet(), ak,
-            title, command, spec.cwd().toString(), paths, null, p);
+            title, command, cwd != null ? cwd : spec.cwd().toString(), paths, reason, p);
         sink.accept(AgentEvent.of(AgentEvent.APPROVAL_REQUESTED, "requestId", r.requestId(), "kind",
             ak.name().toLowerCase(), "title", title, "command", command));
         Decision d;
@@ -440,6 +552,9 @@ final class TraeSession implements AgentSession {
         }
         sink.accept(AgentEvent.of(AgentEvent.APPROVAL_RESOLVED, "requestId", r.requestId(), "decision",
             d.name().toLowerCase(), "by", "policy"));
+        if (d == Decision.DECLINE || d == Decision.CANCEL) {
+          declinedInTurn = command != null ? command : title;
+        }
         yield permissionOutcome(Json.list(p, "options"), d);
       }
       case "elicitation/create" -> {

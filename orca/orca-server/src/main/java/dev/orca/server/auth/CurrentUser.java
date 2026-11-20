@@ -11,6 +11,8 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 public final class CurrentUser {
   static final String ATTR = "orca.member";
   static final String KIND = "orca.tokenKind";
+  /** Request attribute: how the request authenticated ({@code session} or {@code personal}). */
+  public static final String KIND_ATTRIBUTE = KIND;
 
   private CurrentUser() {}
 

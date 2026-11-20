@@ -1,6 +1,6 @@
 # Codex 与 TRAE CLI 对接说明
 
-本文记录两种 CLI 的对接方式、**已实测**的事实与**尚待验证**的点。实测环境：Linux x86_64 容器，codex-cli **0.171.0**（ChatGPT 登录），TRAE CLI **0.216.0**（2.x，未登录）。
+本文记录两种 CLI 的对接方式、**已实测**的事实与**尚待验证**的点。实测环境：Linux x86_64 容器，codex-cli **0.171.0**（ChatGPT 登录），TRAE CLI **0.216.0**（2.x，企业版 SSO 登录）。
 
 ## 1. 总体
 
@@ -43,24 +43,32 @@
 
 ## 3. TRAE CLI 2.x（ACP）
 
-启动参数（daemon 生成）：`traecli acp serve -c model="…" -c model_reasoning_effort="…" -c projects."<cwd>".trust_level="trusted" -c default_permissions=":workspace" [--allowed-tool Bash(cmd)]… [--yolo]`
+实测环境：TRAE CLI **0.216.0**，企业版 SSO 登录（`console.enterprise.trae.cn`），模型 GLM-5.3-Flash。以下全部为**实机验证**结果，`TraeLiveTest`（4 个用例，`ORCA_TRAE_BIN=$(which traecli) mvn test -pl orca-agent -Dgroups=live -Dorca.excludedGroups=none`）覆盖其中关键行为。
+
+启动参数（daemon 生成）：`traecli acp serve -c model="…" [-c model_reasoning_effort="…"] -c projects."<cwd>".trust_level="trusted"`，再按权限档位追加：
+
+| 档位 | 参数 | 实测效果 |
+|---|---|---|
+| `read_only` | `-c default_permissions=":read-only"` | 工作区内外均不可写，网络不可用 ✅ |
+| `workspace` | `-c default_permissions="orca_workspace" -c permissions.orca_workspace.extends=":workspace" -c permissions.orca_workspace.network.enabled=<false\|true>` | 工作区与临时目录可写，其他位置被沙箱拒绝；网络默认关闭，Agent 开启“沙箱内联网”且 daemon 以 `--allow-network` 启动时才打开 ✅ |
+| `full` | `--yolo` | 仅在 `--isolated` 运行时生效 |
+
+注意：TRAE 内置的 `:workspace` 档位**默认允许联网**（与 Codex 不同），且 `-c sandbox_workspace_write.network_access=false` 对它无效（实测仍可直连外网）。Orca 因此定义自己的 `orca_workspace` 档位继承 `:workspace` 并显式关闭网络，使两种 CLI 的“工作区”语义一致。
 
 | 用途 | 方法 / 字段 | 状态 |
 |---|---|---|
-| 版本 / 登录 | `traecli -V`、`traecli login status` | ✅ 实测 |
-| 能力 | `initialize` → `loadSession`, `promptCapabilities.image`, `mcpCapabilities.http`（无 sse）, `sessionCapabilities{list,resume,fork,close,systemPrompt,additionalDirectories}`, `_meta.steering.supported`, `authMethods`（仅企业 SSO / PAT） | ✅ 实测 |
-| 未登录 | `session/new` → `-32000 Authentication required` → `AUTH_REQUIRED` | ✅ 实测 |
-| `acp serve` 参数 | `--yolo`、`--allowed-tool`、`--disallowed-tool`、`--disabled-tool`、`-c`、`--enable/--disable`、`-w` | ✅ 实测（`--help`） |
-| 会话 | `session/new {cwd, mcpServers:[{type:"http",name,url,headers}]}`、`session/load`（回放历史，驱动会忽略）、`session/prompt`、`session/cancel` | 🟡 按 ACP 规范实现，假 CLI 测试通过，待登录后实测 |
-| 流式 | `session/update`：agent_message_chunk / agent_thought_chunk / tool_call / tool_call_update / plan / usage_update | 🟡 同上 |
-| 审批 | `session/request_permission`（选 allow_once / reject_once 等 optionId） | 🟡 同上 |
-| 结构化输出 | ACP 无原生支持：提示词约束 + JSON 解析；后续可改用 `traecli exec --output-schema` | 🟡 |
-| 插话 | 声明了 `steering.supported`，但 `_session/steer` 参数未验证 → 驱动暂不声明 steer，插话降级为“下一轮发送” | ⏳ |
-| 模型列表 | `traecli models`（输出格式待登录后确认，驱动按行宽松解析） | ⏳ |
-
-待登录后实测（需要 TRAE 企业版旗舰版账号或 PAT）：`session/new` 返回的模型/模式、`session/update` 字段细节、`systemPrompt` 参数形态（目前把 Agent 指令拼在首轮 prompt 前）、`_session/steer` 参数、elicitation 能力协商、`-c projects.…trust_level` 是否生效、`traecli models` 输出格式、Agent 开启 **Network in the sandbox** 时下发的 `-c sandbox_workspace_write.network_access=true` 是否被 TRAE 接受（Codex 已实测：未开启时沙箱内 DNS 失败，开启后 `pip` 可访问 PyPI）。
-
-安装提示：官方脚本 `https://trae.cn/trae-cli/install_v2.sh` 按地区限制访问；登录：`traecli login`，或 `TRAECLI_PERSONAL_ACCESS_TOKEN` + `traecli login --with-trae-pat`，国际站/私有部署用 `TRAECLI_HOST`。
+| 版本 / 登录 | `traecli -V`、`traecli login status`；企业 SSO 登录需浏览器回调到本机端口，无浏览器的机器可在别处完成授权后把回调地址交给本机（见运维手册） | ✅ |
+| 能力 | `initialize` → `loadSession`、`promptCapabilities.image`、`mcpCapabilities.http`、`sessionCapabilities{list,resume,fork,close,systemPrompt,additionalDirectories}`、`authMethods`（企业 SSO / PAT） | ✅ |
+| 模型 | `session/new` 返回 `configOptions[id=model]`：`value` 是模型 id（如 `Doubao_1_6`），`name` 是显示名（“Doubao-Seed-Code”），另有描述与上下文窗口。探测时开一个空会话读取后立即 `session/close`（不发 prompt、不耗 token，30 分钟缓存）。`-c model` 接受 id 或显示名；会话中用 `session/set_config_option {configId:"model", value}` 切换；未知模型在 `session/new` 报 “is unavailable” → `MODEL_NOT_FOUND` | ✅ |
+| 模式 | `modes`：`default`（Workspace Edit）、`plan`、`auto`、`bypass_permissions`；Orca 以权限档位控制，不切换模式 | ✅ |
+| 系统提示词 | `session/new {systemPrompt: {mode: "append", content: [{type:"text", text}]}}`；Agent 指令与技能通过它下发（此前拼在首轮 prompt 前） | ✅ |
+| 会话 | `session/new {cwd, mcpServers:[{type:"http", name, url, headers:[{name,value}]}]}`、`session/load`（新进程中恢复，回放历史 17 条，驱动忽略回放并保留上下文）、`session/prompt`、`session/cancel` | ✅ |
+| 流式 | `session/update`：`agent_message_chunk`、`agent_thought_chunk`、`tool_call`（含 `rawInput.command`）、`tool_call_update`、`plan`、`usage_update`（上下文占用 `used/size`）、`available_commands_update` | ✅ |
+| 用量 | `session/prompt` 结果的 `usage` 与 `_meta._trae/tokenUsage{turn, sessionTotal, contextWindow}`；驱动换算成与 Codex 相同的字段，`taskTokens` 只计本任务的轮次 | ✅ |
+| 图片 | prompt 中 `{type:"image", mimeType, data(base64)}` | ✅ |
+| 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次），使两者行为一致 | ✅ |
+| 插话 | `_meta.steering.supported=true`，但 ACP 下没有对应方法：`_session/steer` 返回 Method not found，进行中再发 `session/prompt` 被拒（“an ACP prompt is already in progress”）。驱动不声明 steer 能力，插话排到下一轮发送 | ✅（结论：不支持） |
+| 结构化输出 | ACP 无原生支持：提示词约束 + JSON 解析 | ✅ |
 
 ## 4. 统一事件
 

@@ -120,7 +120,12 @@ public class InboxService {
     }
     Map<String, Object> d = new java.util.LinkedHashMap<>();
     d.put("kind", i.kind);
-    d.put("decision", i.status);
+    Map<String, Object> answer = JsonCols.map(i.answerJson);
+    String decision = i.status;
+    if (APPROVAL.equals(i.kind) && answer.get("decision") != null) {
+      decision = String.valueOf(answer.get("decision")); // approved | rejected
+    }
+    d.put("decision", decision);
     d.put("title", i.title == null ? "" : i.title.length() > 200 ? i.title.substring(0, 200) : i.title);
     if (i.taskId != null) {
       d.put("task", i.taskId);
@@ -129,10 +134,20 @@ public class InboxService {
       d.put("run", i.runId);
     }
     Object approval = JsonCols.map(i.formJson).get("approval");
+    if (approval != null) {
+      // an agent's command / file request answered in the inbox: record the option chosen, never free text
+      if (Boolean.TRUE.equals(answer.get("declined"))) {
+        d.put("decision", "declined");
+      } else if (answer.get("answers") instanceof Map<?, ?> chosen) {
+        d.put("decision", chosen.values().stream().map(String::valueOf)
+            .map(v -> v.length() > 40 ? v.substring(0, 40) : v).collect(java.util.stream.Collectors.joining(",")));
+      }
+    }
     if (approval instanceof Map<?, ?> a) {
       Object cmd = a.get("command");
       if (cmd != null) {
         String c = String.valueOf(cmd);
+        c = dev.orca.server.audit.Redact.secrets(c);
         d.put("command", c.length() > 300 ? c.substring(0, 300) + "..." : c);
       }
       if (a.get("kind") != null) {

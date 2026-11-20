@@ -56,6 +56,57 @@ public final class TraeProvider implements AgentProvider {
     return List.of(exe.get().toString());
   }
 
+  private static final long MODEL_CACHE_MS = 30 * 60_000L;
+  private volatile List<ProviderStatus.ModelInfo> cachedModels;
+  private volatile long cachedAt;
+
+  /**
+   * The models this account may use, from the {@code model} config option of a fresh ACP session: ids
+   * ({@code Doubao_1_6}) with display names ("Doubao-Seed-Code"), descriptions and the default. The probe
+   * session is closed right away; no prompt is sent, so it costs no tokens.
+   */
+  static List<ProviderStatus.ModelInfo> acpModels(JsonRpcConnection c) {
+    Path dir = null;
+    try {
+      dir = java.nio.file.Files.createTempDirectory("orca-trae-probe");
+      Object s = c.call("session/new", Map.of("cwd", dir.toString(), "mcpServers", List.of()), Duration.ofSeconds(30));
+      List<ProviderStatus.ModelInfo> out = modelsFrom(s);
+      String sid = Json.str(s, "sessionId");
+      if (sid != null) {
+        try {
+          c.call("session/close", Map.of("sessionId", sid), Duration.ofSeconds(10));
+        } catch (AgentException ignored) {
+          // older CLIs cannot close sessions; it is only an empty session
+        }
+      }
+      return out;
+    } catch (AgentException | IOException e) {
+      return List.of();
+    } finally {
+      if (dir != null) {
+        dir.toFile().delete();
+      }
+    }
+  }
+
+  static List<ProviderStatus.ModelInfo> modelsFrom(Object sessionNew) {
+    List<ProviderStatus.ModelInfo> out = new ArrayList<>();
+    for (Object o : Json.list(sessionNew, "configOptions")) {
+      if (!"model".equals(Json.str(o, "id"))) {
+        continue;
+      }
+      String current = Json.str(o, "currentValue");
+      for (Object m : Json.list(o, "options")) {
+        String id = Json.str(m, "value");
+        if (id != null) {
+          out.add(new ProviderStatus.ModelInfo(id, Json.str(m, "name"), Json.str(m, "description"), id.equals(current),
+              List.of(), null));
+        }
+      }
+    }
+    return out;
+  }
+
   @Override
   public ProviderStatus probe() {
     List<String> base;
@@ -87,6 +138,10 @@ public final class TraeProvider implements AgentProvider {
       try (JsonRpcConnection c = new JsonRpcConnection(p, "trae-probe", true)) {
         Object init = initialize(c, Duration.ofSeconds(30));
         caps.addAll(capabilities(init));
+        if (loggedIn && (cachedModels == null || System.currentTimeMillis() - cachedAt > MODEL_CACHE_MS)) {
+          cachedModels = acpModels(c);
+          cachedAt = System.currentTimeMillis();
+        }
       }
     } catch (AgentException | IOException e) {
       error = error == null ? "ACP probe failed: " + e.getMessage() : error;
@@ -95,8 +150,8 @@ public final class TraeProvider implements AgentProvider {
         p.destroy();
       }
     }
-    List<ProviderStatus.ModelInfo> models = new ArrayList<>();
-    if (loggedIn) {
+    List<ProviderStatus.ModelInfo> models = new ArrayList<>(loggedIn && cachedModels != null ? cachedModels : List.of());
+    if (loggedIn && models.isEmpty()) {
       Executables.Output m = Executables.run(concat(base, "models"), config.env(), 30);
       if (m.exitCode() == 0) {
         for (String line : Executables.plain(m.stdout()).split("\n")) {
@@ -126,6 +181,9 @@ public final class TraeProvider implements AgentProvider {
     }
     if (Json.bool(Json.obj(agent, "mcpCapabilities"), "http")) {
       caps.add(Capability.MCP_HTTP);
+    }
+    if (Json.obj(agent, "sessionCapabilities").containsKey("systemPrompt")) {
+      caps.add(TraeSession.SYSTEM_PROMPT);
     }
     return caps;
   }

@@ -132,4 +132,4 @@ React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板�
 
 - GitHub/GitLab/Gitee 的合并请求 API 集成（目前 `repo.push` 推送分支并回传托管平台打印的创建链接）、有轮数上限的循环子流程。
 - 多实例（行锁、跨实例推送）、OIDC/SSO、更细的 RBAC。
-- TRAE CLI 登录后的实机联调（见 providers.md 待验证清单）；评估以 app-server 统一两种 CLI。
+- TRAE CLI 若开放 app-server 协议，可评估与 Codex 共用同一驱动（TRAE 的 ACP 后端本身即基于 app-server）。

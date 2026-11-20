@@ -15,9 +15,11 @@ import java.util.concurrent.TimeUnit;
 import java.util.concurrent.atomic.AtomicLong;
 
 /**
- * A scripted stand-in for {@code traecli acp serve}. {@code initialize} mirrors what TRAE CLI 0.216.0
- * returned in a real probe. Scenarios ({@code FAKE_SCENARIO}): {@code echo}, {@code permission},
- * {@code unauth}, {@code hang}.
+ * A scripted stand-in for {@code traecli acp serve}, following what TRAE CLI 0.216.0 did in live probes:
+ * {@code initialize} capabilities, model ids differing from display names in {@code configOptions},
+ * {@code systemPrompt {mode, content[]}}, {@code session/set_config_option}, the three permission options
+ * where "abort" ends the turn as {@code cancelled}, and token usage in the prompt result.
+ * Scenarios ({@code FAKE_SCENARIO}): {@code echo}, {@code permission}, {@code unauth}, {@code hang}.
  */
 public final class FakeTraeAcp {
 
@@ -25,6 +27,9 @@ public final class FakeTraeAcp {
   private static final AtomicLong IDS = new AtomicLong(500);
   private static final Map<Long, CompletableFuture<Map<String, Object>>> PENDING = new ConcurrentHashMap<>();
   private static volatile CompletableFuture<Void> cancelled = new CompletableFuture<>();
+  private static volatile String systemPrompt;
+  private static volatile String model = "fake_model";
+  private static volatile int turns;
 
   public static void main(String[] args) throws Exception {
     if (List.of(args).contains("-V")) {
@@ -63,13 +68,25 @@ public final class FakeTraeAcp {
             "agentCapabilities", Map.of("loadSession", true,
                 "promptCapabilities", Map.of("image", true, "audio", false, "embeddedContext", true),
                 "mcpCapabilities", Map.of("http", true, "sse", false),
-                "sessionCapabilities", Map.of("list", Map.of(), "resume", Map.of(), "fork", Map.of())),
+                "sessionCapabilities", Map.of("list", Map.of(), "resume", Map.of(), "fork", Map.of(),
+                    "systemPrompt", Map.of(), "close", Map.of())),
             "agentInfo", Map.of("name", "traecli-acp", "version", "0.216.0")));
         case "session/new" -> {
           if ("unauth".equals(scenario)) {
             error(id, -32000, "Authentication required");
           } else {
-            reply(id, Map.of("sessionId", "ses_fake", "models", Map.of("currentModelId", "fake-model")));
+            Object sp = Json.get(params, "systemPrompt");
+            if (sp != null) {
+              if (!"append".equals(Json.str(sp, "mode")) || !(Json.get(sp, "content") instanceof List<?>)) {
+                error(id, -32602, "Invalid params: systemPrompt wants {mode, content: [ContentBlock]}");
+                continue;
+              }
+              systemPrompt = Json.str(((List<?>) Json.get(sp, "content")).get(0), "text");
+            }
+            reply(id, Map.of("sessionId", "ses_fake", "configOptions", List.of(Map.of("id", "model", "type", "select",
+                "currentValue", model, "options", List.of(
+                    Map.of("value", "fake_model", "name", "Fake-Model", "description", "200K context window"),
+                    Map.of("value", "fake_mini_2", "name", "Fake-Mini", "description", "fast"))))));
           }
         }
         case "session/load" -> {
@@ -82,6 +99,11 @@ public final class FakeTraeAcp {
           }
         }
         case "session/cancel" -> cancelled.complete(null);
+        case "session/set_config_option" -> {
+          model = String.valueOf(params.get("value"));
+          reply(id, Map.of("configOptions", List.of()));
+        }
+        case "session/close" -> reply(id, Map.of());
         case "session/prompt" -> {
           String text = String.valueOf(((Map<?, ?>) ((List<?>) params.get("prompt")).get(0)).get("text"));
           Thread.ofVirtual().start(() -> {
@@ -105,12 +127,23 @@ public final class FakeTraeAcp {
       case "permission" -> {
         update(Map.of("sessionUpdate", "tool_call", "toolCallId", "call_1", "title", "Run npm test", "kind", "execute",
             "status", "pending", "rawInput", Map.of("command", "npm test")));
+        if (text.contains("was declined")) {
+          update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text",
+              "text", "continued without it")));
+          break;
+        }
         Map<String, Object> res = request("session/request_permission", Map.of("sessionId", "ses_fake",
-            "toolCall", Map.of("toolCallId", "call_1", "title", "Run npm test", "kind", "execute",
-                "rawInput", Map.of("command", "npm test")),
-            "options", List.of(Map.of("optionId", "allow", "name", "Allow", "kind", "allow_once"),
-                Map.of("optionId", "deny", "name", "Deny", "kind", "reject_once"))));
+            "toolCall", Map.of("toolCallId", "call_1", "title", "npm test", "kind", "execute", "status", "pending",
+                "rawInput", Map.of("command", "npm test", "cwd", "/work/app", "reason", "needs the network")),
+            "options", List.of(Map.of("optionId", "approved", "name", "Yes, proceed", "kind", "allow_once"),
+                Map.of("optionId", "approved-execpolicy-amendment", "name", "Yes, and don't ask again", "kind", "allow_always"),
+                Map.of("optionId", "abort", "name", "No, and tell TRAE CLI what to do differently", "kind", "reject_once"))));
         String chosen = String.valueOf(Json.get(res, "outcome.optionId"));
+        if ("abort".equals(chosen)) {
+          // TRAE ends the whole turn when a request is declined
+          reply(id, Map.of("stopReason", "cancelled"));
+          return;
+        }
         update(Map.of("sessionUpdate", "tool_call_update", "toolCallId", "call_1",
             "status", "allow".equals(chosen) ? "completed" : "failed",
             "content", List.of(Map.of("type", "content", "content", Map.of("type", "text", "text", "3 passing")))));
@@ -130,12 +163,20 @@ public final class FakeTraeAcp {
         update(Map.of("sessionUpdate", "tool_call_update", "toolCallId", "call_e", "status", "completed",
             "content", List.of(Map.of("type", "diff", "path", "a.txt", "newText", "hi"))));
         boolean json = text.contains("JSON Schema");
+        String echo = text.equals("system?") ? "SYSTEM: " + systemPrompt + " MODEL: " + model
+            : "ECHO: " + text.substring(Math.max(0, text.lastIndexOf('\n') + 1));
         update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text",
-            "text", json ? "{\"ok\": true}" : "ECHO: " + text.substring(Math.max(0, text.lastIndexOf('\n') + 1)))));
+            "text", json ? "{\"ok\": true}" : echo)));
       }
     }
     update(Map.of("sessionUpdate", "usage_update", "used", 1200, "size", 200000));
-    reply(id, Map.of("stopReason", "end_turn"));
+    turns++;
+    Map<String, Object> turn = Map.of("totalTokens", 1000, "inputTokens", 900, "outputTokens", 100, "thoughtTokens", 20,
+        "cachedReadTokens", 300);
+    Map<String, Object> total = Map.of("totalTokens", 5000 + 1000 * turns, "inputTokens", 4500, "outputTokens", 500,
+        "thoughtTokens", 80, "cachedReadTokens", 1200);
+    reply(id, Map.of("stopReason", "end_turn", "usage", turn, "_meta", Map.of("_trae/tokenUsage", Map.of(
+        "scope", "turn", "turn", turn, "sessionTotal", total, "contextWindow", Map.of("used", 1200, "size", 190000)))));
   }
 
   private static void update(Map<String, Object> u) {

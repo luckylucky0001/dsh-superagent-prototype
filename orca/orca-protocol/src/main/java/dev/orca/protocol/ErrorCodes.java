@@ -15,6 +15,7 @@ public final class ErrorCodes {
   public static final String RUNTIME_LOST = "RUNTIME_LOST";
   public static final String AGENT_ERROR = "AGENT_ERROR";
   public static final String INVALID_OUTPUT = "INVALID_OUTPUT";
+  public static final String MODEL_NOT_FOUND = "MODEL_NOT_FOUND";
 
   private ErrorCodes() {}
 

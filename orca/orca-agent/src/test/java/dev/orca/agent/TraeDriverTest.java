@@ -49,7 +49,11 @@ class TraeDriverTest {
   }
 
   private static SessionSpec spec() throws Exception {
-    return new SessionSpec(Files.createTempDirectory("orca-trae"), "fake-model", null, "Be brief.",
+    return spec("fake-model");
+  }
+
+  private static SessionSpec spec(String model) throws Exception {
+    return new SessionSpec(Files.createTempDirectory("orca-trae"), model, null, "Be brief.",
         null, null, null, null, null, null, null);
   }
 
@@ -61,7 +65,8 @@ class TraeDriverTest {
     assertTrue(s.capabilities().containsAll(List.of(Capability.RESUME, Capability.FORK, Capability.IMAGES,
         Capability.MCP_HTTP)), s.capabilities().toString());
     assertFalse(s.capabilities().contains(Capability.STEER), "steering is not claimed until verified");
-    assertEquals("fake-model", s.models().get(0).id());
+    assertEquals("fake_model", s.models().get(0).id(), "model ids come from the ACP model option");
+    assertEquals("Fake-Model", s.models().get(0).displayName());
   }
 
   @Test
@@ -69,7 +74,7 @@ class TraeDriverTest {
     List<AgentEvent> events = new CopyOnWriteArrayList<>();
     try (AgentSession s = provider("echo").open(spec(), new Handler())) {
       assertEquals("ses_fake", s.sessionRef());
-      assertEquals("fake-model", s.model());
+      assertEquals("fake_model", s.model(), "a display-name-like model resolves to TRAE's id");
       TurnResult r = s.runTurn(TurnSpec.text("hello"), events::add);
       assertEquals(TurnResult.Status.COMPLETED, r.status());
       assertEquals("ECHO: hello", r.finalText(), "only text after the last tool call is the deliverable");
@@ -81,6 +86,9 @@ class TraeDriverTest {
 
       TurnResult r2 = s.runTurn(new TurnSpec("x", List.of(), Map.of("type", "object"), null), e -> {});
       assertEquals(Map.of("ok", true), r2.structured());
+      assertEquals(2000L, ((Number) r2.usage().get("taskTokens")).longValue(), "two turns of 1000 tokens");
+      assertEquals(190000L, ((Number) r2.usage().get("contextWindow")).longValue());
+      assertEquals(1200L, ((Number) r2.usage().get("cachedInputTokens")).longValue(), "session totals, Codex field names");
     }
   }
 
@@ -93,9 +101,25 @@ class TraeDriverTest {
         TurnResult r = s.runTurn(TurnSpec.text("test"), e -> {});
         assertEquals(Interaction.ApprovalKind.COMMAND, h.seen.get().kind());
         assertEquals("npm test", h.seen.get().command());
-        assertEquals("chosen=" + (d == Interaction.Decision.ACCEPT ? "allow" : "deny"), r.finalText());
+        assertEquals("/work/app", h.seen.get().cwd(), "the command's cwd comes from rawInput");
+        assertEquals("needs the network", h.seen.get().reason());
+        assertEquals(TurnResult.Status.COMPLETED, r.status());
+        // TRAE ends the turn when a request is declined; the driver asks it to carry on without it
+        assertEquals(d == Interaction.Decision.ACCEPT ? "chosen=approved" : "continued without it", r.finalText());
       }
     }
+  }
+
+  @Test
+  void instructionsGoToTheSystemPromptAndModelsResolveByName() throws Exception {
+    try (AgentSession s = provider("echo").open(spec("Fake-Mini"), new Handler())) {
+      assertEquals("fake_mini_2", s.model());
+      TurnResult r = s.runTurn(TurnSpec.text("system?"), e -> {});
+      assertEquals("SYSTEM: Be brief. MODEL: fake_mini_2", r.finalText());
+    }
+    AgentException unknown = assertThrows(AgentException.class, () -> provider("echo").open(spec("nope"), new Handler()));
+    assertEquals(ErrorCodes.MODEL_NOT_FOUND, unknown.code());
+    assertTrue(unknown.getMessage().contains("Fake-Mini"), unknown.getMessage());
   }
 
   @Test

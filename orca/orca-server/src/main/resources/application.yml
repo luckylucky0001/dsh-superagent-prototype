@@ -1,5 +1,7 @@
 server:
   port: ${ORCA_PORT:8080}
+  # behind Nginx / a load balancer: trust X-Forwarded-For/-Proto only from internal proxy addresses
+  forward-headers-strategy: native
   shutdown: graceful
 spring:
   application:
@@ -39,6 +41,8 @@ orca:
   downloads-dir: ${ORCA_DOWNLOADS_DIR:}
   # uploaded attachments (screenshots etc.); back this folder up together with the database
   storage-dir: ${ORCA_STORAGE_DIR:${user.home}/.orca/server/files}
+  audit:
+    retention-days: ${ORCA_AUDIT_RETENTION_DAYS:365}
   lease-seconds: 60
   heartbeat-seconds: 15
   http:
