@@ -46,7 +46,8 @@ public class InboxNotifier {
     }
     String label = switch (item.kind) {
       case InboxService.APPROVAL -> "Approval needed";
-      case InboxService.QUESTION -> "An agent has a question";
+      case InboxService.QUESTION -> item.formJson != null && item.formJson.contains("\"approval\"")
+          ? "Approval needed" : "An agent has a question";
       case InboxService.INPUT -> "Input needed";
       default -> "Alert";
     };
