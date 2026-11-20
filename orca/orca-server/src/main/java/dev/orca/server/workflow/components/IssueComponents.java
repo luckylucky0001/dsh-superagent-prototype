@@ -109,7 +109,7 @@ public class IssueComponents {
         return d("issue.create", "action", "Create issue", "Creates an issue, optionally assigned to an agent.", false,
             List.of(req("title", "Title", FieldKind.TEMPLATE), f("description", "Description", FieldKind.TEMPLATE),
                 f("assignee", "Assign to agent", FieldKind.AGENT), f("labels", "Labels (comma separated)", FieldKind.STRING),
-                f("project", "Project id", FieldKind.STRING)),
+                f("project", "Project (id or key)", FieldKind.TEMPLATE)),
             List.of(), List.of(out("issue", "object", "the new issue")));
       }
 

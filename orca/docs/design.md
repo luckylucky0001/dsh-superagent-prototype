@@ -77,6 +77,7 @@
 1. **Assigned issue → agent**：标记进行中 → Agent 执行（续接会话，失败重试 1 次）→ 以 Agent 身份发结果评论 → 移到审核中；失败走 error 分支发失败说明。
 2. **Comment → agent**：有人评论 Agent 负责的 Issue 或 `@Agent` 时，Agent 在同一会话继续并回复。
 3. **Template: implement → cross-review → approve**（手动运行）：实现 Agent → 评审 Agent 按 JSON Schema 给出 verdict → 条件判断 → 人工审批 → 完成 / 打回。可以 Codex 实现、TRAE 评审。
+6. **Template: nightly health check of a project**（定时或手动）：Agent 在项目仓库的全新检出、运行专属分支上检查默认分支，以 JSON 给出结论；不健康时自动开 Issue 列出发现。
 5. **Template: review an issue branch**（手动运行）：评审 Agent 以评审模式审查 Issue 分支相对默认分支的改动，并把结论发到 Issue。
 4. **Template: implement ⇄ review loop → approve**（手动运行）：用 `agent.review_loop` 最多 3 轮，通过后人工审批并完成，未通过则把遗留问题发到 Issue。
 

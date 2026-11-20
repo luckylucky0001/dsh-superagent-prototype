@@ -12,6 +12,8 @@ public class Task {
   public String agentId;
   public String runtimeId;
   public String issueId;
+  /** Without an issue: the project whose repository the task works in (on a branch of its own). */
+  public String projectId;
   public String provider;
   public String kind;
   public String originJson;

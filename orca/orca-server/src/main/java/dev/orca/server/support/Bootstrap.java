@@ -26,6 +26,7 @@ public class Bootstrap implements ApplicationRunner {
   public static final String REVIEW_TEMPLATE = "wf_template_review";
   public static final String LOOP_TEMPLATE = "wf_template_review_loop";
   public static final String CODEX_REVIEW_TEMPLATE = "wf_template_codex_review";
+  public static final String HEALTH_TEMPLATE = "wf_template_health_check";
 
   private final MemberRepo members;
   private final AuthService auth;
@@ -82,6 +83,12 @@ public class Bootstrap implements ApplicationRunner {
           "Run by hand: the implementer works, the reviewer checks; requested changes go back until the review "
               + "passes (max 3 rounds); then a person approves and the issue is done.",
           false, loopDefinition(), false, null);
+    }
+    if (!workflowRepo.existsById(HEALTH_TEMPLATE)) {
+      workflows.save(HEALTH_TEMPLATE, "Template: nightly health check of a project",
+          "Every night (or by hand) an agent checks the project's default branch in a fresh checkout; if it finds "
+              + "problems, an issue is opened with its findings. Set the project and agent in the schedule's payload.",
+          false, healthCheckDefinition(), false, null);
     }
     if (!workflowRepo.existsById(CODEX_REVIEW_TEMPLATE)) {
       workflows.save(CODEX_REVIEW_TEMPLATE, "Template: review an issue branch",
@@ -167,6 +174,36 @@ public class Bootstrap implements ApplicationRunner {
                     + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 150, 340)),
         "edges", List.of(edge("e1", "start", "out", "loop"), edge("e2", "loop", "passed", "approve"),
             edge("e3", "approve", "approved", "done"), edge("e4", "loop", "failed", "report")));
+  }
+
+  static Map<String, Object> healthCheckDefinition() {
+    Map<String, Object> verdict = Map.of("type", "object", "additionalProperties", false,
+        "required", List.of("healthy", "summary", "findings"),
+        "properties", Map.of("healthy", Map.of("type", "boolean"), "summary", Map.of("type", "string"),
+            "findings", Map.of("type", "array", "items", Map.of("type", "string"))));
+    return Map.of(
+        "nodes", List.of(
+            node("nightly", "trigger.schedule", "Every night", Map.of("cron", "30 2 * * *", "timezone", "Asia/Singapore",
+                "payload", Map.of("project", "WMS", "agent", "Reviewer")), -130, 0),
+            node("start", "trigger.manual", "Run by hand", Map.of("inputs", "project, agent"), 150, 0),
+            node("check", "agent.run", "Check the default branch", Map.of(
+                "agent", "{{ default(trigger.input.agent, trigger.payload.agent) }}",
+                "project", "{{ default(trigger.input.project, trigger.payload.project) }}", "session", "new",
+                "outputSchema", verdict,
+                "prompt", "Check this repository's default branch as it would run in production. Run the test suite, "
+                    + "then read the code for defects that would hurt operations: data integrity, concurrency, error "
+                    + "handling and missing validation. Do not change any files. healthy is true only if you found "
+                    + "nothing worth fixing; each finding names the file and line and the impact."), 0, 170),
+            node("ok", "logic.condition", "Healthy?", Map.of("when", "nodes.check.output.structured.healthy == true"), 0, 340),
+            node("report", "issue.create", "Open an issue", Map.of(
+                "project", "{{ default(trigger.input.project, trigger.payload.project) }}",
+                "title", "Health check: {{ len(nodes.check.output.structured.findings) }} finding(s) on the default branch",
+                "description", "{{ nodes.check.output.structured.summary }}\n\n- "
+                    + "{{ join(nodes.check.output.structured.findings, '\\n- ') }}\n\n"
+                    + "Found by the nightly health check (task {{ nodes.check.output.taskId }}).",
+                "labels", "health-check"), 150, 510)),
+        "edges", List.of(edge("e1", "nightly", "out", "check"), edge("e2", "start", "out", "check"),
+            edge("e3", "check", "out", "ok"), edge("e4", "ok", "false", "report")));
   }
 
   static Map<String, Object> codexReviewDefinition() {

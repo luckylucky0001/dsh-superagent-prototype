@@ -107,6 +107,12 @@ public class TaskService {
 
   // ---------------------------------------------------------------- creating work
 
+  /** A project by id or key. */
+  Project project(String ref) {
+    return projects.findById(ref).or(() -> projects.findByKeyPrefix(ref.toUpperCase(java.util.Locale.ROOT)))
+        .orElseThrow(() -> ApiException.bad("project " + ref + " does not exist"));
+  }
+
   /** The branch an issue's work is compared against: its project's default branch, else {@code main}. */
   public String defaultBranch(String issueRef) {
     if (issueRef == null || issueRef.isBlank()) {
@@ -135,6 +141,13 @@ public class TaskService {
     t.prompt = req.prompt();
     t.outputSchemaJson = JsonCols.write(req.outputSchema());
     t.reviewJson = req.review() == null || req.review().isEmpty() ? null : JsonCols.write(req.review());
+    if (issue == null && req.projectId() != null && !req.projectId().isBlank()) {
+      Project p = project(req.projectId());
+      if (p.repoUrl == null || p.repoUrl.isBlank()) {
+        throw ApiException.bad("project " + p.keyPrefix + " has no repository");
+      }
+      t.projectId = p.id;
+    }
     t.status = TaskStatus.QUEUED;
     t.queuedAt = Ids.now();
     t.workspaceKey = workspaceKey(agent, issue, req.origin());
@@ -346,6 +359,13 @@ public class TaskService {
       Project p = issue == null ? null : projects.findById(issue.projectId).orElse(null);
       if (p != null && p.repoUrl != null && !p.repoUrl.isBlank()) {
         repo = new Wire.RepoSpec(p.repoUrl, "orca/" + issue.issueKey.toLowerCase(), p.defaultBranch);
+      }
+    } else if (t.projectId != null) {
+      // a fresh checkout of the default branch, on a branch of its own so nothing lands on main
+      Project p = projects.findById(t.projectId).orElse(null);
+      if (p != null && p.repoUrl != null && !p.repoUrl.isBlank()) {
+        String leaf = t.workspaceKey.substring(t.workspaceKey.lastIndexOf('/') + 1).toLowerCase();
+        repo = new Wire.RepoSpec(p.repoUrl, "orca/" + leaf, p.defaultBranch);
       }
     }
     @SuppressWarnings("unchecked")

@@ -56,7 +56,9 @@ public class IssueService {
       throw ApiException.bad("title is required");
     }
     Project p = in.projectId() == null ? defaultProject()
-        : projects.findById(in.projectId()).orElseThrow(() -> ApiException.notFound("project"));
+        : projects.findById(in.projectId())
+            .or(() -> projects.findByKeyPrefix(in.projectId().trim().toUpperCase(java.util.Locale.ROOT)))
+            .orElseThrow(() -> ApiException.notFound("project"));
     p.nextNumber++;
     projects.save(p);
     Issue i = new Issue();

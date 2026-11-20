@@ -347,4 +347,29 @@ class EndToEndTest {
     List<?> events = (List<?>) call("GET", "/api/tasks/" + taskId + "/events", null);
     return events.stream().filter(e -> "session".equals(Json.str(e, "type"))).findFirst().orElseThrow();
   }
+
+  @Test
+  void agentsCanWorkOnAProjectRepositoryWithoutAnIssue() throws Exception {
+    Path repo = Files.createTempDirectory("orca-e2e-repo");
+    for (List<String> cmd : List.of(List.of("git", "init", "-q", "-b", "main"),
+        List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"))) {
+      assertEquals(0, new ProcessBuilder(cmd).directory(repo.toFile()).inheritIO().start().waitFor());
+    }
+    call("POST", "/api/projects", Map.of("key", "CHK", "name", "Checked", "repoUrl", repo.toString()));
+    Map<String, Object> def = Map.of(
+        "nodes", List.of(
+            Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+            Map.of("id", "check", "type", "agent.run", "config", Map.of("agent", "Builder", "project", "chk",
+                "issue", "", "prompt", "hello"))),
+        "edges", List.of(Map.of("id", "e1", "source", "start", "target", "check")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Project check", "definition", def)), "id");
+    String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of("input", Map.of())), "id");
+    await("check done", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
+    String taskId = String.valueOf(Json.get(call("GET", "/api/runs/" + run, null), "state.nodes.check.output.taskId"));
+    String cwd = Json.str(Json.obj(sessionEvent(taskId), "data"), "cwd");
+    assertTrue(cwd.contains("/runs/" + run), cwd);
+    Process branch = new ProcessBuilder("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").start();
+    assertEquals("orca/" + run.toLowerCase(), new String(branch.getInputStream().readAllBytes()).trim(),
+        "a branch of its own, so nothing lands on main");
+  }
 }

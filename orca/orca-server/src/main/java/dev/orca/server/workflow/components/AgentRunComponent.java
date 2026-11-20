@@ -54,6 +54,9 @@ public class AgentRunComponent implements NodeComponent {
                 .visibleWhen("reviewTarget", "baseBranch"),
             f("issue", "Issue", FieldKind.STRING).withDefault("{{trigger.issue.id}}")
                 .withHelp("Ties the run to an issue: same workspace, and the session can continue."),
+            f("project", "Project (without an issue)", FieldKind.STRING)
+                .withHelp("A project key such as WMS: the agent works in a fresh checkout of its repository, on a "
+                    + "branch of its own. Ignored when an issue is set."),
             select("session", "Session", false, "continue", "continue", "new")
                 .withHelp("'continue' resumes the agent's previous session on the same issue.")
                 .visibleWhen("mode", "work"),
@@ -116,8 +119,12 @@ public class AgentRunComponent implements NodeComponent {
     Task t = tasks.enqueue(new TaskRequest(agent.id, issue, review != null && (prompt == null || prompt.isBlank())
         ? "Review the changes." : prompt, review != null ? "review" : schema == null ? "run" : "structured",
         schema, review != null ? "new" : ctx.string("session", "continue"), origin, timeout > 0 ? (int) timeout : null,
-        review));
+        review, issue == null ? blankToNull(ctx.string("project", "")) : null));
     return new NodeResult.Waiting(t.id, Map.of("taskId", t.id, "agent", agent.name, "provider", agent.provider));
+  }
+
+  private static String blankToNull(String s) {
+    return s == null || s.isBlank() || s.equals("null") ? null : s;
   }
 
   @Override
