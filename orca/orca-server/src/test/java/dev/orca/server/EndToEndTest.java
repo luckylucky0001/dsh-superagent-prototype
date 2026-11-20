@@ -402,6 +402,18 @@ class EndToEndTest {
   }
 
   @Test
+  @SuppressWarnings("unchecked")
+  void aRuntimeIsListedUnderItsNameFromRegistration() throws Exception {
+    String code = Json.str(call("POST", "/api/runtimes/registration-codes", null), "code");
+    Map<String, Object> reg = (Map<String, Object>) call("POST", "/api/daemon/register",
+        Map.of("code", code, "name", "  build-box-7  "));
+    String id = Json.str(reg, "runtimeId");
+    List<Map<String, Object>> all = (List<Map<String, Object>>) call("GET", "/api/runtimes", null);
+    assertEquals("build-box-7", all.stream().filter(r -> id.equals(r.get("id"))).findFirst().orElseThrow().get("name"));
+    call("DELETE", "/api/runtimes/" + id, null);
+  }
+
+  @Test
   void theCliWorksWithAPersonalAccessToken() throws Exception {
     String pat = Json.str(call("POST", "/api/auth/tokens", Map.of("label", "ci", "days", 7)), "token");
     assertTrue(pat.startsWith("orca_p_"), pat);

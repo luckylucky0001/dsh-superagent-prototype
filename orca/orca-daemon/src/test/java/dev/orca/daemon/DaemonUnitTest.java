@@ -171,4 +171,18 @@ class DaemonUnitTest {
     org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("/srv/git/wms/", "/srv/git/wms"));
     org.junit.jupiter.api.Assertions.assertFalse(Workspaces.sameRepo("git@host:a/b.git", "git@host:a/c.git"));
   }
+
+  @Test
+  void doctorExplainsWhatIsMissingAndFails(@org.junit.jupiter.api.io.TempDir Path dir) throws Exception {
+    var bytes = new java.io.ByteArrayOutputStream();
+    var out = new java.io.PrintStream(bytes, true, java.nio.charset.StandardCharsets.UTF_8);
+    DaemonConfig cfg = new DaemonConfig("http://127.0.0.1:1", "orca_r_x", "t", 1, dir.resolve("work").toString(),
+        List.of(dir.resolve("no-codex").toString()), List.of(dir.resolve("no-trae").toString()), Map.of(), false, null, false);
+    assertEquals(1, new Doctor(cfg, out).run());
+    String text = bytes.toString(java.nio.charset.StandardCharsets.UTF_8);
+    assertTrue(text.contains("is writable"), text);
+    assertTrue(text.contains("cannot reach it"), text);
+    assertTrue(text.contains("Codex CLI: not installed"), text);
+    assertTrue(text.contains("problem(s) to fix"), text);
+  }
 }

@@ -7,6 +7,7 @@ COPY orca-workflow orca-workflow
 COPY orca-protocol orca-protocol
 COPY orca-agent orca-agent
 COPY orca-daemon orca-daemon
+COPY orca-cli orca-cli
 COPY orca-server orca-server
 RUN mvn -q -B package -DskipTests
 
@@ -22,9 +23,12 @@ RUN useradd --system --create-home --home-dir /var/lib/orca orca
 WORKDIR /opt/orca
 COPY --from=build /src/orca-server/target/orca-server.jar /opt/orca/orca-server.jar
 COPY --from=build /src/orca-daemon/target/orca-daemon-exec.jar /opt/orca/downloads/orca-daemon.jar
+COPY --from=build /src/orca-cli/target/orca-cli-exec.jar /opt/orca/downloads/orca-cli.jar
+COPY dist-scripts/install-runtime.sh /opt/orca/downloads/install-runtime.sh
 COPY --from=web /web/dist /opt/orca/web
 USER orca
 ENV ORCA_WEB_DIR=file:/opt/orca/web/ \
+    ORCA_DOWNLOADS_DIR=/opt/orca/downloads \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/opt/orca/orca-server.jar"]

@@ -44,6 +44,11 @@ public record DaemonConfig(
     env = env == null ? Map.of() : Map.copyOf(env);
   }
 
+  /** How the runtime is listed: the configured name, else this host's name. */
+  public String displayName() {
+    return name != null && !name.isBlank() ? name : Daemon.hostname();
+  }
+
   public static Path home() {
     String h = System.getenv("ORCA_HOME");
     return h != null && !h.isBlank() ? Path.of(h) : Path.of(System.getProperty("user.home"), ".orca");

@@ -190,7 +190,10 @@ export interface RegistrationCode {
   code: string;
   expiresInMinutes: number;
   server: string;
+  install?: string;
+  download: string;
   register: string;
+  doctor: string;
   start: string;
 }
 

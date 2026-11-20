@@ -29,7 +29,7 @@ import java.util.Set;
  */
 public final class Main {
 
-  public static final String VERSION = "0.3.0";
+  public static final String VERSION = "1.0.0";
 
   private final PrintStream out;
   private final PrintStream err;
@@ -46,7 +46,11 @@ public final class Main {
   }
 
   public static void main(String[] argv) {
-    System.exit(new Main(System.out, System.err, System.getenv()).run(argv));
+    // piped or redirected output (scripts, CI, files, --json) is always UTF-8; a terminal keeps its own encoding
+    java.io.PrintStream out = System.console() == null
+        ? new java.io.PrintStream(new java.io.FileOutputStream(java.io.FileDescriptor.out), true, java.nio.charset.StandardCharsets.UTF_8)
+        : System.out;
+    System.exit(new Main(out, System.err, System.getenv()).run(argv));
   }
 
   /** Runs one command; returns the process exit code (0 ok, 1 failed, 2 usage). */
@@ -74,7 +78,7 @@ public final class Main {
       loadConfig();
       return switch (cmd) {
         case "whoami" -> show(get("/api/auth/me"), me ->
-            out.println(Json.str(me, "name") + " <" + Json.str(me, "email") + "> · " + Json.str(me, "role") + " · " + server));
+            out.println(Json.str(me, "name") + " <" + Json.str(me, "email") + "> | " + Json.str(me, "role") + " | " + server));
         case "issues" -> issues(a);
         case "issue" -> issue(a);
         case "agents" -> table(get("/api/agents"), List.of("name", "provider", "model", "permission", "id"));
@@ -110,13 +114,13 @@ public final class Main {
   private int login(Args a) throws IOException, InterruptedException {
     server = trimSlash(a.opt("server", env.getOrDefault("ORCA_SERVER", "")));
     if (server.isBlank()) {
-      throw new CliException(2, "--server is required, e.g. orca login --server https://orca.example.com --token orca_p_…");
+      throw new CliException(2, "--server is required, e.g. orca login --server https://orca.example.com --token orca_p_...");
     }
     token = a.opt("token", env.get("ORCA_TOKEN"));
     if (token == null || token.isBlank()) {
       String email = a.opt("email", null);
       if (email == null) {
-        throw new CliException(2, "give --token (Settings → Account → API tokens) or --email to sign in with a password");
+        throw new CliException(2, "give --token (Settings > API tokens) or --email to sign in with a password");
       }
       char[] pw = System.console() != null ? System.console().readPassword("Password for %s: ", email)
           : new String(System.in.readAllBytes(), StandardCharsets.UTF_8).strip().toCharArray();
@@ -157,8 +161,8 @@ public final class Main {
           yield print(i);
         }
         out.println(Json.str(i, "key") + "  " + Json.str(i, "title"));
-        out.println("status " + Json.str(i, "status") + " · priority " + Json.str(i, "priority")
-            + (Json.str(i, "assigneeId") != null ? " · assignee " + Json.str(i, "assigneeType") + ":" + Json.str(i, "assigneeId") : ""));
+        out.println("status " + Json.str(i, "status") + " | priority " + Json.str(i, "priority")
+            + (Json.str(i, "assigneeId") != null ? " | assignee " + Json.str(i, "assigneeType") + ":" + Json.str(i, "assigneeId") : ""));
         if (Json.str(i, "description") != null && !Json.str(i, "description").isBlank()) {
           out.println();
           out.println(Json.str(i, "description").strip());
@@ -169,7 +173,7 @@ public final class Main {
           out.println();
           for (Object c : l) {
             String author = names.getOrDefault(String.valueOf(Json.str(c, "authorId")), Json.str(c, "authorType"));
-            out.println("— " + ("system".equals(Json.str(c, "authorType")) ? "Orca" : author) + " · "
+            out.println("- " + ("system".equals(Json.str(c, "authorType")) ? "Orca" : author) + " | "
                 + time(Json.num(c, "createdAt", 0)));
             out.println(indent(String.valueOf(Json.str(c, "body")).strip()));
           }
@@ -228,7 +232,7 @@ public final class Main {
     String agent = a.arg(1, "ask AGENT PROMPT");
     String prompt = String.join(" ", a.positional.subList(Math.min(2, a.positional.size()), a.positional.size()));
     if (prompt.isBlank()) {
-      throw new CliException(2, "what should " + agent + " do? orca ask " + agent + " \"…\"");
+      throw new CliException(2, "what should " + agent + " do? orca ask " + agent + " \"...\"");
     }
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("prompt", prompt);
@@ -247,7 +251,7 @@ public final class Main {
     String id = a.arg(2, "task " + sub + " ID");
     return switch (sub) {
       case "show" -> show(get("/api/tasks/" + enc(id)), t -> {
-        out.println(id + " · " + Json.str(t, "kind") + " · " + Json.str(t, "status") + " · " + Json.str(t, "model"));
+        out.println(id + " | " + Json.str(t, "kind") + " | " + Json.str(t, "status") + " | " + Json.str(t, "model"));
         if (Json.str(t, "finalText") != null) {
           out.println();
           out.println(Json.str(t, "finalText").strip());
@@ -271,7 +275,7 @@ public final class Main {
   }
 
   private int runWorkflow(Args a) throws IOException, InterruptedException {
-    String ref = a.arg(1, "run WORKFLOW [--input key=value]…");
+    String ref = a.arg(1, "run WORKFLOW [--input key=value]...");
     String id = workflowId(ref);
     Map<String, Object> input = new LinkedHashMap<>();
     for (String kv : a.all("input")) {
@@ -298,7 +302,7 @@ public final class Main {
   }
 
   private int decide(Args a, String decision) throws IOException, InterruptedException {
-    String id = a.arg(1, (decision.equals("approved") ? "approve" : "reject") + " INBOX_ID [--comment …]");
+    String id = a.arg(1, (decision.equals("approved") ? "approve" : "reject") + " INBOX_ID [--comment ...]");
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("decision", decision);
     body.put("comment", a.opt("comment", ""));
@@ -307,7 +311,7 @@ public final class Main {
   }
 
   private int answer(Args a) throws IOException, InterruptedException {
-    String id = a.arg(1, "answer INBOX_ID key=value…");
+    String id = a.arg(1, "answer INBOX_ID key=value...");
     Map<String, Object> answers = new LinkedHashMap<>();
     for (String kv : a.positional.subList(Math.min(2, a.positional.size()), a.positional.size())) {
       int eq = kv.indexOf('=');
@@ -461,7 +465,7 @@ public final class Main {
       List<String> line = new ArrayList<>();
       for (String c : columns) {
         Object v = r instanceof Map<?, ?> m ? m.get(c) : null;
-        String s = v == null ? "—" : c.endsWith("At") && v instanceof Number n ? time(n.longValue()) : String.valueOf(v);
+        String s = v == null ? "-" : c.endsWith("At") && v instanceof Number n ? time(n.longValue()) : String.valueOf(v);
         line.add(s.length() > 60 ? s.substring(0, 57) + "..." : s);
       }
       cells.add(line);
@@ -494,7 +498,7 @@ public final class Main {
 
   private String time(long millis) {
     if (millis <= 0) {
-      return "—";
+      return "-";
     }
     ZoneId zone = ZoneId.of(env.getOrDefault("ORCA_TIMEZONE", "Asia/Singapore"));
     return DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm").withZone(zone).format(Instant.ofEpochMilli(millis));
@@ -527,7 +531,7 @@ public final class Main {
     }
     HttpResponse<String> res = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
     if (res.statusCode() == 401) {
-      throw new CliException(1, "not signed in or the token expired: orca login --server " + server + " --token …");
+      throw new CliException(1, "not signed in or the token expired: orca login --server " + server + " --token ...");
     }
     if (res.statusCode() >= 400) {
       String msg = res.body();
@@ -599,7 +603,7 @@ public final class Main {
 
   private void usage() {
     out.println("""
-        orca — work with Orca from the command line                                   v%s
+        orca - work with Orca from the command line                                   v%s
 
           orca login --server URL --token TOKEN     sign in with a personal access token
           orca login --server URL --email EMAIL     sign in with a password (creates a 90-day token)
@@ -608,7 +612,7 @@ public final class Main {
           orca issues [--project KEY] [--status STATUS]
           orca issue show KEY
           orca issue create --title T [--project KEY] [--description D | --description-file F]
-                            [--priority P] [--label L]… [--assign AGENT]
+                            [--priority P] [--label L]... [--assign AGENT]
           orca issue comment KEY "text"            (mention @Agent to ask an agent)
           orca issue assign KEY AGENT
           orca issue status KEY STATUS
@@ -619,12 +623,12 @@ public final class Main {
           orca task steer ID "text"
 
           orca workflows
-          orca run WORKFLOW [--input key=value]… [--wait]
+          orca run WORKFLOW [--input key=value]... [--wait]
           orca runs [--limit N]
 
           orca inbox [--all]
           orca approve ID [--comment C] | reject ID [--comment C]
-          orca answer ID key=value…
+          orca answer ID key=value...
 
         Add --json to any command for machine-readable output. Settings: ~/.orca/cli.json,
         or ORCA_SERVER and ORCA_TOKEN in the environment (handy in CI).""".formatted(VERSION));

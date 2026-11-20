@@ -91,7 +91,7 @@ public class McpController {
         case "initialize" -> Map.of("protocolVersion", Json.str(msg, "params.protocolVersion") == null ? PROTOCOL
                 : Json.str(msg, "params.protocolVersion"),
             "capabilities", Map.of("tools", Map.of("listChanged", false)),
-            "serverInfo", Map.of("name", "orca", "version", "0.1.0"),
+            "serverInfo", Map.of("name", "orca", "version", "1.0.0"),
             "instructions", "Tools for the Orca issue this task works on. Your final reply is posted automatically.");
         case "ping" -> Map.of();
         case "tools/list" -> Map.of("tools", tools());

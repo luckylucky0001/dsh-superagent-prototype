@@ -58,7 +58,7 @@
 | 插话 | 声明了 `steering.supported`，但 `_session/steer` 参数未验证 → 驱动暂不声明 steer，插话降级为“下一轮发送” | ⏳ |
 | 模型列表 | `traecli models`（输出格式待登录后确认，驱动按行宽松解析） | ⏳ |
 
-待登录后实测（需要 TRAE 企业版旗舰版账号或 PAT）：`session/new` 返回的模型/模式、`session/update` 字段细节、`systemPrompt` 参数形态（目前把 Agent 指令拼在首轮 prompt 前）、`_session/steer` 参数、elicitation 能力协商、`-c projects.…trust_level` 是否生效、`traecli models` 输出格式。
+待登录后实测（需要 TRAE 企业版旗舰版账号或 PAT）：`session/new` 返回的模型/模式、`session/update` 字段细节、`systemPrompt` 参数形态（目前把 Agent 指令拼在首轮 prompt 前）、`_session/steer` 参数、elicitation 能力协商、`-c projects.…trust_level` 是否生效、`traecli models` 输出格式、Agent 开启 **Network in the sandbox** 时下发的 `-c sandbox_workspace_write.network_access=true` 是否被 TRAE 接受（Codex 已实测：未开启时沙箱内 DNS 失败，开启后 `pip` 可访问 PyPI）。
 
 安装提示：官方脚本 `https://trae.cn/trae-cli/install_v2.sh` 按地区限制访问；登录：`traecli login`，或 `TRAECLI_PERSONAL_ACCESS_TOKEN` + `traecli login --with-trae-pat`，国际站/私有部署用 `TRAECLI_HOST`。
 

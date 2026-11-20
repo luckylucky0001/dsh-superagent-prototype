@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /** Connects to the server, reports what this machine can run, and executes assigned tasks. */
 public final class Daemon {
 
-  public static final String VERSION = "0.3.0";
+  public static final String VERSION = "1.0.0";
   private static final Logger log = LoggerFactory.getLogger(Daemon.class);
 
   private final DaemonConfig config;
@@ -197,10 +197,10 @@ public final class Daemon {
   }
 
   private String name() {
-    return config.name() != null && !config.name().isBlank() ? config.name() : hostname();
+    return config.displayName();
   }
 
-  private static String hostname() {
+  static String hostname() {
     try {
       return InetAddress.getLocalHost().getHostName();
     } catch (Exception e) {

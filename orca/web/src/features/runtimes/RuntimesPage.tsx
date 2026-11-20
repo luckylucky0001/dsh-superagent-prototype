@@ -131,6 +131,15 @@ function RuntimeCard({ r }: { r: Runtime }) {
   );
 }
 
+function Cmd({ text }: { text: string }) {
+  return (
+    <Typography.Paragraph copyable={{ text }} className="orca-mono"
+      style={{ background: '#0f172a', color: '#e2e8f0', padding: '8px 12px', borderRadius: 6, fontSize: 12, wordBreak: 'break-all' }}>
+      {text}
+    </Typography.Paragraph>
+  );
+}
+
 function AddRuntimeModal({ open, onClose }: { open: boolean; onClose: () => void }) {
   const t = useT();
   const notify = useNotify();
@@ -141,30 +150,24 @@ function AddRuntimeModal({ open, onClose }: { open: boolean; onClose: () => void
       afterOpenChange={(o) => o && !code && gen.mutate()}>
       <Alert type="info" showIcon message={t('runtimes.prereq')} style={{ marginBottom: 16 }} />
       {gen.isPending && <Typography.Text type="secondary">{t('runtimes.generating')}</Typography.Text>}
+      {code?.install && (
+        <>
+          <Typography.Title level={5} style={{ marginTop: 0 }}>{t('runtimes.quick')}</Typography.Title>
+          <Typography.Paragraph type="secondary" style={{ fontSize: 12 }}>{t('runtimes.quickHelp')}</Typography.Paragraph>
+          <Cmd text={code.install} />
+          <Typography.Title level={5}>{t('runtimes.manual')}</Typography.Title>
+        </>
+      )}
       {code && (
         <Steps
           direction="vertical"
           size="small"
           current={-1}
           items={[
-            {
-              title: t('runtimes.step1'),
-              description: (
-                <Typography.Paragraph copyable={{ text: code.register }} className="orca-mono"
-                  style={{ background: '#0f172a', color: '#e2e8f0', padding: '8px 12px', borderRadius: 6, fontSize: 12 }}>
-                  {code.register}
-                </Typography.Paragraph>
-              ),
-            },
-            {
-              title: t('runtimes.step2'),
-              description: (
-                <Typography.Paragraph copyable={{ text: code.start }} className="orca-mono"
-                  style={{ background: '#0f172a', color: '#e2e8f0', padding: '8px 12px', borderRadius: 6, fontSize: 12 }}>
-                  {code.start}
-                </Typography.Paragraph>
-              ),
-            },
+            { title: t('runtimes.step0'), description: <Cmd text={code.download} /> },
+            { title: t('runtimes.step1'), description: <Cmd text={code.register} /> },
+            { title: t('runtimes.stepDoctor'), description: <Cmd text={code.doctor} /> },
+            { title: t('runtimes.step2'), description: <Cmd text={code.start} /> },
             { title: t('runtimes.step3'), description: t('runtimes.step3Help') },
           ]}
         />

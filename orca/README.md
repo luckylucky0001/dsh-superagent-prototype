@@ -44,22 +44,34 @@ ORCA_ADMIN_PASSWORD=dev-pass java -jar orca-server/target/orca-server.jar   # ht
 ```
 
 1. 用 `admin@orca.local` / `dev-pass` 登录。
-2. **运行时 → 添加运行时**，复制弹窗里的两条命令到要跑 Agent 的机器上执行：
+2. **运行时 → 添加运行时**，复制弹窗里的命令到要跑 Agent 的机器上执行：
    ```bash
    java -jar orca-daemon/target/orca-daemon-exec.jar register --server http://localhost:8080 --code orca_r_...
+   java -jar orca-daemon/target/orca-daemon-exec.jar doctor     # 自检：Java、git、服务器、令牌、Codex / TRAE 安装与登录
    java -jar orca-daemon/target/orca-daemon-exec.jar start
    ```
-   daemon 会探测本机的 Codex / TRAE CLI（版本、登录状态、模型、能力）并上报。`orca-daemon probe` 可单独查看。
+   daemon 会探测本机的 Codex / TRAE CLI（版本、登录状态、模型、能力）并上报。`orca-daemon probe` 输出原始探测结果（JSON）。
+   服务器配置了 `ORCA_DOWNLOADS_DIR` 时（Docker 镜像与发布包默认如此），弹窗会给出**一键安装**命令，见下文「接入运行时」。
 3. **Agents → 新建**：选 provider（codex / trae）、运行时、模型、权限档位。
 4. 新建 Issue，负责人选这个 Agent。内置工作流「Assigned issue → agent」会把 Issue 改成进行中、让 Agent 干活、把结果发成评论、移到审核中。之后在 Issue 下评论（或 `@AgentName`），Agent 会在**同一个会话**里继续。
 
 ## 生产部署
 
-**发布包**：`scripts/package.sh` 生成 `dist/orca-<version>.tar.gz`，内含自带前端的 `orca-server.jar`、`daemon/orca-daemon.jar` 与启动脚本、`deploy/`。不用 Docker 时：
+**发布包**：`scripts/package.sh` 生成 `dist/orca-<version>.tar.gz`：
+
+| 目录 | 内容 |
+|---|---|
+| `orca-server.jar` | 服务端（自带前端） |
+| `daemon/` | `orca-daemon.jar`、启动脚本（`orca-daemon` / `.cmd`）、systemd unit、`install-runtime.sh` |
+| `cli/` | 命令行客户端 `orca-cli.jar` 与启动脚本（`orca` / `orca.cmd`） |
+| `downloads/` | 服务端在 `/downloads/` 下发的文件（daemon、CLI、安装脚本），把 `ORCA_DOWNLOADS_DIR` 指向它 |
+| `deploy/` | Docker Compose 与 `.env` 样例 |
+
+`scripts/package-daemon.sh` 另可为当前平台打一个**自带 Java 运行时**（jlink）的 daemon 包，目标机无需安装 Java。不用 Docker 时：
 
 ```bash
 ORCA_DB_URL=jdbc:postgresql://db:5432/orca ORCA_DB_USER=orca ORCA_DB_PASSWORD=... \
-ORCA_ADMIN_PASSWORD=... ORCA_PUBLIC_URL=https://orca.example.com ORCA_DOWNLOADS_DIR=./daemon \
+ORCA_ADMIN_PASSWORD=... ORCA_PUBLIC_URL=https://orca.example.com ORCA_DOWNLOADS_DIR=./downloads \
 java -jar orca-server.jar
 ```
 
@@ -70,7 +82,7 @@ cp deploy/.env.example deploy/.env          # 改密码和 ORCA_PUBLIC_URL
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 ```
 
-镜像里自带前端；daemon 安装包可从 `{ORCA_PUBLIC_URL}/downloads/orca-daemon.jar` 下载。daemon 需要 Java 21，可用 `dist-scripts/` 下的启动脚本和 systemd unit。
+镜像里自带前端，并在 `{ORCA_PUBLIC_URL}/downloads/` 下发 `orca-daemon.jar`、`orca-cli.jar` 与 `install-runtime.sh`。
 
 主要配置（环境变量）：
 
@@ -83,6 +95,35 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
 | `ORCA_NOTIFY_WEBHOOK_URL` / `ORCA_NOTIFY_FORMAT` | 空 / `slack` | 收件箱新事项推送到群（`feishu`、`dingtalk`、`wecom`、`slack`、`teams`） |
 | `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
+| `ORCA_DOWNLOADS_DIR` | 空（镜像内为 `/opt/orca/downloads`） | 在 `/downloads/` 下发 daemon、CLI 与安装脚本；有安装脚本时「添加运行时」显示一键安装命令 |
+
+### 接入运行时（构建机 / 开发机）
+
+在「运行时 → 添加运行时」复制一键安装命令（Linux / macOS）：
+
+```bash
+curl -fsSL https://orca.example.com/downloads/install-runtime.sh | sh -s -- \
+    --server https://orca.example.com --code orca_r_... [--name sg-build-01] [--service] [--allow-network]
+```
+
+脚本会：检查 Java 21 与 git → 未安装 Codex 时可用 npm 安装（`--install-codex`），未登录时引导 `codex login --device-auth`（SSH 环境可用；也支持 `printenv OPENAI_API_KEY | codex login --with-api-key`）→ 下载 daemon 与 `orca` 命令行到 `~/.orca/bin` → 注册 → 运行 `orca-daemon doctor` → 可选安装 systemd 用户服务（`--service`）。TRAE CLI 需按 TRAE 官方方式安装后执行 `traecli login`（或 `TRAECLI_PERSONAL_ACCESS_TOKEN=... traecli login --with-trae-pat`）。
+
+`orca-daemon doctor` 随时可运行，逐项给出 ✓ / ! / ✗ 和修复建议，有阻断问题时退出码为 1，便于放进运维脚本。Windows 上用 `daemon/orca-daemon.cmd register ...` 手动接入。
+
+### 命令行 `orca`
+
+在 **设置 → API tokens** 创建个人访问令牌（`orca_p_` 前缀，可随时吊销），然后：
+
+```bash
+orca login --server https://orca.example.com --token orca_p_...
+orca issues --project WMS
+orca issue create --project WMS --title "Reject putaway into blocked bins" --assign Codex
+orca ask Codex "Where is FIFO enforced for line-side picks?"
+orca run "Nightly WMS health check" --wait        # 按名称或 id 运行一个已启用的工作流
+orca inbox && orca approve inb_... --comment "ok"
+```
+
+所有命令都支持 `--json`；CI 中可直接用 `ORCA_SERVER` / `ORCA_TOKEN` 环境变量。完整参考见 [docs/cli.md](docs/cli.md)。
 
 ## 功能一览
 
@@ -94,7 +135,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 - **收件箱**：审批、Agent 提问、工作流表单、失败提醒。
 - **MCP 回写**：Agent 运行中可通过 Orca 的 MCP 工具读 Issue、发进展、改状态（每个任务一个短期 token）。
 - **Git**：项目配置仓库后，每个 Issue 一个分支 `orca/<key>`，同一 Issue 的 Agent 共享工作目录；遗留改动自动提交。
-- **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。
+- **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。内置 9 个经过整理的技能（git 提交规范、测试纪律、代码评审清单、安全基线、Java/Spring、Python、TypeScript/React、仓储 WMS 约定、汽车物流领域知识），首次启动自动导入，之后可在「技能 → 从内置库添加」补回缺少的技能（已存在的同名技能不会被覆盖）。
+- **命令行与令牌**：`orca` CLI 覆盖 Issue、Agent、提问、任务、工作流、收件箱；个人访问令牌可在设置页创建与吊销。
 - **成员与用量**：成员/角色管理，按 Agent、按天的运行与 token 统计。
 
 ## Agent 权限档位

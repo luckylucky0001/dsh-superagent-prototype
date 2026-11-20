@@ -119,8 +119,15 @@ React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板�
 
 `/api/stats?days=N` 按 Agent 和按天汇总运行次数、成功/失败、token 与忙碌时间。Codex 上报的是会话累计 token，续接的会话会带上之前任务的用量；驱动在会话打开后的第一次上报记下基线，事件里的 `taskTokens` 只计本任务。
 
-## 11. 后续
+## 11. 交付与运维
 
-- git / PR 节点（GitHub/GitLab/Gitee）、`traecli review` / Codex review 节点、有轮数上限的循环子流程。
-- 多实例（行锁、跨实例推送）、OIDC/SSO、RBAC、审计、用量报表。
+- **运行时接入**：`install-runtime.sh`（服务端 `/downloads/` 下发）检查 Java / git，引导安装并登录 Codex（`codex login --device-auth` 适合 SSH），下载 daemon 与 CLI，注册（带上运行时名称），运行自检，可选 systemd 用户服务。脚本只用 POSIX sh，非交互（`--yes`）时不做任何安装。
+- **自检**：`orca-daemon doctor` 逐项检查 Java ≥ 21、git 与身份、工作目录可写与磁盘、注册信息、服务器可达（`/api/health`）、运行时令牌（实际发起 daemon WebSocket 握手）、每个 CLI 的安装与登录、网络与 full 档位设置、是否已有 daemon 持有锁；每项给出修复命令，有阻断问题时退出码 1。终端不支持 UTF-8 时自动改用 ASCII 标记。
+- **命令行**：`orca` 只调用公开 REST API；认证用个人访问令牌（`orca_p_`，库里只存哈希，可在设置页吊销）或密码换取的 90 天令牌；`--json` 与稳定退出码便于脚本与 CI。
+- **技能库**：内置技能以带 front matter 的 Markdown 随服务端发布（`classpath:skills/*.md`），空库首次启动时导入；之后可在界面上从内置库补回缺少的技能；已存在的同名技能（可能已被团队修改）不会被覆盖。
+
+## 12. 后续
+
+- GitHub/GitLab/Gitee 的合并请求 API 集成（目前 `repo.push` 推送分支并回传托管平台打印的创建链接）、有轮数上限的循环子流程。
+- 多实例（行锁、跨实例推送）、OIDC/SSO、更细的 RBAC、审计。
 - TRAE CLI 登录后的实机联调（见 providers.md 待验证清单）；评估以 app-server 统一两种 CLI。

@@ -24,9 +24,11 @@ public class RuntimeController {
   private final DaemonGateway gateway;
   private final TaskService tasks;
   private final OrcaProperties props;
+  private final String downloads;
 
   public RuntimeController(RuntimeService runtimes, AuthService auth, DaemonGateway gateway, TaskService tasks,
-      OrcaProperties props) {
+      OrcaProperties props, @org.springframework.beans.factory.annotation.Value("${orca.downloads-dir:}") String downloads) {
+    this.downloads = downloads;
     this.runtimes = runtimes;
     this.auth = auth;
     this.gateway = gateway;
@@ -43,10 +45,24 @@ public class RuntimeController {
   public Map<String, Object> code() {
     String code = auth.issueRegistrationCode(CurrentUser.id(), "runtime registration");
     String server = props.publicUrl();
-    return Map.of("code", code, "expiresInMinutes", 60, "server", server,
-        "download", "curl -fsSLO " + server + "/downloads/orca-daemon.jar",
-        "register", "java -jar orca-daemon.jar register --server " + server + " --code " + code,
-        "start", "java -jar orca-daemon.jar start");
+    Map<String, Object> out = new java.util.LinkedHashMap<>();
+    out.put("code", code);
+    out.put("expiresInMinutes", 60);
+    out.put("server", server);
+    if (downloadable("install-runtime.sh")) {
+      // one line that checks Java/git/Codex, installs, registers, runs doctor and offers a service
+      out.put("install", "curl -fsSL " + server + "/downloads/install-runtime.sh | sh -s -- --server " + server
+          + " --code " + code);
+    }
+    out.put("download", "curl -fsSLO " + server + "/downloads/orca-daemon.jar");
+    out.put("register", "java -jar orca-daemon.jar register --server " + server + " --code " + code);
+    out.put("doctor", "java -jar orca-daemon.jar doctor");
+    out.put("start", "java -jar orca-daemon.jar start");
+    return out;
+  }
+
+  private boolean downloadable(String file) {
+    return downloads != null && !downloads.isBlank() && java.nio.file.Files.isRegularFile(java.nio.file.Path.of(downloads, file));
   }
 
   @PostMapping("/api/runtimes/{id}/probe")
@@ -64,13 +80,13 @@ public class RuntimeController {
     return Map.of("ok", true);
   }
 
-  public record RegisterRequest(String code) {}
+  public record RegisterRequest(String code, String name) {}
 
   /** Called by {@code orca-daemon register}; unauthenticated, the one-time code is the credential. */
   @PostMapping("/api/daemon/register")
   public Map<String, Object> register(@RequestBody RegisterRequest req) {
     String[] token = new String[1];
-    Wire.Welcome w = runtimes.register(req.code(), token);
+    Wire.Welcome w = runtimes.register(req.code(), req.name(), token);
     return Map.of("token", token[0], "runtimeId", w.runtimeId());
   }
 }

@@ -55,7 +55,7 @@ public final class Main {
         HttpRequest req = HttpRequest.newBuilder(URI.create(server.replaceAll("/$", "") + "/api/daemon/register"))
             .timeout(Duration.ofSeconds(30))
             .header("Content-Type", "application/json")
-            .POST(HttpRequest.BodyPublishers.ofString(Json.write(Map.of("code", code))))
+            .POST(HttpRequest.BodyPublishers.ofString(Json.write(Map.of("code", code, "name", cfg.displayName()))))
             .build();
         HttpResponse<String> res = HttpClient.newHttpClient().send(req, HttpResponse.BodyHandlers.ofString());
         if (res.statusCode() != 200) {
@@ -91,6 +91,7 @@ public final class Main {
       case "probe" -> System.out.println(Json.MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(
           new Daemon(cfg, Daemon.defaultProviders(cfg, Providers::trae)).probe()));
       case "version" -> System.out.println("orca-daemon " + Daemon.VERSION);
+      case "doctor" -> System.exit(new Doctor(cfg, System.out).run());
       default -> usage();
     }
   }
@@ -136,6 +137,7 @@ public final class Main {
         orca-daemon register --server URL --code CODE
         orca-daemon start [--server URL --token TOKEN] [--name NAME] [--capacity N] [--work-root DIR]
                           [--codex "codex"] [--trae "traecli"] [--isolated] [--allow-extra-args] [--allow-network] [--save]
+        orca-daemon doctor        check this machine: Java, git, server, token, Codex / TRAE CLI
         orca-daemon probe
         orca-daemon version""");
   }

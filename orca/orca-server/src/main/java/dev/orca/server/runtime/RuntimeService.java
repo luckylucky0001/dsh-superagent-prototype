@@ -34,12 +34,19 @@ public class RuntimeService {
   /** Exchanges a one-time code for a runtime and its long-lived token. */
   @Transactional
   public Wire.Welcome register(String code, String[] tokenOut) {
+    return register(code, null, tokenOut);
+  }
+
+  /** As above, listing the runtime under {@code name} (trimmed, at most 80 characters) until its daemon says hello. */
+  @Transactional
+  public Wire.Welcome register(String code, String name, String[] tokenOut) {
     if (!auth.consumeRegistration(code)) {
       throw new ApiException(HttpStatus.UNAUTHORIZED, "the registration code is invalid, used or expired");
     }
     RuntimeHost r = new RuntimeHost();
     r.id = Ids.next("rt");
-    r.name = "new runtime";
+    String n = name == null ? "" : name.strip();
+    r.name = n.isEmpty() ? "new runtime" : n.length() > 80 ? n.substring(0, 80) : n;
     r.capacity = 2;
     r.status = OFFLINE;
     r.createdAt = Ids.now();
