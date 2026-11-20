@@ -238,6 +238,9 @@ function Properties({ issue, update }: { issue: Issue; update: (p: IssuePatch) =
           items={[
             { key: 'p', label: t('issues.project'), children: project ? `${project.key} · ${project.name}` : '—' },
             { key: 'c', label: t('common.created'), children: fmtDateTime(issue.createdAt) },
+            ...(issue.createdBy?.startsWith('run_')
+              ? [{ key: 'by', label: t('issues.createdBy'), children: <Link to={`/runs/${issue.createdBy}`}>{t('issues.createdByRun')}</Link> }]
+              : []),
             { key: 'u', label: t('common.updated'), children: fromNow(issue.updatedAt) },
           ]} />
         <div>
