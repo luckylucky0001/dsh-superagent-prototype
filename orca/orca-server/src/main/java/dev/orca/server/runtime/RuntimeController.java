@@ -92,9 +92,10 @@ public class RuntimeController {
 
   @DeleteMapping("/api/runtimes/{id}")
   public Map<String, Object> delete(@PathVariable String id) {
+    String name = runtimes.find(id).map(r -> r.name).orElseThrow(() -> ApiException.notFound("runtime"));
     gateway.disconnect(id);
-    audit.record("runtime.remove", "runtime", id, Map.of("name", runtimes.find(id).map(r -> r.name).orElse("?")));
     runtimes.delete(id);
+    audit.record("runtime.remove", "runtime", id, Map.of("name", name));
     return Map.of("ok", true);
   }
 

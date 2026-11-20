@@ -221,14 +221,37 @@ public class IssueService {
       p.description = description;
     }
     if (repoUrl != null) {
-      p.repoUrl = repoUrl.isBlank() ? null : repoUrl.trim();
+      p.repoUrl = repoUrl.isBlank() ? null : checkRepoUrl(repoUrl);
     }
     if (branch != null) {
-      p.defaultBranch = branch.isBlank() ? null : branch.trim();
+      p.defaultBranch = branch.isBlank() ? null : checkBranch(branch);
     }
     projects.save(p);
     realtime.publish("project.updated", Realtime.ids("id", p.id));
     return p;
+  }
+
+  /**
+   * A clone URL the daemon's git understands: {@code https://}, {@code ssh://}, {@code git://},
+   * {@code git@host:org/repo}, or an absolute path on the runtime machines. No spaces or option-like
+   * values ({@code -u...}), which git would read as flags.
+   */
+  static String checkRepoUrl(String url) {
+    String u = url.trim();
+    boolean ok = u.matches("(?i)(https?|ssh|git)://[^\\s]+") || u.matches("[\\w.-]+@[\\w.-]+:[^\\s]+")
+        || u.matches("/[^\\s]*") || u.matches("(?i)file:///[^\\s]*");
+    if (!ok || u.startsWith("-")) {
+      throw ApiException.bad("the repository must be an https://, ssh:// or git@host:org/repo URL, or an absolute path");
+    }
+    return u;
+  }
+
+  static String checkBranch(String branch) {
+    String b = branch.trim();
+    if (!b.matches("[A-Za-z0-9._/-]{1,200}") || b.startsWith("-") || b.contains("..")) {
+      throw ApiException.bad("not a valid branch name: " + b);
+    }
+    return b;
   }
 
   @Transactional
@@ -245,8 +268,8 @@ public class IssueService {
     p.keyPrefix = prefix;
     p.name = name == null || name.isBlank() ? prefix : name;
     p.description = description;
-    p.repoUrl = repoUrl;
-    p.defaultBranch = branch;
+    p.repoUrl = repoUrl == null || repoUrl.isBlank() ? null : checkRepoUrl(repoUrl);
+    p.defaultBranch = branch == null || branch.isBlank() ? null : checkBranch(branch);
     p.createdAt = Ids.now();
     projects.save(p);
     realtime.publish("project.updated", Realtime.ids("id", p.id));

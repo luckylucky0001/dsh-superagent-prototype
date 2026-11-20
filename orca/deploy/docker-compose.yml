@@ -40,7 +40,8 @@ services:
     volumes:
       - orca-files:/var/lib/orca/files   # uploaded attachments; back up with the database
     ports:
-      - "${ORCA_HTTP_PORT:-8080}:8080"
+      # behind a reverse proxy on this host, set ORCA_HTTP_BIND=127.0.0.1 so clients cannot bypass it
+      - "${ORCA_HTTP_BIND:-0.0.0.0}:${ORCA_HTTP_PORT:-8080}:8080"
 
 volumes:
   orca-db:

@@ -97,6 +97,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
 | `ORCA_NOTIFY_WEBHOOK_URL` / `ORCA_NOTIFY_FORMAT` | 空 / `slack` | 收件箱新事项推送到群（`feishu`、`dingtalk`、`wecom`、`slack`、`teams`） |
 | `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
+| `ORCA_AUDIT_RETENTION_DAYS` | `365` | 审计日志保留天数，0 为永久 |
+| `ORCA_HTTP_BIND`（Compose） | `0.0.0.0` | 前面有反向代理时设为 `127.0.0.1`，防止绕过代理 |
 | `ORCA_STORAGE_DIR` | `~/.orca/server/files`（镜像内为 `/var/lib/orca/files`，挂载卷 `orca-files`） | 上传附件的存放目录，需与数据库一起备份 |
 | `ORCA_DOWNLOADS_DIR` | 空（镜像内为 `/opt/orca/downloads`） | 在 `/downloads/` 下发 daemon、CLI 与安装脚本；有安装脚本时「添加运行时」显示一键安装命令 |
 

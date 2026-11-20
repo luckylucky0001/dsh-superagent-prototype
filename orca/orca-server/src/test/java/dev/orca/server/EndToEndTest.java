@@ -36,6 +36,10 @@ import org.springframework.boot.test.web.server.LocalServerPort;
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 class EndToEndTest {
 
+  /** Unique per run, so the suite can run repeatedly against the same PostgreSQL database. */
+  private static final String RUN = Long.toString(System.currentTimeMillis() % 46656, 36).toUpperCase();
+
+
   @LocalServerPort
   int port;
 
@@ -172,6 +176,10 @@ class EndToEndTest {
     await("chat notification", () -> NOTIFICATIONS.stream().anyMatch(n -> n.contains("Approval needed: Ship v2?")
         && n.contains("\"msg_type\":\"text\"")));
     call("POST", "/api/inbox/" + Json.str(item, "id") + "/answer", Map.of("decision", "approved", "comment", "lgtm"));
+    @SuppressWarnings("unchecked")
+    List<Map<String, Object>> audited = (List<Map<String, Object>>) call("GET", "/api/audit?limit=500", null);
+    assertTrue(audited.stream().anyMatch(e -> "approval.decide".equals(e.get("action"))
+        && "approved".equals(Json.str(e.get("detail"), "decision"))), "the audit log records approved / rejected");
 
     Object done = call("GET", "/api/runs/" + run, null);
     assertEquals("succeeded", Json.str(done, "status"));
@@ -365,11 +373,11 @@ class EndToEndTest {
         List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "--allow-empty", "-m", "init"))) {
       assertEquals(0, new ProcessBuilder(cmd).directory(repo.toFile()).inheritIO().start().waitFor());
     }
-    call("POST", "/api/projects", Map.of("key", "CHK", "name", "Checked", "repoUrl", repo.toString()));
+    call("POST", "/api/projects", Map.of("key", "CHK" + RUN, "name", "Checked", "repoUrl", repo.toString()));
     Map<String, Object> def = Map.of(
         "nodes", List.of(
             Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
-            Map.of("id", "check", "type", "agent.run", "config", Map.of("agent", "Builder", "project", "chk",
+            Map.of("id", "check", "type", "agent.run", "config", Map.of("agent", "Builder", "project", "chk" + RUN.toLowerCase(),
                 "issue", "", "prompt", "hello"))),
         "edges", List.of(Map.of("id", "e1", "source", "start", "target", "check")));
     String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Project check", "definition", def)), "id");
@@ -377,9 +385,9 @@ class EndToEndTest {
     await("check done", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
     String taskId = String.valueOf(Json.get(call("GET", "/api/runs/" + run, null), "state.nodes.check.output.taskId"));
     String cwd = Json.str(Json.obj(sessionEvent(taskId), "data"), "cwd");
-    assertTrue(cwd.endsWith("/runs/" + run + "-CHK"), cwd);
+    assertTrue(cwd.endsWith("/runs/" + run + "-CHK" + RUN), cwd);
     Process branch = new ProcessBuilder("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").start();
-    assertEquals("orca/runs-" + run.toLowerCase() + "-chk", new String(branch.getInputStream().readAllBytes()).trim(),
+    assertEquals("orca/runs-" + run.toLowerCase() + "-chk" + RUN.toLowerCase(), new String(branch.getInputStream().readAllBytes()).trim(),
         "a branch of its own, so nothing lands on main");
   }
 
@@ -426,9 +434,9 @@ class EndToEndTest {
 
   @Test
   void personalAccessTokensCannotTakeOverTheAccount() throws Exception {
-    call("POST", "/api/members", Map.of("email", "pat-user@test.local", "name", "Pat", "password", "first-pass-1"));
+    call("POST", "/api/members", Map.of("email", "pat-user" + RUN.toLowerCase() + "@test.local", "name", "Pat", "password", "first-pass-1"));
     HttpClient web = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
-    assertEquals(200, raw(web, "POST", "/api/auth/login", Map.of("email", "pat-user@test.local", "password", "first-pass-1"), null).status());
+    assertEquals(200, raw(web, "POST", "/api/auth/login", Map.of("email", "pat-user" + RUN.toLowerCase() + "@test.local", "password", "first-pass-1"), null).status());
     String me = Json.str(Json.MAPPER.readValue(raw(web, "GET", "/api/auth/me", null, null).body(), Object.class), "id");
     String pat = Json.str(Json.MAPPER.readValue(
         raw(web, "POST", "/api/auth/tokens", Map.of("label", "ci", "days", 7), null).body(), Object.class), "token");
@@ -441,7 +449,7 @@ class EndToEndTest {
     assertEquals(403, raw(bare, "PATCH", "/api/members/" + me, Map.of("password", "stolen-pass-1"), pat).status());
     assertEquals(403, raw(bare, "POST", "/api/auth/tokens", Map.of("label", "more", "days", 365), pat).status());
     assertEquals(403, raw(bare, "POST", "/api/runtimes/registration-codes", null, pat).status());
-    assertEquals(403, raw(bare, "POST", "/api/projects", Map.of("key", "PATX", "name", "x"), pat).status());
+    assertEquals(403, raw(bare, "POST", "/api/projects", Map.of("key", "PX" + RUN, "name", "x"), pat).status());
 
     // the web session needs the current password, and changing it signs out every other session and token
     assertEquals(400, raw(web, "PATCH", "/api/members/" + me, Map.of("password", "second-pass-2"), null).status());
@@ -457,7 +465,7 @@ class EndToEndTest {
   @SuppressWarnings("unchecked")
   void securityRelevantActionsAreAudited() throws Exception {
     // a project's repository can be changed by admins, and that change is recorded with its old value
-    String pid = Json.str(call("POST", "/api/projects", Map.of("key", "AUD", "name", "Audited")), "id");
+    String pid = Json.str(call("POST", "/api/projects", Map.of("key", "AUD" + RUN, "name", "Audited")), "id");
     call("PATCH", "/api/projects/" + pid, Map.of("repoUrl", "git@example.com:acme/wms.git", "defaultBranch", "main"));
     Map<String, Object> agent = (Map<String, Object>) call("GET", "/api/agents/" + agentId, null);
     boolean wasNetwork = Boolean.TRUE.equals(agent.get("networkAccess"));
@@ -466,13 +474,31 @@ class EndToEndTest {
     String tokenId = Json.str(Json.obj(call("POST", "/api/auth/tokens", Map.of("label", "=cmd|' /C calc'!A0", "days", 1)), "info"), "id");
     call("DELETE", "/api/auth/tokens/" + tokenId, null);
 
+    // credentials in a repository URL never reach the log; option-like or malformed URLs are refused
+    call("PATCH", "/api/projects/" + pid, Map.of("repoUrl", "https://ci:sekret-token@git.example.com/acme/wms.git"));
+    assertEquals(400, raw(http, "PATCH", "/api/projects/" + pid, Map.of("repoUrl", "-uevil"), null).status());
+    assertEquals(400, raw(http, "PATCH", "/api/projects/" + pid, Map.of("key", "OTHER"), null).status());
+    // a failed sign-in is recorded without trusting the typed name as the actor
+    raw(HttpClient.newHttpClient(), "POST", "/api/auth/login", Map.of("email", "admin@test.local", "password", "wrong"), null);
+
     List<Map<String, Object>> log = (List<Map<String, Object>>) call("GET", "/api/audit?limit=200", null);
+    assertTrue(log.stream().noneMatch(e -> String.valueOf(e.get("detail")).contains("sekret")), "credentials are redacted");
+    assertTrue(log.stream().anyMatch(e -> String.valueOf(e.get("detail")).contains("https://***@git.example.com")));
+    Map<String, Object> failed = log.stream().filter(e -> "auth.login_failed".equals(e.get("action"))).findFirst().orElseThrow();
+    assertEquals(null, failed.get("actorName"));
+    assertEquals("admin@test.local", Json.str(failed.get("detail"), "login"));
+    // keyset paging: two pages of one event never repeat or skip
+    List<Map<String, Object>> p1 = (List<Map<String, Object>>) call("GET", "/api/audit?limit=1", null);
+    String cursor = p1.get(0).get("at") + ":" + p1.get(0).get("id");
+    List<Map<String, Object>> p2 = (List<Map<String, Object>>) call("GET", "/api/audit?limit=1&before=" + cursor, null);
+    assertEquals(log.get(1).get("id"), p2.get(0).get("id"));
     java.util.function.Predicate<String> has = action -> log.stream().anyMatch(e -> action.equals(e.get("action")));
     for (String action : List.of("auth.login", "project.create", "project.update", "agent.update", "token.create",
         "token.revoke", "runtime.register")) {
       assertTrue(has.test(action), action + " is in the audit log");
     }
-    Map<String, Object> update = log.stream().filter(e -> "project.update".equals(e.get("action"))).findFirst().orElseThrow();
+    Map<String, Object> update = log.stream().filter(e -> "project.update".equals(e.get("action"))
+        && "".equals(Json.str(Json.obj(e.get("detail"), "before"), "repoUrl"))).findFirst().orElseThrow();
     assertEquals("git@example.com:acme/wms.git", Json.str(update.get("detail"), "repoUrl"));
     assertEquals("", Json.str(Json.obj(update.get("detail"), "before"), "repoUrl"));
     Map<String, Object> agentChange = log.stream().filter(e -> "agent.update".equals(e.get("action"))).findFirst().orElseThrow();
@@ -487,9 +513,9 @@ class EndToEndTest {
     assertEquals("\"a \"\"b\"\"\"", dev.orca.server.audit.AuditController.cell("a \"b\""));
 
     // members cannot read the log or change projects
-    call("POST", "/api/members", Map.of("email", "plain@test.local", "name", "Plain", "password", "plain-pass-1"));
+    call("POST", "/api/members", Map.of("email", "plain" + RUN.toLowerCase() + "@test.local", "name", "Plain", "password", "plain-pass-1"));
     HttpClient member = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
-    raw(member, "POST", "/api/auth/login", Map.of("email", "plain@test.local", "password", "plain-pass-1"), null);
+    raw(member, "POST", "/api/auth/login", Map.of("email", "plain" + RUN.toLowerCase() + "@test.local", "password", "plain-pass-1"), null);
     assertEquals(403, raw(member, "GET", "/api/audit", null, null).status());
     assertEquals(403, raw(member, "PATCH", "/api/projects/" + pid, Map.of("repoUrl", "evil"), null).status());
     assertEquals(401, raw(bare, "GET", "/api/audit", null, null).status());
@@ -518,12 +544,12 @@ class EndToEndTest {
         List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"))) {
       assertEquals(0, new ProcessBuilder(cmd).directory(repo.toFile()).inheritIO().start().waitFor());
     }
-    call("POST", "/api/projects", Map.of("key", "ASK", "name", "Asked", "repoUrl", repo.toString()));
-    String first = Json.str(call("POST", "/api/agents/" + agentId + "/ask", Map.of("prompt", "what is this?", "project", "ask")), "id");
+    call("POST", "/api/projects", Map.of("key", "ASK" + RUN, "name", "Asked", "repoUrl", repo.toString()));
+    String first = Json.str(call("POST", "/api/agents/" + agentId + "/ask", Map.of("prompt", "what is this?", "project", "ask" + RUN.toLowerCase())), "id");
     await("answer", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + first, null), "status"))));
     String cwd = Json.str(Json.obj(sessionEvent(first), "data"), "cwd");
     assertTrue(Files.isRegularFile(Path.of(cwd, "README.md")), "the agent starts in a checkout: " + cwd);
-    assertTrue(cwd.endsWith("-ASK"), cwd);
+    assertTrue(cwd.endsWith("-ASK" + RUN), cwd);
     String second = Json.str(call("POST", "/api/agents/" + agentId + "/ask",
         Map.of("prompt", "and the tests?", "followUp", first)), "id");
     await("follow-up", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + second, null), "status"))));

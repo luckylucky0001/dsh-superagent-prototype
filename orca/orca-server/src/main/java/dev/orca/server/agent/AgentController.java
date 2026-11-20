@@ -47,8 +47,20 @@ public class AgentController {
     m.put("skills", a.skillsJson);
     m.put("escalateApprovals", a.escalateApprovals);
     m.put("networkAccess", a.networkAccess);
-    m.put("instructions", a.instructions == null ? 0 : a.instructions.hashCode());
+    m.put("instructions", sha256(a.instructions));
     return m;
+  }
+
+  private static String sha256(String s) {
+    if (s == null) {
+      return "";
+    }
+    try {
+      return java.util.HexFormat.of().formatHex(java.security.MessageDigest.getInstance("SHA-256")
+          .digest(s.getBytes(java.nio.charset.StandardCharsets.UTF_8)));
+    } catch (java.security.NoSuchAlgorithmException e) {
+      throw new IllegalStateException(e);
+    }
   }
 
   public AgentController(AgentRepo agents, TaskService tasks, Realtime realtime) {

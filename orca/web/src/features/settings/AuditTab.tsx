@@ -33,13 +33,13 @@ export function AuditTab() {
   const events = useInfiniteQuery({
     queryKey: ['audit'],
     queryFn: ({ pageParam }) => api.audit(pageParam, PAGE),
-    initialPageParam: undefined as number | undefined,
-    getNextPageParam: (last) => (last.length < PAGE ? undefined : last[last.length - 1].at),
+    initialPageParam: undefined as string | undefined,
+    getNextPageParam: (last) => (last.length < PAGE ? undefined : `${last[last.length - 1].at}:${last[last.length - 1].id}`),
   });
   const rows = (events.data?.pages ?? []).flat();
   const f = filter.trim().toLowerCase();
   const shown = f
-    ? rows.filter((e) => [e.action, e.actorName, e.targetId, e.ip, detailText(e.detail)].some((x) => x?.toLowerCase().includes(f)))
+    ? rows.filter((e) => [e.action, e.actorName ?? 'login', e.targetId, e.ip, detailText(e.detail)].some((x) => x?.toLowerCase().includes(f)))
     : rows;
   return (
     <QueryState isLoading={events.isLoading} error={events.error} onRetry={() => void events.refetch()}>
@@ -61,7 +61,7 @@ export function AuditTab() {
           pagination={false}
           columns={[
             { title: t('audit.time'), dataIndex: 'at', width: 160, render: (v: number) => <span style={{ whiteSpace: 'nowrap', fontSize: 12 }}>{fmtDateTime(v)}</span> },
-            { title: t('audit.actor'), dataIndex: 'actorName', width: 140, ellipsis: true, render: (v: string | null) => v ?? '—' },
+            { title: t('audit.actor'), dataIndex: 'actorName', width: 140, ellipsis: true, render: (v: string | null) => v ?? <Typography.Text type="secondary">{t('audit.anonymous')}</Typography.Text> },
             {
               title: t('audit.action'), dataIndex: 'action', width: 210,
               render: (a: string) => <Tag color={areaColor(a)} bordered={false} className="orca-mono" style={{ fontSize: 11 }}>{a}</Tag>,

@@ -183,7 +183,8 @@ public final class Daemon {
       } catch (InterruptedException e) {
         return;
       }
-      if (running.isEmpty() && link.connected()) {
+      // also while tasks run: that is when plan usage climbs (each probe is a short-lived CLI process)
+      if (link.connected()) {
         link.send(Wire.frame(Wire.PROBE_RESULT, new Wire.ProbeResult(probe())));
       }
       if (System.currentTimeMillis() - lastCleanup > Duration.ofHours(24).toMillis() && running.isEmpty()) {

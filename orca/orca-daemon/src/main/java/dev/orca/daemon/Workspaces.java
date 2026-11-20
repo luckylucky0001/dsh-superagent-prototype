@@ -26,7 +26,23 @@ public final class Workspaces {
   }
 
   static boolean sameRepo(String a, String b) {
-    return a.replaceAll("(\\.git)?/*$", "").equals(b.replaceAll("(\\.git)?/*$", ""));
+    return repoKey(a).equals(repoKey(b));
+  }
+
+  /**
+   * A repository's identity regardless of how it is written: credentials, scheme and port, {@code .git}
+   * and trailing slashes do not matter, and {@code git@host:org/repo} equals {@code https://host/org/repo}.
+   * Rotating a token in an https URL or moving to SSH therefore keeps existing checkouts usable.
+   */
+  static String repoKey(String url) {
+    String u = url.trim();
+    u = u.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://", "");   // scheme
+    u = u.replaceFirst("^[^/@]*@", "");                        // user info
+    u = u.replaceFirst("^([^/:]+):\\d+/", "$1/");              // port
+    if (!u.startsWith("/") && u.matches("^[^/:]+:[^/].*")) {   // scp-like host:path
+      u = u.replaceFirst(":", "/");
+    }
+    return u.replaceAll("(\\.git)?/*$", "").toLowerCase(java.util.Locale.ROOT);
   }
 
   public Path prepare(String key, Wire.RepoSpec repo) throws AgentException {
@@ -65,8 +81,13 @@ public final class Workspaces {
         Executables.Output origin = Executables.run(List.of("git", "-C", dir.toString(), "remote", "get-url", "origin"),
             Map.of(), 30);
         if (origin.exitCode() != 0 || !sameRepo(origin.stdout().trim(), repo.url())) {
-          throw new AgentException(ErrorCodes.AGENT_ERROR, "workspace " + key + " is a checkout of "
-              + origin.stdout().trim() + ", not " + repo.url());
+          throw new AgentException(ErrorCodes.AGENT_ERROR, "workspace " + key + " is a checkout of another repository ("
+              + Redacted.url(origin.stdout().trim()) + ", not " + Redacted.url(repo.url()) + "); remove the folder on this"
+              + " machine to start the issue afresh");
+        }
+        if (!origin.stdout().trim().equals(repo.url())) {
+          // same repository written differently (new token, https to ssh): follow the project's setting
+          Executables.run(List.of("git", "-C", dir.toString(), "remote", "set-url", "origin", repo.url()), Map.of(), 30);
         }
         // keep local work; just refresh remote refs so the agent can rebase if it wants to
         Executables.run(List.of("git", "-C", dir.toString(), "fetch", "--quiet", "--all"), Map.of(), 120);
@@ -136,6 +157,15 @@ public final class Workspaces {
     Executables.Output out = Executables.run(cmd, Map.of("GIT_TERMINAL_PROMPT", "0"), 600);
     if (out.exitCode() != 0) {
       throw new AgentException(ErrorCodes.AGENT_ERROR, "git " + args[0] + " failed: " + Executables.plain(out.stderr()));
+    }
+  }
+
+  /** Repository URLs in messages, without credentials. */
+  static final class Redacted {
+    private Redacted() {}
+
+    static String url(String u) {
+      return u == null ? null : u.replaceFirst("(://)[^/@]+@", "$1***@");
     }
   }
 }

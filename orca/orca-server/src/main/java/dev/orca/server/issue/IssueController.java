@@ -41,6 +41,7 @@ public class IssueController {
 
   @PostMapping("/projects")
   public ProjectView createProject(@RequestBody ProjectInput in) {
+    requireAdmin("create projects");
     var p = issues.createProject(in.key(), in.name(), in.description(), in.repoUrl(), in.defaultBranch());
     audit.record("project.create", "project", p.id, auditProject(p));
     return ProjectView.of(p);
@@ -53,18 +54,27 @@ public class IssueController {
   @org.springframework.web.bind.annotation.PatchMapping("/projects/{id}")
   public ProjectView updateProject(@org.springframework.web.bind.annotation.PathVariable String id,
       @RequestBody ProjectInput in) {
-    String role = dev.orca.server.auth.CurrentUser.get().role;
-    if (!"owner".equals(role) && !"admin".equals(role)) {
-      throw new dev.orca.server.support.ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
-          "only owners and admins can change a project's settings");
-    }
+    requireAdmin("change a project's settings");
     var before = auditProject(issues.projects().stream().filter(p -> p.id.equals(id)).findFirst()
         .orElseThrow(() -> dev.orca.server.support.ApiException.notFound("project")));
+    var current = issues.projects().stream().filter(x -> x.id.equals(id)).findFirst().orElseThrow();
+    if (in.key() != null && !in.key().isBlank() && !in.key().trim().equalsIgnoreCase(current.keyPrefix)) {
+      throw dev.orca.server.support.ApiException.bad("a project's key cannot change: issue keys use it");
+    }
     var p = issues.updateProject(id, in.name(), in.description(), in.repoUrl(), in.defaultBranch());
     Map<String, Object> d = new java.util.LinkedHashMap<>(auditProject(p));
     d.put("before", before);
     audit.record("project.update", "project", p.id, d);
     return ProjectView.of(p);
+  }
+
+  /** The repository decides what code agents read and where they push: owners and admins only. */
+  private static void requireAdmin(String what) {
+    String role = dev.orca.server.auth.CurrentUser.get().role;
+    if (!"owner".equals(role) && !"admin".equals(role)) {
+      throw new dev.orca.server.support.ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+          "only owners and admins can " + what);
+    }
   }
 
   private static Map<String, Object> auditProject(dev.orca.server.model.Project p) {

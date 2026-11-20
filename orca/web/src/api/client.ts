@@ -159,7 +159,7 @@ export const api = {
   projects: () => request<Project[]>('GET', '/projects'),
   createProject: (input: ProjectInput) => request<Project>('POST', '/projects', input),
   updateProject: (id: string, input: Partial<ProjectInput>) => request<Project>('PATCH', `/projects/${enc(id)}`, input),
-  audit: (before?: number, limit = 100) => request<AuditEvent[]>('GET', `/audit${q({ before, limit })}`),
+  audit: (before?: string, limit = 100) => request<AuditEvent[]>('GET', `/audit${q({ before, limit })}`),
   issues: (projectId?: string) => request<Issue[]>('GET', `/issues${q({ projectId })}`),
   issue: (idOrKey: string) => request<Issue>('GET', `/issues/${enc(idOrKey)}`),
   createIssue: (input: IssueInput) => request<Issue>('POST', '/issues', input),

@@ -170,6 +170,15 @@ class DaemonUnitTest {
     org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("git@host:a/b.git", "git@host:a/b"));
     org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("/srv/git/wms/", "/srv/git/wms"));
     org.junit.jupiter.api.Assertions.assertFalse(Workspaces.sameRepo("git@host:a/b.git", "git@host:a/c.git"));
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("https://ci:old-token@git.example.com/wms/core.git",
+        "https://ci:new-token@git.example.com/wms/core"), "a rotated token is the same repository");
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("git@git.example.com:wms/core.git",
+        "https://git.example.com/wms/core"), "ssh and https of one repository");
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("ssh://git@git.example.com:2222/wms/core.git",
+        "git@git.example.com:wms/core"));
+    org.junit.jupiter.api.Assertions.assertFalse(Workspaces.sameRepo("https://git.example.com/wms/core",
+        "https://git.example.com/wms/other"));
+    org.junit.jupiter.api.Assertions.assertEquals("https://***@h/r", Workspaces.Redacted.url("https://u:t@h/r"));
   }
 
   @Test

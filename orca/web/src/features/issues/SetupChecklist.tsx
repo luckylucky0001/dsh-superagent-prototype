@@ -59,7 +59,15 @@ export function SetupChecklist({ onNewIssue }: { onNewIssue: () => void }) {
     },
   ];
   const done = steps.filter((s) => s.done).length;
-  if (done === steps.length) return null;
+  if (done === steps.length) {
+    // once a team is set up, a machine going offline later does not bring the guide back
+    try {
+      localStorage.setItem(DISMISSED, '1');
+    } catch {
+      // not remembered; it hides again on the next complete check
+    }
+    return null;
+  }
   const next = steps.find((s) => !s.done)?.key;
 
   const dismiss = () => {

@@ -134,8 +134,9 @@ public class WorkflowController {
 
   @PostMapping("/runs/{id}/cancel")
   public RunView cancel(@PathVariable String id) {
+    RunView v = view(workflows.cancel(id, "cancelled by a person"), true);
     audit.record("run.cancel", "run", id, Map.of());
-    return view(workflows.cancel(id, "cancelled by a person"), true);
+    return v;
   }
 
   public record RetryInput(String nodeId) {}

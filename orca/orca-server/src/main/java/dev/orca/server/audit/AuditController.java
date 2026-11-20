@@ -37,12 +37,23 @@ public class AuditController {
   }
 
   @GetMapping("/api/audit")
-  public List<AuditView> list(@RequestParam(required = false) Long before,
+  /** Newest first. {@code before}: the cursor {@code at:id} of the last event of the previous page. */
+  public List<AuditView> list(@RequestParam(required = false) String before,
       @RequestParam(defaultValue = "100") int limit) {
     requireAdmin();
     int n = Math.max(1, Math.min(limit, 500));
-    return events.findByAtLessThanOrderByAtDesc(before == null ? Long.MAX_VALUE : before, PageRequest.of(0, n))
-        .stream().map(AuditView::of).toList();
+    long at = Long.MAX_VALUE;
+    String id = "~";
+    if (before != null && !before.isBlank()) {
+      int colon = before.indexOf(':');
+      try {
+        at = Long.parseLong(colon < 0 ? before : before.substring(0, colon));
+      } catch (NumberFormatException e) {
+        throw dev.orca.server.support.ApiException.bad("before must be at:id");
+      }
+      id = colon < 0 ? "~" : before.substring(colon + 1);
+    }
+    return events.page(at, id, PageRequest.of(0, n)).stream().map(AuditView::of).toList();
   }
 
   /** {@code from}/{@code to} in epoch milliseconds; defaults to the last 90 days. */
@@ -57,11 +68,22 @@ public class AuditController {
     PrintWriter w = new PrintWriter(new java.io.OutputStreamWriter(res.getOutputStream(), StandardCharsets.UTF_8));
     w.write('﻿'); // so spreadsheet tools read UTF-8
     w.println("time_utc,actor,action,target_type,target_id,detail,ip");
-    for (AuditEvent e : events.findByAtBetweenOrderByAtAsc(start, end)) {
-      w.println(String.join(",", cell(Instant.ofEpochMilli(e.at).toString()), cell(e.actorName), cell(e.action),
-          cell(e.targetType), cell(e.targetId), cell(e.detailJson), cell(e.ip)));
+    // streamed in keyset pages, so a long range never sits in memory at once
+    long at = start - 1;
+    String id = "";
+    while (true) {
+      List<AuditEvent> page = events.after(at, id, end, PageRequest.of(0, 1000));
+      for (AuditEvent e : page) {
+        w.println(String.join(",", cell(Instant.ofEpochMilli(e.at).toString()), cell(e.actorName), cell(e.action),
+            cell(e.targetType), cell(e.targetId), cell(e.detailJson), cell(e.ip)));
+      }
+      w.flush();
+      if (page.size() < 1000) {
+        break;
+      }
+      at = page.get(page.size() - 1).at;
+      id = page.get(page.size() - 1).id;
     }
-    w.flush();
   }
 
   /** CSV cell, quoted; a leading = + - @ is neutralised so spreadsheets do not run it as a formula. */
