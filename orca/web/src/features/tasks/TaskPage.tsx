@@ -1,12 +1,16 @@
-import { Link, useParams } from 'react-router-dom';
-import { useQuery } from '@tanstack/react-query';
-import { Alert, Breadcrumb, Card, Col, Descriptions, Row, Space, Typography } from 'antd';
+import { useState } from 'react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { useMutation, useQuery } from '@tanstack/react-query';
+import { Alert, Breadcrumb, Button, Card, Col, Descriptions, Input, Row, Space, Typography } from 'antd';
+import { SendOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useAgentMap, useIssueMap, useRuntimeMap } from '@/api/queries';
 import { useT } from '@/app/i18n';
 import { JsonView } from '@/components/CodeBlock';
 import { QueryState } from '@/components/QueryState';
 import { fmtDateTime } from '@/components/format';
+import { useNotify } from '@/components/useNotify';
+import type { Task } from '@/api/types';
 import { CancelTaskButton, Transcript } from '@/components/transcript/Transcript';
 import { TaskMeta } from './TaskCard';
 
@@ -44,6 +48,12 @@ export function TaskPage() {
               <Card title={t('tasks.transcript')} size="small">
                 <Transcript task={d} maxHeight="calc(100vh - 320px)" />
               </Card>
+              {d.kind === 'ask' && d.status === 'succeeded' && <AskFollowUp task={d} />}
+              {typeof d.origin?.followUpOf === 'string' && (
+                <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
+                  {t('tasks.followUpOf')} <Link to={`/tasks/${d.origin.followUpOf}`} className="orca-mono">{d.origin.followUpOf}</Link>
+                </Typography.Paragraph>
+              )}
             </Col>
             <Col xs={24} xl={7}>
               <Card size="small" title={t('tasks.details')}>
@@ -74,5 +84,33 @@ export function TaskPage() {
         </>
       )}
     </QueryState>
+  );
+}
+
+/** Continue a finished Ask in the same session: the agent remembers the conversation. */
+function AskFollowUp({ task }: { task: Task }) {
+  const t = useT();
+  const notify = useNotify();
+  const navigate = useNavigate();
+  const [text, setText] = useState('');
+  const send = useMutation({
+    mutationFn: () => api.askAgent(task.agentId, text, task.id),
+    onSuccess: (next) => {
+      setText('');
+      navigate(`/tasks/${next.id}`);
+    },
+    onError: notify.error,
+  });
+  return (
+    <Card size="small" style={{ marginTop: 12 }}>
+      <Space.Compact style={{ width: '100%' }}>
+        <Input.TextArea value={text} onChange={(e) => setText(e.target.value)} autoSize={{ minRows: 1, maxRows: 6 }}
+          placeholder={t('tasks.followUpPlaceholder')}
+          onKeyDown={(e) => { if (e.key === 'Enter' && (e.ctrlKey || e.metaKey) && text.trim()) send.mutate(); }} />
+        <Button type="primary" icon={<SendOutlined />} loading={send.isPending} disabled={!text.trim()} onClick={() => send.mutate()}>
+          {t('tasks.followUp')}
+        </Button>
+      </Space.Compact>
+    </Card>
   );
 }

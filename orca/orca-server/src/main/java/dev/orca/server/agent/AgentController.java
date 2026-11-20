@@ -93,7 +93,8 @@ public class AgentController {
     return AgentView.of(a);
   }
 
-  public record AskInput(String prompt) {}
+  /** {@code followUp}: a finished Ask task of this agent whose session the question continues. */
+  public record AskInput(String prompt, String followUp) {}
 
   /** A one-off task for the agent, without an issue; the transcript is at /tasks/{id}. */
   @PostMapping("/{id}/ask")
@@ -102,6 +103,9 @@ public class AgentController {
       throw ApiException.bad("prompt is empty");
     }
     Agent a = find(id);
+    if (in.followUp() != null && !in.followUp().isBlank()) {
+      return Views.TaskView.of(tasks.followUp(a, in.followUp(), in.prompt(), dev.orca.server.auth.CurrentUser.id()));
+    }
     return Views.TaskView.of(tasks.enqueue(new dev.orca.server.task.TaskRequest(a.id, null, in.prompt(), "ask", null, "new",
         java.util.Map.of("source", "ask", "by", dev.orca.server.auth.CurrentUser.id()), null)));
   }

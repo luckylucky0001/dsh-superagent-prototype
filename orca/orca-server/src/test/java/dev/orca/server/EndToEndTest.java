@@ -329,4 +329,22 @@ class EndToEndTest {
         .noneMatch(i -> run.equals(Json.str(i, "runId"))), "no failure alert");
     assertEquals("cancelled", Json.str(((List<?>) call("GET", "/api/issues/" + key + "/tasks", null)).get(0), "status"));
   }
+
+  @Test
+  void askFollowUpsContinueTheSameSession() throws Exception {
+    String first = Json.str(call("POST", "/api/agents/" + agentId + "/ask", Map.of("prompt", "hello")), "id");
+    await("first answer", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + first, null), "status"))));
+    Object next = call("POST", "/api/agents/" + agentId + "/ask", Map.of("prompt", "and then?", "followUp", first));
+    String second = Json.str(next, "id");
+    await("second answer", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + second, null), "status"))));
+    Object s1 = sessionEvent(first);
+    Object s2 = sessionEvent(second);
+    assertEquals(Json.str(Json.obj(s1, "data"), "cwd"), Json.str(Json.obj(s2, "data"), "cwd"), "same directory");
+    assertTrue(Json.bool(Json.obj(s2, "data"), "resumed"), "the follow-up resumes the first session");
+  }
+
+  private Object sessionEvent(String taskId) throws Exception {
+    List<?> events = (List<?>) call("GET", "/api/tasks/" + taskId + "/events", null);
+    return events.stream().filter(e -> "session".equals(Json.str(e, "type"))).findFirst().orElseThrow();
+  }
 }

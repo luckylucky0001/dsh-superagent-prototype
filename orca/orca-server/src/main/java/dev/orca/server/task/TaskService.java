@@ -160,6 +160,32 @@ public class TaskService {
   }
 
   /**
+   * Continues a finished Ask in the same provider session and directory, so the agent remembers the
+   * conversation. Only the agent's own, successful Ask tasks can be continued.
+   */
+  @Transactional
+  public Task followUp(Agent agent, String previousTaskId, String prompt, String by) {
+    Task prev = tasks.findById(previousTaskId).orElseThrow(() -> ApiException.notFound("task " + previousTaskId));
+    if (!agent.id.equals(prev.agentId) || !"ask".equals(prev.kind)) {
+      throw ApiException.bad("only this agent's Ask tasks can be continued");
+    }
+    if (!TaskStatus.SUCCEEDED.equals(prev.status) || prev.sessionRef == null) {
+      throw ApiException.bad("the previous answer has not finished successfully");
+    }
+    Map<String, Object> origin = new LinkedHashMap<>();
+    origin.put("source", "ask");
+    origin.put("by", by);
+    origin.put("followUpOf", prev.id);
+    Task t = enqueue(new TaskRequest(agent.id, null, prompt, "ask", null, "new", origin, null));
+    t.workspaceKey = prev.workspaceKey;
+    if (prev.provider.equals(agent.provider) && (agent.runtimeId == null || agent.runtimeId.equals(prev.runtimeId))) {
+      t.resumeRef = prev.sessionRef;
+    }
+    tasks.save(t);
+    return t;
+  }
+
+  /**
    * One directory per issue, shared by every agent that works on it (one at a time), so a reviewer
    * sees the implementer's changes. Work without an issue shares a directory per workflow run.
    */
