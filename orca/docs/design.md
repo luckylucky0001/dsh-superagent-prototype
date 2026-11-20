@@ -102,7 +102,7 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 ## 7. 安全
 
 - Web 会话 cookie（HttpOnly、SameSite=Lax）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较）。
-- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
+- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（沙箱内联网须 Agent 请求且 daemon 以 `--allow-network` 启动；Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
 - 工作目录键严格校验，不能逃出工作根目录。
 - `http.request` 只允许 `ORCA_HTTP_ALLOWED_HOSTS` 中的主机，不跟随重定向；通知组件额外允许常见 IM webhook 主机。
 - MCP 回写 token 通过环境变量传给 CLI，不出现在命令行参数里。

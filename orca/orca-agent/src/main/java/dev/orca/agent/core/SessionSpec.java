@@ -11,6 +11,7 @@ import java.util.Map;
  * @param mcpUrl      platform MCP endpoint the agent may call, or null
  * @param mcpToken    bearer token for {@code mcpUrl}; passed through the environment, never argv
  * @param extraArgs   additional CLI arguments configured on the agent
+ * @param network     network access inside the workspace sandbox
  */
 public record SessionSpec(
     Path cwd,
@@ -23,7 +24,13 @@ public record SessionSpec(
     String mcpToken,
     List<String> allowedCommands,
     List<String> extraArgs,
-    Map<String, String> env) {
+    Map<String, String> env,
+    boolean network) {
+
+  public SessionSpec(Path cwd, String model, String effort, String instructions, Permission permission, String resumeRef,
+      String mcpUrl, String mcpToken, List<String> allowedCommands, List<String> extraArgs, Map<String, String> env) {
+    this(cwd, model, effort, instructions, permission, resumeRef, mcpUrl, mcpToken, allowedCommands, extraArgs, env, false);
+  }
 
   public SessionSpec {
     permission = permission == null ? Permission.WORKSPACE : permission;
@@ -37,6 +44,7 @@ public record SessionSpec(
   }
 
   public SessionSpec withResume(String ref) {
-    return new SessionSpec(cwd, model, effort, instructions, permission, ref, mcpUrl, mcpToken, allowedCommands, extraArgs, env);
+    return new SessionSpec(cwd, model, effort, instructions, permission, ref, mcpUrl, mcpToken, allowedCommands, extraArgs, env,
+        network);
   }
 }

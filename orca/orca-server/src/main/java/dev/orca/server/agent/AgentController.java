@@ -40,7 +40,7 @@ public class AgentController {
 
   public record AgentInput(String name, String description, String provider, String runtimeId, String model,
       String effort, String instructions, String permission, List<String> allowedCommands, List<String> extraArgs,
-      List<String> skills, Integer maxConcurrency, Integer timeoutMinutes, Boolean archived, Boolean escalateApprovals) {}
+      List<String> skills, Integer maxConcurrency, Integer timeoutMinutes, Boolean archived, Boolean escalateApprovals, Boolean networkAccess) {}
 
   @GetMapping
   public List<AgentView> list() {
@@ -173,6 +173,9 @@ public class AgentController {
     }
     if (in.escalateApprovals() != null) {
       a.escalateApprovals = in.escalateApprovals();
+    }
+    if (in.networkAccess() != null) {
+      a.networkAccess = in.networkAccess();
     }
     a.updatedAt = Ids.now();
   }

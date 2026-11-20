@@ -181,4 +181,16 @@ class CodexDriverTest {
           && String.valueOf(e.data().get("message")).contains("review started")));
     }
   }
+
+  @Test
+  void networkAccessIsRequestedOnlyForTheWorkspaceTier() throws Exception {
+    java.nio.file.Path dir = java.nio.file.Files.createTempDirectory("orca-net");
+    var withNet = new dev.orca.agent.core.SessionSpec(dir, null, null, null, dev.orca.agent.core.Permission.WORKSPACE,
+        null, null, null, null, null, null, true);
+    assertEquals(Map.of("network_access", true),
+        dev.orca.agent.codex.CodexSessionAccess.threadConfig(withNet).get("sandbox_workspace_write"));
+    var readOnly = new dev.orca.agent.core.SessionSpec(dir, null, null, null, dev.orca.agent.core.Permission.READ_ONLY,
+        null, null, null, null, null, null, true);
+    assertTrue(dev.orca.agent.codex.CodexSessionAccess.threadConfig(readOnly).isEmpty());
+  }
 }

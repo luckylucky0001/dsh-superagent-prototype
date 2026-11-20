@@ -62,6 +62,7 @@ interface Values {
   permission: Permission;
   allowedCommands?: string[];
   escalateApprovals?: boolean;
+  networkAccess?: boolean;
   skills?: string[];
   instructions?: string;
   maxConcurrency: number;
@@ -78,6 +79,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
   const runtimeId = Form.useWatch('runtimeId', form);
   const model = Form.useWatch('model', form);
   const permission = Form.useWatch('permission', form);
+  const networkAccess = Form.useWatch('networkAccess', form);
 
   useEffect(() => {
     if (!open) return;
@@ -94,6 +96,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
             permission: agent.permission,
             allowedCommands: agent.allowedCommands,
             escalateApprovals: agent.escalateApprovals,
+            networkAccess: agent.networkAccess,
             skills: agent.skills ?? [],
             instructions: agent.instructions ?? undefined,
             maxConcurrency: agent.maxConcurrency,
@@ -128,6 +131,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         permission: v.permission,
         allowedCommands: v.allowedCommands ?? [],
         escalateApprovals: !!v.escalateApprovals,
+        networkAccess: !!v.networkAccess,
         skills: v.skills ?? [],
         instructions: v.instructions ?? '',
         maxConcurrency: v.maxConcurrency,
@@ -213,6 +217,14 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
           <Alert type={runtime && !runtime.isolated ? 'error' : 'warning'} showIcon style={{ marginBottom: 16 }}
             message={t('agents.fullWarning')}
             description={runtime && !runtime.isolated ? t('agents.fullNotIsolated', { runtime: runtime.name }) : undefined} />
+        )}
+        {permission === 'workspace' && (
+          <Form.Item name="networkAccess" label={t('agents.network')} extra={t('agents.networkHelp')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
+        )}
+        {permission === 'workspace' && networkAccess && runtime && !runtime.allowNetwork && (
+          <Alert type="warning" showIcon style={{ marginBottom: 16 }} message={t('agents.networkNotAllowed', { runtime: runtime.name })} />
         )}
         {permission !== 'read_only' && (
           <Form.Item name="escalateApprovals" label={t('agents.escalate')} extra={t('agents.escalateHelp')} valuePropName="checked">

@@ -21,6 +21,8 @@ public class Agent {
   public String skillsJson;
   /** When the daemon's policy would deny a request, ask a person in the inbox instead. */
   public boolean escalateApprovals;
+  /** Asks for network access inside the workspace sandbox; the daemon must allow it. */
+  public boolean networkAccess;
   public int maxConcurrency;
   public int timeoutMinutes;
   public boolean archived;

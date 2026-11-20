@@ -140,6 +140,8 @@ export interface Agent {
   archived: boolean;
   /** Ask a person in the inbox when the runtime's policy would deny a request. */
   escalateApprovals: boolean;
+  /** Network access inside the workspace sandbox; the runtime must allow it. */
+  networkAccess: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -176,6 +178,7 @@ export interface Runtime {
   daemonVersion: string | null;
   capacity: number;
   isolated: boolean;
+  allowNetwork: boolean;
   status: 'online' | 'offline' | string;
   lastSeenAt: number | null;
   providers: ProviderStatus[];

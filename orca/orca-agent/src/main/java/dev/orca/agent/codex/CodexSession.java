@@ -148,13 +148,9 @@ final class CodexSession implements AgentSession {
     if (spec.instructions() != null && !spec.instructions().isBlank()) {
       params.put("developerInstructions", spec.instructions());
     }
-    if (spec.mcpUrl() != null) {
-      Map<String, Object> server = new LinkedHashMap<>();
-      server.put("url", spec.mcpUrl());
-      if (spec.mcpToken() != null) {
-        server.put("bearer_token_env_var", TOKEN_ENV);
-      }
-      params.put("config", Map.of("mcp_servers", Map.of("orca", server)));
+    Map<String, Object> config = threadConfig(spec);
+    if (!config.isEmpty()) {
+      params.put("config", config);
     }
     params.put("serviceName", "orca");
     Object result;
@@ -198,6 +194,23 @@ final class CodexSession implements AgentSession {
   @Override
   public boolean resumed() {
     return resumed;
+  }
+
+  /** Per-thread configuration: the platform's MCP server and, when granted, network access in the sandbox. */
+  static Map<String, Object> threadConfig(SessionSpec spec) {
+    Map<String, Object> config = new LinkedHashMap<>();
+    if (spec.mcpUrl() != null) {
+      Map<String, Object> server = new LinkedHashMap<>();
+      server.put("url", spec.mcpUrl());
+      if (spec.mcpToken() != null) {
+        server.put("bearer_token_env_var", TOKEN_ENV);
+      }
+      config.put("mcp_servers", Map.of("orca", server));
+    }
+    if (spec.network() && spec.permission() == Permission.WORKSPACE) {
+      config.put("sandbox_workspace_write", Map.of("network_access", true));
+    }
+    return config;
   }
 
   @Override

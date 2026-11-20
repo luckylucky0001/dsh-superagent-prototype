@@ -88,6 +88,7 @@ function RuntimeCard({ r }: { r: Runtime }) {
           <span>{r.name}</span>
           <StatusTag status={r.status} />
           {r.isolated && <Tag color="purple" bordered={false}>{t('runtimes.isolated')}</Tag>}
+          {r.allowNetwork && <Tag color="cyan" bordered={false}>{t('runtimes.network')}</Tag>}
         </Space>
       }
       extra={

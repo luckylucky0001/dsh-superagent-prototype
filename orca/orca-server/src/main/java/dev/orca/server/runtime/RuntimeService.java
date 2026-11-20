@@ -58,6 +58,7 @@ public class RuntimeService {
     r.daemonVersion = h.daemonVersion();
     r.capacity = Math.max(1, h.capacity());
     r.isolated = h.isolated();
+    r.allowNetwork = h.allowNetwork();
     r.status = ONLINE;
     r.lastSeenAt = Ids.now();
     r.providersJson = JsonCols.write(h.providers());

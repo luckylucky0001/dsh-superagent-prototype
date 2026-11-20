@@ -38,7 +38,7 @@ public final class Wire {
 
   /** First frame after connecting. {@code running} lists tasks still executing after a reconnect. */
   public record Hello(String name, String hostname, String os, String daemonVersion, int capacity,
-      boolean isolated, List<ProviderStatus> providers, List<RunningTask> running) {}
+      boolean isolated, List<ProviderStatus> providers, List<RunningTask> running, boolean allowNetwork) {}
 
   public record RunningTask(String taskId, long lastSeq) {}
 
@@ -77,7 +77,8 @@ public final class Wire {
 
   public record AgentSpec(String id, String name, String model, String effort, String instructions,
       String permission, List<String> allowedCommands, List<String> extraArgs, Map<String, String> env,
-      boolean escalateApprovals) {}
+      boolean escalateApprovals,
+      boolean networkAccess) {}
 
   public record RepoSpec(String url, String branch, String baseBranch) {}
 

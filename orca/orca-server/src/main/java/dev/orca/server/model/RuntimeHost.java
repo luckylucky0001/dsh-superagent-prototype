@@ -14,6 +14,8 @@ public class RuntimeHost {
   public String daemonVersion;
   public int capacity;
   public boolean isolated;
+  /** The owner lets agents use the network inside the workspace sandbox (daemon --allow-network). */
+  public boolean allowNetwork;
   public String status;
   public Long lastSeenAt;
   public String providersJson;

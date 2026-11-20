@@ -46,19 +46,20 @@ public final class Views {
   public record AgentView(String id, String name, String description, String provider, String runtimeId, String model,
       String effort, String instructions, String permission, List<String> allowedCommands, List<String> extraArgs,
       List<String> skills, int maxConcurrency, int timeoutMinutes, boolean archived, boolean escalateApprovals,
-      long createdAt, long updatedAt) {
+      boolean networkAccess, long createdAt, long updatedAt) {
     public static AgentView of(Agent a) {
       return new AgentView(a.id, a.name, a.description, a.provider, a.runtimeId, a.model, a.effort, a.instructions,
           a.permission, JsonCols.strings(a.allowedCommandsJson), JsonCols.strings(a.extraArgsJson),
           JsonCols.strings(a.skillsJson), a.maxConcurrency, a.timeoutMinutes, a.archived, a.escalateApprovals,
-          a.createdAt, a.updatedAt);
+          a.networkAccess, a.createdAt, a.updatedAt);
     }
   }
 
   public record RuntimeView(String id, String name, String hostname, String os, String daemonVersion, int capacity,
-      boolean isolated, String status, Long lastSeenAt, List<ProviderStatus> providers, long activeTasks, long createdAt) {
+      boolean isolated, boolean allowNetwork, String status, Long lastSeenAt, List<ProviderStatus> providers,
+      long activeTasks, long createdAt) {
     public static RuntimeView of(RuntimeHost r, long active) {
-      return new RuntimeView(r.id, r.name, r.hostname, r.os, r.daemonVersion, r.capacity, r.isolated, r.status,
+      return new RuntimeView(r.id, r.name, r.hostname, r.os, r.daemonVersion, r.capacity, r.isolated, r.allowNetwork, r.status,
           r.lastSeenAt, Views.providers(r), active, r.createdAt);
     }
   }

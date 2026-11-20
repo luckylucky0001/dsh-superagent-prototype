@@ -91,6 +91,11 @@ final class TraeSession implements AgentSession {
       case WORKSPACE -> {
         args.add("-c");
         args.add("default_permissions=\":workspace\"");
+        if (spec.network()) {
+          // TRAE CLI 2.x shares Codex's configuration keys
+          args.add("-c");
+          args.add("sandbox_workspace_write.network_access=true");
+        }
         for (String allowed : spec.allowedCommands()) {
           args.add("--allowed-tool");
           args.add("Bash(" + allowed.replace(")", "") + ")");

@@ -84,7 +84,8 @@ public final class Daemon {
     List<Wire.RunningTask> tasks = new ArrayList<>();
     running.values().forEach(r -> tasks.add(new Wire.RunningTask(r.taskId(), r.lastSeq())));
     link.send(Wire.frame(Wire.HELLO, new Wire.Hello(name(), hostname(), System.getProperty("os.name") + " "
-        + System.getProperty("os.arch"), VERSION, config.capacity(), config.isolated(), statuses, tasks)));
+        + System.getProperty("os.arch"), VERSION, config.capacity(), config.isolated(), statuses, tasks,
+        config.allowNetwork())));
     running.values().forEach(TaskRunner::replay);
   }
 
@@ -149,7 +150,8 @@ public final class Daemon {
       // nothing to keep: if this frame is lost, the server's lease puts the task back in the queue
       return;
     }
-    TaskRunner r = new TaskRunner(t, p, workspaces, link, config.isolated(), config.allowExtraArgs(), config.server(),
+    TaskRunner r = new TaskRunner(t, p, workspaces, link, config.isolated(), config.allowExtraArgs(), config.allowNetwork(),
+        config.server(),
         () -> running.remove(t.taskId()));
     running.put(t.taskId(), r);
     Thread.ofVirtual().name("task-" + t.taskId()).start(r);

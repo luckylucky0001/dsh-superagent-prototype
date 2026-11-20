@@ -15,6 +15,7 @@ import java.util.Map;
  * @param traeCommand  command that runs TRAE CLI; empty means PATH lookup
  * @param isolated     the machine is a disposable sandbox, so the FULL permission tier is allowed
  * @param allowExtraArgs pass agents' extra CLI arguments through (sandbox and approval flags are always dropped)
+ * @param allowNetwork   agents that ask for it get network access inside the workspace sandbox
  */
 public record DaemonConfig(
     String server,
@@ -27,7 +28,14 @@ public record DaemonConfig(
     Map<String, String> env,
     boolean isolated,
     String recordDir,
-    boolean allowExtraArgs) {
+    boolean allowExtraArgs,
+    boolean allowNetwork) {
+
+  public DaemonConfig(String server, String token, String name, int capacity, String workRoot, List<String> codexCommand,
+      List<String> traeCommand, Map<String, String> env, boolean isolated, String recordDir, boolean allowExtraArgs) {
+    this(server, token, name, capacity, workRoot, codexCommand, traeCommand, env, isolated, recordDir, allowExtraArgs,
+        false);
+  }
 
   public DaemonConfig {
     capacity = capacity <= 0 ? 2 : capacity;
@@ -71,21 +79,26 @@ public record DaemonConfig(
   public DaemonConfig with(String server, String token, String name, Integer capacity, String workRoot) {
     return new DaemonConfig(server != null ? server : this.server, token != null ? token : this.token,
         name != null ? name : this.name, capacity != null ? capacity : this.capacity,
-        workRoot != null ? workRoot : this.workRoot, codexCommand, traeCommand, env, isolated, recordDir, allowExtraArgs);
+        workRoot != null ? workRoot : this.workRoot, codexCommand, traeCommand, env, isolated, recordDir, allowExtraArgs, allowNetwork);
   }
 
   public DaemonConfig withCommands(List<String> codex, List<String> trae) {
     return new DaemonConfig(server, token, name, capacity, workRoot, codex != null ? codex : codexCommand,
-        trae != null ? trae : traeCommand, env, isolated, recordDir, allowExtraArgs);
+        trae != null ? trae : traeCommand, env, isolated, recordDir, allowExtraArgs, allowNetwork);
   }
 
   public DaemonConfig withIsolated(boolean value) {
     return new DaemonConfig(server, token, name, capacity, workRoot, codexCommand, traeCommand, env, value, recordDir,
-        allowExtraArgs);
+        allowExtraArgs, allowNetwork);
   }
 
   public DaemonConfig withAllowExtraArgs(boolean value) {
     return new DaemonConfig(server, token, name, capacity, workRoot, codexCommand, traeCommand, env, isolated, recordDir,
-        value);
+        value, allowNetwork);
+  }
+
+  public DaemonConfig withAllowNetwork(boolean value) {
+    return new DaemonConfig(server, token, name, capacity, workRoot, codexCommand, traeCommand, env, isolated, recordDir,
+        allowExtraArgs, value);
   }
 }

@@ -38,6 +38,7 @@ final class TaskRunner implements Runnable {
   private final Link link;
   private final boolean isolated;
   private final boolean allowExtraArgs;
+  private final boolean allowNetwork;
   private final String server;
   private final Runnable onDone;
   private final EventBuffer buffer = new EventBuffer();
@@ -51,8 +52,9 @@ final class TaskRunner implements Runnable {
   private volatile Wire.Frame completion;
 
   TaskRunner(Wire.TaskAssign task, AgentProvider provider, Workspaces workspaces, Link link, boolean isolated,
-      boolean allowExtraArgs, String server, Runnable onDone) {
+      boolean allowExtraArgs, boolean allowNetwork, String server, Runnable onDone) {
     this.allowExtraArgs = allowExtraArgs;
+    this.allowNetwork = allowNetwork;
     this.server = server == null ? "" : server.replaceAll("/+$", "");
     this.task = task;
     this.provider = provider;
@@ -147,10 +149,16 @@ final class TaskRunner implements Runnable {
           ? "sandbox and approval arguments in the agent's extra arguments were ignored"
           : "the agent's extra CLI arguments were ignored; start the daemon with --allow-extra-args to use them"));
     }
+    boolean network = a != null && a.networkAccess() && permission == Permission.WORKSPACE;
+    if (network && !allowNetwork) {
+      buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message", "the agent asks for network access, but "
+          + "this runtime does not allow it; start the daemon with --allow-network to grant it"));
+      network = false;
+    }
     SessionSpec spec = new SessionSpec(dir, a == null ? null : a.model(), a == null ? null : a.effort(),
         a == null ? null : a.instructions(), permission, task.sessionRef(),
         task.mcp() == null ? null : absolute(task.mcp().url()), task.mcp() == null ? null : task.mcp().token(),
-        allowed, extra, agentEnv(a));
+        allowed, extra, agentEnv(a), network);
     String prompt = task.prompt();
     try {
       session = provider.open(spec, handler);
