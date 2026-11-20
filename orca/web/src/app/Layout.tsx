@@ -103,6 +103,7 @@ function Shell() {
                 items: [
                   { key: 'email', label: me.data?.email, disabled: true },
                   { type: 'divider' },
+                  { key: 'settings', icon: <SettingOutlined />, label: t('settings.myAccount'), onClick: () => navigate('/settings?tab=account') },
                   { key: 'logout', icon: <LogoutOutlined />, label: t('header.logout'), onClick: logout },
                 ],
               }}

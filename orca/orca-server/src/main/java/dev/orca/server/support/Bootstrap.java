@@ -24,6 +24,7 @@ public class Bootstrap implements ApplicationRunner {
   public static final String ASSIGN_WORKFLOW = "wf_builtin_assign";
   public static final String COMMENT_WORKFLOW = "wf_builtin_comment";
   public static final String REVIEW_TEMPLATE = "wf_template_review";
+  public static final String LOOP_TEMPLATE = "wf_template_review_loop";
 
   private final MemberRepo members;
   private final AuthService auth;
@@ -74,6 +75,12 @@ public class Bootstrap implements ApplicationRunner {
       workflows.save(COMMENT_WORKFLOW, "Comment → agent",
           "When someone comments on an agent's issue or @mentions an agent, the agent continues in the same session.",
           true, commentDefinition(), true, null);
+    }
+    if (!workflowRepo.existsById(LOOP_TEMPLATE)) {
+      workflows.save(LOOP_TEMPLATE, "Template: implement ⇄ review loop → approve",
+          "Run by hand: the implementer works, the reviewer checks; requested changes go back until the review "
+              + "passes (max 3 rounds); then a person approves and the issue is done.",
+          false, loopDefinition(), false, null);
     }
     if (!workflowRepo.existsById(REVIEW_TEMPLATE)) {
       workflows.save(REVIEW_TEMPLATE, "Template: implement → cross-review → approve",
@@ -134,6 +141,25 @@ public class Bootstrap implements ApplicationRunner {
                 "body", "The agent run failed: {{ nodes.work.output.error }}", "taskId", "{{ nodes.work.output.taskId }}"), 160, 240)),
         "edges", List.of(edge("e1", "start", "out", "work"), edge("e2", "work", "out", "reply"),
             edge("e3", "work", "error", "failed")));
+  }
+
+  static Map<String, Object> loopDefinition() {
+    return Map.of(
+        "nodes", List.of(
+            node("start", "trigger.manual", "Run by hand", Map.of("inputs", "issueId, implementer, reviewer"), 0, 0),
+            node("loop", "agent.review_loop", "Implement ⇄ review", Map.of("implementer", "{{ trigger.input.implementer }}",
+                "reviewer", "{{ trigger.input.reviewer }}", "issue", "{{ trigger.input.issueId }}", "maxRounds", 3,
+                "prompt", "Implement the issue in the current directory, run the tests, commit, and summarise the change."),
+                0, 120),
+            node("approve", "human.approval", "Approve", Map.of("issue", "{{ trigger.input.issueId }}",
+                "title", "Approve {{ trigger.input.issueId }} (review passed in {{ nodes.loop.output.rounds }} round(s))",
+                "body", "{{ nodes.loop.output.summary }}"), -160, 240),
+            node("done", "issue.update", "Mark done", Map.of("issue", "{{ trigger.input.issueId }}", "status", "done"), -160, 360),
+            node("report", "issue.comment", "Report open points", Map.of("issue", "{{ trigger.input.issueId }}",
+                "body", "The review did not pass after {{ nodes.loop.output.rounds }} rounds:\n\n- "
+                    + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 160, 240)),
+        "edges", List.of(edge("e1", "start", "out", "loop"), edge("e2", "loop", "passed", "approve"),
+            edge("e3", "approve", "approved", "done"), edge("e4", "loop", "failed", "report")));
   }
 
   static Map<String, Object> reviewDefinition() {

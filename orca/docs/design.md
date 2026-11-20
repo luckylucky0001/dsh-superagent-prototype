@@ -37,7 +37,7 @@
 
 | 实体 | 要点 |
 |---|---|
-| Member / ApiToken | 只存 token 的 SHA-256；会话 token（Web）、运行时 token（daemon）、一次性注册码 |
+| Member / ApiToken | 角色 owner / admin / member（成员管理在 `/api/members`）；只存 token 的 SHA-256：会话 token（Web）、运行时 token（daemon）、一次性注册码、任务 MCP token |
 | Runtime | 一台跑 daemon 的机器；`providers[]` 记录每个 CLI 的版本、登录、套餐、模型、能力、错误 |
 | Agent | 名称（即 @ 提及名）、provider、绑定运行时、模型/推理强度、指令、权限档位、命令白名单、并发、超时 |
 | Project / Issue / Comment | Issue key 形如 `ORCA-12`；状态 backlog → todo → in_progress → in_review → done（可 cancelled） |
@@ -67,7 +67,7 @@
 | 分类 | 类型 |
 |---|---|
 | 触发 | `trigger.manual`（带输入）、`trigger.issue`（assigned / commented / created / status_changed，可按 Agent、标签、状态、表达式过滤；默认忽略 Agent/工作流自己造成的变化，避免循环）、`trigger.schedule`（cron + 时区）、`trigger.webhook`（密钥校验） |
-| Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时 |
+| Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时<br>`agent.review_loop`：实现者与评审者在一个节点内轮转（实现者续接会话，评审者每轮新会话并给出结构化结论），通过走 `passed`，超过轮数走 `failed`——在 DAG 里表达“改到评审通过为止” |
 | 逻辑 | `logic.condition`（true/false）、`logic.set`、`logic.join` |
 | 人工 | `human.approval`（approved/rejected）、`human.input` |
 | 动作 | `issue.comment`（以 Agent 或系统身份）、`issue.update`、`issue.create`、`http.request`（主机白名单）、`notify.webhook`（飞书/钉钉/企微/Slack/Teams） |
@@ -76,12 +76,13 @@
 1. **Assigned issue → agent**：标记进行中 → Agent 执行（续接会话，失败重试 1 次）→ 以 Agent 身份发结果评论 → 移到审核中；失败走 error 分支发失败说明。
 2. **Comment → agent**：有人评论 Agent 负责的 Issue 或 `@Agent` 时，Agent 在同一会话继续并回复。
 3. **Template: implement → cross-review → approve**（手动运行）：实现 Agent → 评审 Agent 按 JSON Schema 给出 verdict → 条件判断 → 人工审批 → 完成 / 打回。可以 Codex 实现、TRAE 评审。
+4. **Template: implement ⇄ review loop → approve**（手动运行）：用 `agent.review_loop` 最多 3 轮，通过后人工审批并完成，未通过则把遗留问题发到 Issue。
 
 ## 5. 任务调度
 
 - **路由**：按 Agent 绑定的运行时派发，要求运行时在线、对应 CLI 已安装且已登录；不满足时任务留在队列并写明原因（“codex is not logged in on dev-box”）。
 - **并发**：运行时容量、Agent 并发上限、**同一工作目录同一时间只有一个任务**。
-- **工作目录**：同一 Issue 的所有 Agent 共享 `issues/<KEY>`（评审能看到实现的改动）；无 Issue 的运行共享 `runs/<runId>`。项目配置了仓库时，首次克隆并建分支 `orca/<key>`。
+- **工作目录**：同一 Issue 的所有 Agent 共享 `issues/<KEY>`（评审能看到实现的改动）；无 Issue 的运行共享 `runs/<runId>`。项目配置了仓库时，首次克隆并建分支 `orca/<key>`，常见构建缓存写入 `.git/info/exclude`。Agent 被要求自己提交；Codex 沙箱把 `.git` 设为只读，提交以审批请求出现，工作区档位内置放行 `git add/commit/status/diff/log`。任务成功后仍有未提交改动时，daemon 以 `<KEY>: <总结首行>` 自动提交，保证工作留在分支上（推送和 PR 仍由人或明确要求时由 Agent 完成）。
 - **会话续接**：按 (Agent, Issue) 找上次成功任务的 provider 会话并续接；续接失败（会话丢失、换了机器/CLI）则开新会话，并把 Issue 上下文（标题、描述、人和 Agent 的评论，不含系统通知）作为前情提要。新会话的 prompt 若没提到该 Issue，也会自动补上 Issue 上下文。
 - **租约**：派发和事件/心跳会续租；租约过期：未开始的任务重新排队，已开始的判 `RUNTIME_LOST`。daemon 重连时上报在跑任务，server 对账。
 - **控制**：取消（中断 → 宽限 → 杀进程树）、插话（支持则 steer，否则排到下一轮）、Agent 提问 → 收件箱 → 回答回送。
@@ -111,7 +112,11 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 
 React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板、Issue 详情（评论与执行记录时间线、实时转录、插话/取消）、收件箱、Agents、运行时（每个 CLI 的健康状态、接入命令）、工作流列表与画布编辑器（组件面板、自动表单、变量助手、校验定位）、运行记录（图上叠加节点状态）。一条 SSE 连接驱动缓存失效与转录追加。英文为主、可切中文。
 
-## 10. 后续
+## 10. 用量
+
+`/api/stats?days=N` 按 Agent 和按天汇总运行次数、成功/失败、token 与忙碌时间。Codex 上报的是会话累计 token，续接的会话会带上之前任务的用量；驱动在会话打开后的第一次上报记下基线，事件里的 `taskTokens` 只计本任务。
+
+## 11. 后续
 
 - git / PR 节点（GitHub/GitLab/Gitee）、`traecli review` / Codex review 节点、有轮数上限的循环子流程。
 - 权限升级转人工审批（目前由策略直接拒绝）。
