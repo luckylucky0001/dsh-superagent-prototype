@@ -2,7 +2,7 @@
 
 **AI coding agents as teammates.** Assign an issue to an agent and it works on your own machine with **OpenAI Codex** or **TRAE CLI 2.x**: it reads and changes code, runs tests, commits to a branch, reports back on the issue and waits for review. Comment to continue in the same session. Every automation is a composable, visually edited workflow. Self-hosted; English UI with a Chinese toggle; Asia/Singapore by default.
 
-📘 **[Technical design & Codex walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and an 18-step live demo with real Codex runs.
+📘 **[Technical design & Codex walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and a live demo with real Codex runs on an automotive parts-warehouse (WMS) codebase: putaway, FIFO line-side picking with a three-round review loop, Codex's built-in reviewer and approval escalation.
 
 ---
 
