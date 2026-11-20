@@ -1,0 +1,13 @@
+# systemd unit for a build machine. Install the jar and script under /opt/orca, run as a user that has
+# Codex / TRAE CLI logged in, then: systemctl --user enable --now orca-daemon
+[Unit]
+Description=Orca daemon
+After=network-online.target
+
+[Service]
+ExecStart=/opt/orca/orca-daemon start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

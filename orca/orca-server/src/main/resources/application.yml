@@ -1,0 +1,49 @@
+server:
+  port: ${ORCA_PORT:8080}
+  shutdown: graceful
+spring:
+  application:
+    name: orca
+  threads:
+    virtual:
+      enabled: true
+  datasource:
+    url: ${ORCA_DB_URL:jdbc:h2:file:${user.home}/.orca/server/orca;MODE=PostgreSQL;DATABASE_TO_LOWER=TRUE;DEFAULT_NULL_ORDERING=HIGH;AUTO_SERVER=FALSE}
+    username: ${ORCA_DB_USER:sa}
+    password: ${ORCA_DB_PASSWORD:}
+  jpa:
+    open-in-view: false
+    hibernate:
+      ddl-auto: none
+    properties:
+      hibernate.jdbc.time_zone: UTC
+  flyway:
+    enabled: true
+  web:
+    resources:
+      static-locations: ${ORCA_WEB_DIR:classpath:/static/}
+  servlet:
+    multipart:
+      max-file-size: 20MB
+      max-request-size: 21MB
+  mvc:
+    async:
+      request-timeout: -1
+orca:
+  public-url: ${ORCA_PUBLIC_URL:http://localhost:8080}
+  admin:
+    email: ${ORCA_ADMIN_EMAIL:admin@orca.local}
+    password: ${ORCA_ADMIN_PASSWORD:}
+    name: ${ORCA_ADMIN_NAME:Admin}
+  default-timezone: ${ORCA_TIMEZONE:Asia/Singapore}
+  downloads-dir: ${ORCA_DOWNLOADS_DIR:}
+  lease-seconds: 60
+  heartbeat-seconds: 15
+  http:
+    allowed-hosts: ${ORCA_HTTP_ALLOWED_HOSTS:}
+  notify:
+    webhook-url: ${ORCA_NOTIFY_WEBHOOK_URL:}
+    format: ${ORCA_NOTIFY_FORMAT:slack}
+logging:
+  level:
+    dev.orca: INFO
