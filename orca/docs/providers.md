@@ -68,6 +68,8 @@
 | 图片 | prompt 中 `{type:"image", mimeType, data(base64)}` | ✅ |
 | 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次），使两者行为一致 | ✅ |
 | 插话 | `_meta.steering.supported=true`，但 ACP 下没有对应方法：`_session/steer` 返回 Method not found，进行中再发 `session/prompt` 被拒（“an ACP prompt is already in progress”）。驱动不声明 steer 能力，插话排到下一轮发送 | ✅（结论：不支持） |
+| 代码评审 | `available_commands` 中的 `review` 命令：prompt 发 `/review <目标说明>`（分支评审附 `git diff main...HEAD` 提示），返回与 Codex 相同格式的 `[P0..P3] 文件:行` 结论；TRAE 会把总体结论作为第二条消息重复一次，驱动去重 | ✅ |
+| 编辑差异 | 文件编辑的 `diff`（`oldText`/`newText`）随 `tool_call` 下发，完成事件只有 `{"success":true}`；驱动保存起始事件中的 diff 并生成统一 diff 展示 | ✅ |
 | 结构化输出 | ACP 无原生支持：提示词约束 + JSON 解析 | ✅ |
 
 ## 4. 统一事件

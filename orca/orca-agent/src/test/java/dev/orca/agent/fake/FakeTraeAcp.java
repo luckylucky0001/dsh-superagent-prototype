@@ -158,10 +158,21 @@ public final class FakeTraeAcp {
         return;
       }
       default -> {
-        update(Map.of("sessionUpdate", "tool_call", "toolCallId", "call_e", "title", "Edit a.txt", "kind", "edit",
-            "status", "pending", "locations", List.of(Map.of("path", "a.txt"))));
+        if (text.startsWith("/review")) {
+          String verdict = "The change breaks add(). " + text;
+          update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text",
+              "text", verdict + "\n\n- [P0] add() subtracts — calc.py:2")));
+          // TRAE repeats its overall verdict as a second message
+          update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text", "text", verdict)));
+          break;
+        }
+        // like TRAE: the diff arrives with the tool call; the completion only says {"success":true}
+        Map<String, Object> diff = new java.util.HashMap<>(Map.of("type", "diff", "path", "a.txt", "newText", "hi\nthere\n"));
+        diff.put("oldText", "hi\n");
+        update(Map.of("sessionUpdate", "tool_call", "toolCallId", "call_e", "title", "Editing files", "kind", "edit",
+            "status", "in_progress", "locations", List.of(Map.of("path", "a.txt")), "content", List.of(diff)));
         update(Map.of("sessionUpdate", "tool_call_update", "toolCallId", "call_e", "status", "completed",
-            "content", List.of(Map.of("type", "diff", "path", "a.txt", "newText", "hi"))));
+            "content", List.of(Map.of("type", "content", "content", Map.of("type", "text", "text", "{\"success\":true}")))));
         boolean json = text.contains("JSON Schema");
         String echo = text.equals("system?") ? "SYSTEM: " + systemPrompt + " MODEL: " + model
             : "ECHO: " + text.substring(Math.max(0, text.lastIndexOf('\n') + 1));

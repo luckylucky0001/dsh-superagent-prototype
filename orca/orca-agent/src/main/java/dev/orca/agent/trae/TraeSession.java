@@ -46,6 +46,7 @@ final class TraeSession implements AgentSession {
   private final Set<String> capabilities;
   private final Map<String, String> toolTitles = new ConcurrentHashMap<>();
   private final Map<String, String> toolKinds = new ConcurrentHashMap<>();
+  private final Map<String, List<Map<String, Object>>> toolDiffs = new ConcurrentHashMap<>();
   private final AtomicInteger requestIds = new AtomicInteger();
 
   private String sessionId;
@@ -137,6 +138,7 @@ final class TraeSession implements AgentSession {
       Set<String> caps = new HashSet<>(TraeProvider.capabilities(init));
       caps.add(Capability.STRUCTURED_OUTPUT);
       caps.add(Capability.USAGE);
+      caps.add(Capability.REVIEW); // the /review command (TRAE CLI 2.x)
       TraeSession s = new TraeSession(conn, handler, spec, provider.config().requestTimeout(), caps);
       conn.onNotification(s::onNotification);
       conn.onRequest(s::onRequest);
@@ -303,7 +305,12 @@ final class TraeSession implements AgentSession {
       text.append(spec.instructions()).append("\n\n---\n\n");
     }
     instructionsSent = true;
-    text.append(turn.text());
+    if (turn.review() != null) {
+      // TRAE CLI's own reviewer, the /review command (verified live): same [P0..P3] findings as Codex
+      text.append(reviewCommand(turn.review(), turn.text()));
+    } else {
+      text.append(turn.text());
+    }
     if (turn.outputSchema() != null) {
       text.append("\n\nReply with only a JSON value (no prose, no code fence) that validates against this JSON Schema:\n")
           .append(Json.write(turn.outputSchema()));
@@ -410,6 +417,29 @@ final class TraeSession implements AgentSession {
     return new TurnResult(status, finalText, structured, code, error, usage);
   }
 
+  /** {@code /review} with a hint for the target; an uncommitted-changes review needs none. */
+  static String reviewCommand(Map<String, Object> review, String extra) {
+    String type = String.valueOf(review.get("type"));
+    String base = String.valueOf(review.getOrDefault("branch", "main"));
+    String hint = switch (type) {
+      case "baseBranch" -> "Review the changes on this branch compared with `" + base + "` (git diff " + base + "...HEAD).";
+      case "commit" -> "Review commit " + review.get("sha") + " (git show " + review.get("sha") + ").";
+      case "custom" -> String.valueOf(review.getOrDefault("instructions", ""));
+      default -> "";
+    };
+    StringBuilder b = new StringBuilder("/review");
+    if (!hint.isBlank()) {
+      b.append(' ').append(hint);
+    }
+    if (!"custom".equals(type) && review.get("instructions") instanceof String i && !i.isBlank()) {
+      b.append(' ').append(i);
+    }
+    if (extra != null && !extra.isBlank()) {
+      b.append("\n\n").append(extra);
+    }
+    return b.toString();
+  }
+
   /**
    * Token usage from a prompt result ({@code _meta._trae/tokenUsage}): session totals in the Codex field
    * names, plus {@code taskTokens}, the tokens of this task's turns only (a resumed session's earlier
@@ -484,6 +514,10 @@ final class TraeSession implements AgentSession {
         String t = Json.str(u, "content.text");
         if (t != null) {
           synchronized (segment) {
+            // the reviewer repeats its overall verdict as a second message: drop a long chunk already sent
+            if (t.length() > 40 && segment.toString().contains(t.strip())) {
+              return;
+            }
             segment.append(t);
           }
           sink.accept(AgentEvent.of(AgentEvent.MESSAGE_DELTA, "itemId", "msg-" + segmentNo, "text", t));
@@ -501,6 +535,11 @@ final class TraeSession implements AgentSession {
         String k = toolKind(Json.str(u, "kind"));
         toolTitles.put(String.valueOf(id), String.valueOf(title));
         toolKinds.put(String.valueOf(id), k);
+        List<Map<String, Object>> startDiffs = diffs(u);
+        if (startDiffs != null) {
+          // TRAE sends an edit's diff with the tool call, not with its completion
+          toolDiffs.put(String.valueOf(id), startDiffs);
+        }
         flushSegment();
         sink.accept(AgentEvent.of(AgentEvent.TOOL_STARTED, "itemId", id, "kind", k, "title", title,
             "input", u.get("rawInput")));
@@ -514,7 +553,9 @@ final class TraeSession implements AgentSession {
           sink.accept(AgentEvent.of(AgentEvent.TOOL_COMPLETED, "itemId", id,
               "kind", toolKinds.getOrDefault(String.valueOf(id), "other"),
               "title", title != null ? title : toolTitles.get(String.valueOf(id)),
-              "status", status, "output", Truncate.middle(output, Truncate.TOOL_OUTPUT), "changes", diffs(u)));
+              "status", status, "output", diffs(u) == null && toolDiffs.containsKey(String.valueOf(id))
+                  && output != null && output.trim().equals("{\"success\":true}") ? null : Truncate.middle(output, Truncate.TOOL_OUTPUT),
+              "changes", diffs(u) != null ? diffs(u) : "completed".equals(status) ? toolDiffs.remove(String.valueOf(id)) : null));
         } else if (output != null && !output.isBlank()) {
           sink.accept(AgentEvent.of(AgentEvent.TOOL_OUTPUT, "itemId", id, "text", output));
         }
@@ -671,11 +712,51 @@ final class TraeSession implements AgentSession {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("path", Json.str(c, "path"));
         m.put("kind", Json.str(c, "oldText") == null ? "add" : "update");
-        m.put("diff", Truncate.middle(Json.str(c, "newText"), Truncate.TOOL_OUTPUT));
+        m.put("diff", Truncate.middle(unifiedDiff(Json.str(c, "path"), Json.str(c, "oldText"), Json.str(c, "newText")),
+            Truncate.TOOL_OUTPUT));
         out.add(m);
       }
     }
     return out.isEmpty() ? null : out;
+  }
+
+  /**
+   * A small unified diff of an edit (TRAE sends whole old and new texts): changed lines with three lines
+   * of context, enough for the transcript; new files show every line as added.
+   */
+  static String unifiedDiff(String path, String oldText, String newText) {
+    List<String> a = oldText == null ? List.of() : oldText.lines().toList();
+    List<String> b = newText == null ? List.of() : newText.lines().toList();
+    int start = 0;
+    while (start < a.size() && start < b.size() && a.get(start).equals(b.get(start))) {
+      start++;
+    }
+    int endA = a.size();
+    int endB = b.size();
+    while (endA > start && endB > start && a.get(endA - 1).equals(b.get(endB - 1))) {
+      endA--;
+      endB--;
+    }
+    int from = Math.max(0, start - 3);
+    StringBuilder out = new StringBuilder();
+    String name = path == null ? "file" : path;
+    out.append("--- ").append(oldText == null ? "/dev/null" : "a/" + name).append('\n')
+        .append("+++ b/").append(name).append('\n')
+        .append("@@ -").append(from + 1).append(',').append(Math.min(endA + 3, a.size()) - from)
+        .append(" +").append(from + 1).append(',').append(Math.min(endB + 3, b.size()) - from).append(" @@\n");
+    for (int i = from; i < start; i++) {
+      out.append(' ').append(a.get(i)).append('\n');
+    }
+    for (int i = start; i < endA; i++) {
+      out.append('-').append(a.get(i)).append('\n');
+    }
+    for (int i = start; i < endB; i++) {
+      out.append('+').append(b.get(i)).append('\n');
+    }
+    for (int i = endA; i < Math.min(endA + 3, a.size()); i++) {
+      out.append(' ').append(a.get(i)).append('\n');
+    }
+    return out.toString();
   }
 
   private static String firstString(Object map, String... keys) {

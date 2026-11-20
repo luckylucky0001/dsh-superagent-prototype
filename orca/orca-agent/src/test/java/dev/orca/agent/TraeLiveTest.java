@@ -133,4 +133,26 @@ class TraeLiveTest {
       assertFalse(Files.exists(dir.resolve("ro.txt")));
     }
   }
+
+  @Test
+  void reviewsABranchWithTraesOwnReviewer() throws Exception {
+    Path dir = Files.createTempDirectory("orca-trae-review");
+    run(dir, "git", "init", "-q", "-b", "main");
+    Files.writeString(dir.resolve("calc.py"), "def add(a, b):\n    return a + b\n");
+    run(dir, "git", "add", ".");
+    run(dir, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init");
+    run(dir, "git", "checkout", "-qb", "feature");
+    Files.writeString(dir.resolve("calc.py"), "def add(a, b):\n    return a - b\n");
+    run(dir, "git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qam", "tweak add");
+    try (AgentSession s = provider().open(spec(dir, Permission.READ_ONLY, false), new Handler())) {
+      TurnResult r = s.runTurn(new TurnSpec("", List.of(), null, null, Map.of("type", "baseBranch", "branch", "main")), e -> {});
+      System.out.println("review: " + r.finalText().replace('\n', ' '));
+      assertEquals(TurnResult.Status.COMPLETED, r.status(), String.valueOf(r.error()));
+      assertTrue(r.finalText().contains("calc.py"), "a finding with file and line");
+    }
+  }
+
+  private static void run(Path dir, String... cmd) throws Exception {
+    assertEquals(0, new ProcessBuilder(cmd).directory(dir.toFile()).inheritIO().start().waitFor());
+  }
 }

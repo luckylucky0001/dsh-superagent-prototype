@@ -129,7 +129,7 @@ public final class TraeProvider implements AgentProvider {
     Executables.Output login = Executables.run(concat(base, "login", "status"), config.env(), 20);
     String loginText = Executables.plain(login.stdout() + "\n" + login.stderr());
     boolean loggedIn = login.exitCode() == 0 && !loginText.toLowerCase().contains("not logged in");
-    Set<String> caps = new HashSet<>(Set.of(Capability.STRUCTURED_OUTPUT, Capability.USAGE));
+    Set<String> caps = new HashSet<>(Set.of(Capability.STRUCTURED_OUTPUT, Capability.USAGE, Capability.REVIEW));
     String error = loggedIn ? null : "not logged in: run `traecli login` (or set TRAECLI_PERSONAL_ACCESS_TOKEN and run "
         + "`traecli login --with-trae-pat`) on this machine";
     Process p = null;

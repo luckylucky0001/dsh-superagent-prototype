@@ -83,6 +83,8 @@ class TraeDriverTest {
           AgentEvent.MESSAGE, AgentEvent.USAGE, AgentEvent.TURN_COMPLETED)), types.toString());
       AgentEvent edit = events.stream().filter(e -> e.type().equals(AgentEvent.TOOL_COMPLETED)).findFirst().orElseThrow();
       assertEquals("file_change", edit.data().get("kind"));
+      String diff = String.valueOf(((List<?>) edit.data().get("changes")).get(0));
+      assertTrue(diff.contains("+there") && diff.contains("kind=update"), "the diff from the tool call: " + diff);
 
       TurnResult r2 = s.runTurn(new TurnSpec("x", List.of(), Map.of("type", "object"), null), e -> {});
       assertEquals(Map.of("ok", true), r2.structured());
@@ -107,6 +109,17 @@ class TraeDriverTest {
         // TRAE ends the turn when a request is declined; the driver asks it to carry on without it
         assertEquals(d == Interaction.Decision.ACCEPT ? "chosen=approved" : "continued without it", r.finalText());
       }
+    }
+  }
+
+  @Test
+  void reviewsUseTraesOwnReviewerOnce() throws Exception {
+    try (AgentSession s = provider("echo").open(spec(), new Handler())) {
+      assertTrue(s.capabilities().contains(Capability.REVIEW));
+      TurnResult r = s.runTurn(new TurnSpec("", List.of(), null, null, Map.of("type", "baseBranch", "branch", "main")), e -> {});
+      assertTrue(r.finalText().contains("/review Review the changes on this branch compared with `main` (git diff main...HEAD)."),
+          r.finalText());
+      assertEquals(1, r.finalText().split("The change breaks add").length - 1, "the repeated verdict is dropped");
     }
   }
 
