@@ -59,6 +59,39 @@ public final class Workspaces {
     }
   }
 
+  /**
+   * Removes one-off workspaces ({@code runs/*}, {@code adhoc/*}) untouched for {@code maxAgeDays}. Issue
+   * workspaces stay: a later comment resumes work in them.
+   */
+  public int cleanup(int maxAgeDays, java.util.Set<Path> inUse) {
+    long cutoff = System.currentTimeMillis() - maxAgeDays * 86_400_000L;
+    int removed = 0;
+    for (String group : java.util.List.of("runs", "adhoc")) {
+      Path dir = root.resolve(group);
+      if (!Files.isDirectory(dir)) {
+        continue;
+      }
+      try (var children = Files.list(dir)) {
+        for (Path p : children.toList()) {
+          if (inUse.contains(p.toAbsolutePath().normalize()) || Files.getLastModifiedTime(p).toMillis() > cutoff) {
+            continue;
+          }
+          try (var walk = Files.walk(p)) {
+            walk.sorted(java.util.Comparator.reverseOrder()).forEach(x -> x.toFile().delete());
+          }
+          removed++;
+        }
+      } catch (IOException ignored) {
+        // best effort
+      }
+    }
+    return removed;
+  }
+
+  Path root() {
+    return root;
+  }
+
   /** Local-only ignores so build caches never end up in commits; the repository itself is untouched. */
   static void excludeCaches(Path dir) throws IOException {
     Path exclude = dir.resolve(".git/info/exclude");

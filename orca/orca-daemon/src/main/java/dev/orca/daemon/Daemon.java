@@ -31,6 +31,7 @@ public final class Daemon {
   private volatile List<ProviderStatus> statuses = List.of();
   private volatile int heartbeatSeconds = 15;
   private volatile String runtimeId;
+  private volatile long lastCleanup;
   private ServerLink link;
 
   public Daemon(DaemonConfig config, Map<String, AgentProvider> providers) {
@@ -173,6 +174,13 @@ public final class Daemon {
       }
       if (running.isEmpty() && link.connected()) {
         link.send(Wire.frame(Wire.PROBE_RESULT, new Wire.ProbeResult(probe())));
+      }
+      if (System.currentTimeMillis() - lastCleanup > Duration.ofHours(24).toMillis() && running.isEmpty()) {
+        lastCleanup = System.currentTimeMillis();
+        int n = workspaces.cleanup(7, java.util.Set.of());
+        if (n > 0) {
+          log.info("removed {} one-off workspaces older than 7 days", n);
+        }
       }
     }
   }

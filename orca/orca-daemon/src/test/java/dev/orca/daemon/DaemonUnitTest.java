@@ -72,6 +72,12 @@ class DaemonUnitTest {
     assertThrows(AgentException.class, () -> ws.prepare("../escape", null));
     assertThrows(AgentException.class, () -> ws.prepare("/abs", null));
     assertThrows(AgentException.class, () -> ws.prepare("a/../../b", null));
+    Path old = ws.prepare("runs/run_old", null);
+    Path fresh = ws.prepare("runs/run_new", null);
+    Files.setLastModifiedTime(old, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 10 * 86_400_000L));
+    Files.setLastModifiedTime(p, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis() - 10 * 86_400_000L));
+    assertEquals(1, ws.cleanup(7, java.util.Set.of()));
+    assertTrue(!Files.exists(old) && Files.exists(fresh) && Files.exists(p), "issue workspaces are kept");
   }
 
   @Test
