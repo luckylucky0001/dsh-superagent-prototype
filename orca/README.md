@@ -49,6 +49,16 @@ ORCA_ADMIN_PASSWORD=dev-pass java -jar orca-server/target/orca-server.jar   # ht
 
 ## 生产部署
 
+**发布包**：`scripts/package.sh` 生成 `dist/orca-<version>.tar.gz`，内含自带前端的 `orca-server.jar`、`daemon/orca-daemon.jar` 与启动脚本、`deploy/`。不用 Docker 时：
+
+```bash
+ORCA_DB_URL=jdbc:postgresql://db:5432/orca ORCA_DB_USER=orca ORCA_DB_PASSWORD=... \
+ORCA_ADMIN_PASSWORD=... ORCA_PUBLIC_URL=https://orca.example.com ORCA_DOWNLOADS_DIR=./daemon \
+java -jar orca-server.jar
+```
+
+**Docker Compose**：
+
 ```bash
 cp deploy/.env.example deploy/.env          # 改密码和 ORCA_PUBLIC_URL
 docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build

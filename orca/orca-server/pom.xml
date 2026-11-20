@@ -88,6 +88,16 @@
   </dependencies>
   <build>
     <finalName>orca-server</finalName>
+    <resources>
+      <resource>
+        <directory>src/main/resources</directory>
+      </resource>
+      <!-- the web UI, when built (cd ../web && npm run build); the jar then serves it at / -->
+      <resource>
+        <directory>${project.basedir}/../web/dist</directory>
+        <targetPath>static</targetPath>
+      </resource>
+    </resources>
     <plugins>
       <plugin>
         <groupId>org.springframework.boot</groupId>
