@@ -387,19 +387,32 @@ final class TaskRunner implements Runnable {
    * Captures the agent's work on the issue branch when it left changes uncommitted (Codex keeps .git
    * read-only in its sandbox, and smaller models often do not ask to escalate).
    */
+  /**
+   * Subject from what changed ({@code WMS-5: update wms/counting.py, tests/test_counting.py}), body from
+   * the agent's own summary, so the history reads well even when the agent could not commit itself.
+   */
+  static String autoCommitMessage(String key, String porcelain, String finalText, String agent, String taskId) {
+    List<String> files = porcelain.lines().filter(l -> l.length() > 3).map(l -> l.substring(3).trim())
+        .map(f -> f.contains(" -> ") ? f.substring(f.indexOf(" -> ") + 4) : f).map(f -> f.replace("\"", "")).toList();
+    String subject = key + ": update " + String.join(", ", files.subList(0, Math.min(2, files.size())))
+        + (files.size() > 2 ? " and " + (files.size() - 2) + " more" : "");
+    if (subject.length() > 72) {
+      subject = key + ": update " + files.size() + " files";
+    }
+    String body = finalText == null ? "" : finalText.strip().lines().limit(30).map(String::stripTrailing)
+        .collect(java.util.stream.Collectors.joining("\n"));
+    return subject + "\n\n" + (body.isBlank() ? "" : body + "\n\n") + "Committed by Orca for " + agent + " (task " + taskId + ")";
+  }
+
   private void autoCommit(Path dir, String finalText) {
     Executables.Output st = Executables.run(List.of("git", "-C", dir.toString(), "status", "--porcelain"), Map.of(), 30);
     if (st.exitCode() != 0 || st.stdout().isBlank()) {
       return;
     }
-    String summary = finalText == null ? "" : finalText.strip().lines().findFirst().orElse("").replaceAll("[`*#>]", "");
-    if (summary.length() > 72) {
-      summary = summary.substring(0, 69) + "...";
-    }
     String key = task.workspaceKey().contains("/") ? task.workspaceKey().substring(task.workspaceKey().lastIndexOf('/') + 1)
         : task.workspaceKey();
-    String message = key + ": " + (summary.isBlank() ? "changes by " + (task.agent() == null ? "agent" : task.agent().name())
-        : summary) + "\n\nCommitted by Orca for task " + task.taskId();
+    String message = autoCommitMessage(key, st.stdout(), finalText, task.agent() == null ? "agent" : task.agent().name(),
+        task.taskId());
     Executables.run(List.of("git", "-C", dir.toString(), "add", "-A"), Map.of(), 60);
     List<String> commit = new ArrayList<>(List.of("git", "-C", dir.toString()));
     if (Executables.run(List.of("git", "-C", dir.toString(), "config", "user.email"), Map.of(), 10).stdout().isBlank()) {

@@ -193,7 +193,8 @@ function decisionOutcome(d: string | undefined): 'approved' | 'approvedSession' 
 function UsageFooter({ usage }: { usage: Usage }) {
   const t = useT();
   const window = usage.contextWindow ?? 0;
-  const used = usage.lastTotalTokens ?? usage.totalTokens ?? 0;
+  // TRAE reports what the context holds (contextUsed); Codex the size of the last request
+  const used = usage.contextUsed ?? usage.lastTotalTokens ?? usage.totalTokens ?? 0;
   const pct = window > 0 ? Math.min(100, Math.round((used / window) * 100)) : null;
   return (
     <Flex className="orca-tx-usage" gap={16} wrap="wrap" align="center">

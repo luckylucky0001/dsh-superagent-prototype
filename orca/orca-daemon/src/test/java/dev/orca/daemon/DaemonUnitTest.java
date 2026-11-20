@@ -231,4 +231,12 @@ class DaemonUnitTest {
     org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git add -A &&& git status"));
     org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git status && cd /etc && git status"), "cd only as the first part");
   }
+
+  @Test
+  void autoCommitMessagesSayWhatChanged() {
+    String m = TaskRunner.autoCommitMessage("WMS-5", " M wms/model.py\n?? wms/counting.py\n?? tests/test_counting.py\n",
+        "All 16 tests pass. Here's what was changed:\n- counting", "TraeBuilder", "tsk_1");
+    assertEquals("WMS-5: update wms/model.py, wms/counting.py and 1 more", m.lines().findFirst().orElseThrow());
+    assertTrue(m.contains("All 16 tests pass") && m.endsWith("Committed by Orca for TraeBuilder (task tsk_1)"), m);
+  }
 }

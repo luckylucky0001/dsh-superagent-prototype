@@ -2,7 +2,7 @@ import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
 import { Alert, Button, Card, Flex, Space, Tooltip, Typography } from 'antd';
 import { DownOutlined, ExportOutlined, RightOutlined } from '@ant-design/icons';
-import { useAgentMap } from '@/api/queries';
+import { useAgentMap, useModelLabel } from '@/api/queries';
 import { ACTIVE_TASK_STATUSES, taskTokensOf, type Task } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
@@ -14,6 +14,7 @@ import { CancelTaskButton, Transcript } from '@/components/transcript/Transcript
 export function TaskMeta({ task }: { task: Task }) {
   const t = useT();
   const agents = useAgentMap();
+  const modelLabel = useModelLabel();
   const agent = agents.get(task.agentId);
   const tokens = taskTokensOf(task.usage);
   const running = !!task.startedAt && !task.finishedAt;
@@ -30,7 +31,7 @@ export function TaskMeta({ task }: { task: Task }) {
         <Typography.Text strong>{agent?.name ?? task.agentId}</Typography.Text>
       </Space>
       <ProviderTag provider={task.provider} small />
-      {task.model && <Typography.Text type="secondary" className="orca-mono" style={{ fontSize: 12 }}>{task.model}</Typography.Text>}
+      {task.model && <Typography.Text type="secondary" className="orca-mono" style={{ fontSize: 12 }}>{modelLabel({ provider: task.provider, runtimeId: task.runtimeId ?? null, model: task.model })}</Typography.Text>}
       <StatusTag status={task.status} />
       {task.statusDetail && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{task.statusDetail}</Typography.Text>}
       <Tooltip title={`${t('tasks.queuedAt')}: ${fmtTime(task.queuedAt)}`}>

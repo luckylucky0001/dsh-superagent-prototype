@@ -242,6 +242,8 @@ export interface Usage {
   totalTokens?: number;
   contextWindow?: number;
   lastTotalTokens?: number;
+  /** tokens currently in the context window (TRAE) */
+  contextUsed?: number;
   /** Tokens of this task only; totalTokens covers the whole provider session. */
   taskTokens?: number;
 }
