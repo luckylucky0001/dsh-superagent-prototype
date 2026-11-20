@@ -19,6 +19,9 @@ import java.util.Map;
  */
 public final class Main {
 
+  /** Held for the life of the process: one daemon per configuration. */
+  private static volatile java.nio.channels.FileLock LOCK;
+
   private Main() {}
 
   public static void main(String[] argv) throws Exception {
@@ -61,9 +64,6 @@ public final class Main {
         System.out.println("registered; settings saved to " + DaemonConfig.file());
       }
       case "start" -> {
-        if (flags.containsKey("save")) {
-          cfg.save();
-        }
         if (cfg.server() == null || cfg.token() == null) {
           System.err.println("not registered: run `orca-daemon register --server URL --code CODE` first"
               + " (settings are read from " + DaemonConfig.file() + ")");
@@ -74,11 +74,14 @@ public final class Main {
         java.nio.channels.FileChannel lockFile = java.nio.channels.FileChannel.open(
             DaemonConfig.file().resolveSibling("daemon.lock"), java.nio.file.StandardOpenOption.CREATE,
             java.nio.file.StandardOpenOption.WRITE);
-        java.nio.channels.FileLock lock = lockFile.tryLock();
-        if (lock == null) {
+        LOCK = lockFile.tryLock();
+        if (LOCK == null) {
           System.err.println("another orca-daemon is already running with " + DaemonConfig.file()
               + "; stop it first, or use a different ORCA_HOME for a second runtime");
           System.exit(3);
+        }
+        if (flags.containsKey("save")) {
+          cfg.save();
         }
         new Daemon(cfg, Daemon.defaultProviders(cfg, Providers::trae)).run();
       }

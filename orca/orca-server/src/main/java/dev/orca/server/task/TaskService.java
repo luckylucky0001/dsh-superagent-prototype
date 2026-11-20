@@ -107,7 +107,6 @@ public class TaskService {
 
   // ---------------------------------------------------------------- creating work
 
-  @Transactional
   /** The branch an issue's work is compared against: its project's default branch, else {@code main}. */
   public String defaultBranch(String issueRef) {
     if (issueRef == null || issueRef.isBlank()) {
@@ -118,6 +117,7 @@ public class TaskService {
     return p == null || p.defaultBranch == null || p.defaultBranch.isBlank() ? "main" : p.defaultBranch;
   }
 
+  @Transactional
   public Task enqueue(TaskRequest req) {
     Agent agent = agents.findById(req.agentId()).orElseThrow(() -> ApiException.notFound("agent " + req.agentId()));
     if (agent.archived) {
@@ -270,6 +270,23 @@ public class TaskService {
     }
   }
 
+  /** True when a dotted version is older than {@code min}; an unknown version counts as old. */
+  static boolean olderThan(String version, String min) {
+    if (version == null || version.isBlank()) {
+      return true;
+    }
+    String[] x = version.split("[^0-9]+");
+    String[] y = min.split("[^0-9]+");
+    for (int i = 0; i < Math.max(x.length, y.length); i++) {
+      int xi = i < x.length && !x[i].isEmpty() ? Integer.parseInt(x[i]) : 0;
+      int yi = i < y.length && !y[i].isEmpty() ? Integer.parseInt(y[i]) : 0;
+      if (xi != yi) {
+        return xi < yi;
+      }
+    }
+    return false;
+  }
+
   /** Returns why the task cannot be dispatched now, or null if it can. */
   private String route(Task t, Agent agent, Set<String> busyPairs) {
     if (agent.runtimeId == null) {
@@ -289,6 +306,10 @@ public class TaskService {
     }
     if (!ps.get().loggedIn()) {
       return agent.provider + " is not logged in on " + r.name;
+    }
+    // an older daemon would ignore the review target and run the prompt as ordinary, writing work
+    if (t.reviewJson != null && olderThan(r.daemonVersion, "0.2.0")) {
+      return "review tasks need orca-daemon 0.2.0 or later on " + r.name;
     }
     if (tasks.countByRuntimeIdAndStatusIn(r.id, TaskStatus.ACTIVE) >= r.capacity) {
       return "runtime " + r.name + " is busy";

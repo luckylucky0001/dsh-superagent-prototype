@@ -23,4 +23,23 @@ class ExecutablesTest {
     assertEquals("bash -lc 'a' extra", Executables.unwrapShell("bash -lc 'a' extra"));
     assertEquals("bash -lc 'unbalanced", Executables.unwrapShell("bash -lc 'unbalanced"));
   }
+
+  @Test
+  void doesNotUnwrapWhatTheOuterShellWouldExpandOrUntrustedShells() {
+    // an unquoted glob after the script would be expanded by the outer shell
+    assertEquals("bash -c 'git log '*", Executables.unwrapShell("bash -c 'git log '*"));
+    // only system shells: an agent-written ./bash is not a shell wrapper
+    assertEquals("./bash -lc 'git status'", Executables.unwrapShell("./bash -lc 'git status'"));
+    assertEquals("/tmp/x/sh -c 'npm test'", Executables.unwrapShell("/tmp/x/sh -c 'npm test'"));
+    assertEquals("git status", Executables.unwrapShell("/usr/bin/bash -lc 'git status'"));
+  }
+
+  @Test
+  void detectsUnquotedExpansion() {
+    org.junit.jupiter.api.Assertions.assertTrue(Executables.hasUnquotedExpansion("git log *"));
+    org.junit.jupiter.api.Assertions.assertTrue(Executables.hasUnquotedExpansion("cat ~/.ssh/id_rsa"));
+    org.junit.jupiter.api.Assertions.assertTrue(Executables.hasUnquotedExpansion("git add {a,b}"));
+    org.junit.jupiter.api.Assertions.assertFalse(Executables.hasUnquotedExpansion("git commit -m 'Is it *done*?'"));
+    org.junit.jupiter.api.Assertions.assertFalse(Executables.hasUnquotedExpansion("git status --short"));
+  }
 }

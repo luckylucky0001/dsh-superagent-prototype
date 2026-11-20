@@ -21,7 +21,7 @@ import org.slf4j.LoggerFactory;
 /** Connects to the server, reports what this machine can run, and executes assigned tasks. */
 public final class Daemon {
 
-  public static final String VERSION = "0.1.0";
+  public static final String VERSION = "0.2.0";
   private static final Logger log = LoggerFactory.getLogger(Daemon.class);
 
   private final DaemonConfig config;

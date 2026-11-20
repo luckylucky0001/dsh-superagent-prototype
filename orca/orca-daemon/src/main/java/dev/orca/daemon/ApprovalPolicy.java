@@ -69,7 +69,8 @@ public final class ApprovalPolicy {
    */
   boolean commandAllowed(String command) {
     String c = dev.orca.agent.core.Executables.unwrapShell(command);
-    if (c == null || c.isEmpty() || c.chars().anyMatch(ch -> ";|`$<>\n\r\\".indexOf(ch) >= 0) || c.contains("&&&")) {
+    if (c == null || c.isEmpty() || c.chars().anyMatch(ch -> ";|`$<>\n\r\\".indexOf(ch) >= 0) || c.contains("&&&")
+        || dev.orca.agent.core.Executables.hasUnquotedExpansion(c)) {
       return false;
     }
     for (String part : c.split("&&")) {

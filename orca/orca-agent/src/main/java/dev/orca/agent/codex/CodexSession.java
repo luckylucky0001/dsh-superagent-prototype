@@ -411,12 +411,13 @@ final class CodexSession implements AgentSession {
             actions.add(Json.str(a, "command"));
           }
         }
-        // the policy judges the command that will actually run, not Codex's display summary of it
+        // the policy judges the command that will actually run (unwrapping it once itself), not Codex's
+        // display summary of it
         String rawCommand = Json.str(p, "command");
-        String command = rawCommand != null ? dev.orca.agent.core.Executables.unwrapShell(rawCommand)
-            : actions.isEmpty() ? null : String.join(" && ", actions);
+        String command = rawCommand != null ? rawCommand : actions.isEmpty() ? null : String.join(" && ", actions);
         ApprovalRequest r = new ApprovalRequest(nextRequestId(), network ? ApprovalKind.NETWORK : ApprovalKind.COMMAND,
-            network ? "network access to " + Json.str(p, "networkApprovalContext.host") : command, command,
+            network ? "network access to " + Json.str(p, "networkApprovalContext.host")
+                : dev.orca.agent.core.Executables.unwrapShell(command), command,
             Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);
         yield Map.of("decision", commandDecision(decide(r)));
       }
@@ -480,7 +481,8 @@ final class CodexSession implements AgentSession {
 
   private Decision decide(ApprovalRequest r) {
     sink.accept(AgentEvent.of(AgentEvent.APPROVAL_REQUESTED, "requestId", r.requestId(),
-        "kind", r.kind().name().toLowerCase(), "title", r.title(), "detail", r.reason(), "command", r.command(),
+        "kind", r.kind().name().toLowerCase(), "title", r.title(), "detail", r.reason(),
+        "command", dev.orca.agent.core.Executables.unwrapShell(r.command()),
         "paths", r.paths().isEmpty() ? null : r.paths()));
     Decision d;
     try {

@@ -152,4 +152,16 @@ class DaemonUnitTest {
         TaskRunner.decisionFrom(dev.orca.agent.core.Interaction.InputReply.decline()));
     org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.DECLINE, TaskRunner.decisionFrom(null));
   }
+
+  @org.junit.jupiter.api.Test
+  void policyRejectsGlobAndFakeShellBypasses() {
+    ApprovalPolicy p = new ApprovalPolicy(dev.orca.agent.core.Permission.WORKSPACE, java.nio.file.Path.of("/w"), java.util.List.of());
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("/bin/bash -lc \"bash -c 'git log '*\""));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("bash -c 'git log '*"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("./bash -lc 'git status'"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("/tmp/x/sh -c 'git status'"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git log *"));
+    org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("/bin/bash -lc 'git status --short'"));
+    org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("/bin/bash -lc \"git add a.py && git commit -m 'Add GST'\""));
+  }
 }

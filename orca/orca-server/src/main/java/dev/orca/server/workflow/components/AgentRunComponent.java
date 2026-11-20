@@ -102,12 +102,8 @@ public class AgentRunComponent implements NodeComponent {
         String base = ctx.string("baseBranch", "");
         review.put("branch", base == null || base.isBlank() ? tasks.defaultBranch(issue) : base);
       }
-      if (prompt != null && !prompt.isBlank()) {
-        review.put("instructions", prompt);
-      }
-      if (schema != null) {
-        return NodeResult.fatal("review mode returns the reviewer's text; remove the output schema");
-      }
+      // review mode returns the reviewer's text: a schema or session setting left over from work mode is ignored
+      schema = null;
     } else if (prompt == null || prompt.isBlank()) {
       return NodeResult.fatal("a prompt is required");
     }

@@ -85,6 +85,7 @@ function TaskApprovalForm({ item }: { item: InboxItem }) {
       {a.paths && a.paths.length > 0 && (
         <pre className="orca-mono orca-approval-cmd">{a.paths.join('\n')}</pre>
       )}
+      {a.grantRoot && <Typography.Text strong>{t('inbox.approvalGrant', { path: a.grantRoot })}</Typography.Text>}
       {a.cwd && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('inbox.approvalCwd', { cwd: a.cwd })}</Typography.Text>}
       <Space wrap>
         <Button type="primary" icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow once'} onClick={() => send('Allow once')}>

@@ -198,7 +198,8 @@ final class TaskRunner implements Runnable {
       r = session.runTurn(new TurnSpec(follow, List.of(), task.outputSchema(), timeout), sink);
       usage.putAll(r.usage());
     }
-    if (r.ok() && task.repo() != null) {
+    // a review must not commit what it was asked to review
+    if (r.ok() && task.repo() != null && task.review() == null) {
       autoCommit(dir, r.finalText());
     }
     String status = switch (r.status()) {
@@ -352,19 +353,29 @@ final class TaskRunner implements Runnable {
    * the inbox like any agent question, and the answer becomes the decision.
    */
   private Interaction.Decision askPerson(Interaction.ApprovalRequest r) {
+    // only requests a person can judge from what is shown: a command, or write access to a directory.
+    // Network and extra-permission requests carry details the card cannot show faithfully; they stay declined.
+    if (cancelRequested || (r.kind() != Interaction.ApprovalKind.COMMAND && r.kind() != Interaction.ApprovalKind.FILE_CHANGE)) {
+      return Interaction.Decision.DECLINE;
+    }
     String requestId = "approval-" + r.requestId();
     List<String> paths = r.paths() == null ? List.of() : r.paths();
-    String what = r.command() != null ? r.command()
-        : !paths.isEmpty() ? String.join(", ", paths) : String.valueOf(r.title());
+    boolean command = r.kind() == Interaction.ApprovalKind.COMMAND && r.command() != null;
+    String shown = command ? dev.orca.agent.core.Executables.unwrapShell(r.command()) : null;
+    String grantRoot = !command && r.cwd() != null ? relativeCwd(r.cwd()) : null;
+    String what = command ? shown
+        : grantRoot != null ? "write access under " + grantRoot + (paths.isEmpty() ? "" : " (" + String.join(", ", paths) + ")")
+            : !paths.isEmpty() ? String.join(", ", paths) : String.valueOf(r.title());
     String agentName = task.agent() == null ? "The agent" : task.agent().name();
-    String title = agentName + " asks to " + (r.command() != null ? "run a command outside its policy"
-        : r.kind() == Interaction.ApprovalKind.FILE_CHANGE ? "change files outside its workspace" : "get more permissions");
+    String title = agentName + " asks to " + (command ? "run a command its policy does not allow"
+        : "write files its policy does not allow");
     Map<String, Object> approval = new LinkedHashMap<>();
     approval.put("kind", r.kind().name().toLowerCase(java.util.Locale.ROOT));
-    approval.put("command", r.command());
+    approval.put("command", shown);
     approval.put("paths", paths.isEmpty() ? null : paths);
+    approval.put("grantRoot", grantRoot);
     approval.put("reason", r.reason());
-    approval.put("cwd", r.cwd() == null ? null : relativeCwd(r.cwd()));
+    approval.put("cwd", command && r.cwd() != null ? relativeCwd(r.cwd()) : null);
     approval.values().removeIf(java.util.Objects::isNull);
     Map<String, Object> question = new LinkedHashMap<>();
     question.put("id", "decision");
@@ -377,7 +388,10 @@ final class TaskRunner implements Runnable {
     Interaction.Decision d = decisionFrom(reply);
     buffer.add(AgentEvent.of(AgentEvent.INPUT_RESOLVED, "requestId", requestId, "declined", reply.declined(),
         "answers", reply.answers()));
-    decidedByPerson.add(r.requestId());
+    if (!reply.declined()) {
+      // a timeout or a cancellation is not a person's decision
+      decidedByPerson.add(r.requestId());
+    }
     return d;
   }
 

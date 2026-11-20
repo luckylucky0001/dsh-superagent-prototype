@@ -70,34 +70,77 @@ public final class Executables {
   }
 
   private static final java.util.Set<String> SHELLS = java.util.Set.of("sh", "bash", "zsh", "dash");
+  private static final java.util.Set<String> SHELL_DIRS = java.util.Set.of("", "/bin/", "/usr/bin/");
 
   /**
-   * {@code /bin/bash -lc 'npm test'} becomes {@code npm test}; anything else is returned trimmed. The
-   * wrapper is split with POSIX quoting rules, so scripts that mix quote styles
-   * ({@code "echo "'$HOME'}) come back as the shell would see them.
+   * {@code /bin/bash -lc 'npm test'} becomes {@code npm test}; anything else is returned trimmed. Only
+   * a system shell ({@code sh|bash|zsh|dash}, bare or in /bin or /usr/bin) is unwrapped, and only when
+   * its script is one fully quoted word (quoted parts may be concatenated, as in {@code "a "'$b'}): an
+   * unquoted part would be expanded by the outer shell, so such commands are left as they are and judged
+   * whole.
    */
   public static String unwrapShell(String command) {
     if (command == null) {
       return null;
     }
     String c = command.trim();
-    List<String> words = shellWords(c);
+    List<Word> words = tokenize(c);
     if (words == null || words.size() != 3) {
       return c;
     }
-    String shell = words.get(0).substring(words.get(0).lastIndexOf('/') + 1);
-    String flag = words.get(1);
-    if (!SHELLS.contains(shell) || !(flag.equals("-c") || flag.equals("-lc") || flag.equals("-cl"))) {
+    Word shell = words.get(0);
+    Word flag = words.get(1);
+    Word script = words.get(2);
+    if (shell.quoted() || flag.quoted() || !script.fullyQuoted()) {
       return c;
     }
-    return words.get(2).trim();
+    int slash = shell.text().lastIndexOf('/') + 1;
+    if (!SHELLS.contains(shell.text().substring(slash)) || !SHELL_DIRS.contains(shell.text().substring(0, slash))) {
+      return c;
+    }
+    if (!(flag.text().equals("-c") || flag.text().equals("-lc") || flag.text().equals("-cl"))) {
+      return c;
+    }
+    return script.text().trim();
   }
 
   /** Splits a command line into words like a POSIX shell (quotes, backslashes); null if unbalanced. */
   static List<String> shellWords(String s) {
-    List<String> words = new ArrayList<>();
+    List<Word> words = tokenize(s);
+    return words == null ? null : words.stream().map(Word::text).toList();
+  }
+
+  /**
+   * True when the script has characters a shell would expand outside quotes: globs, brace expansion,
+   * tilde, subshells or comments. Such a command does not mean what its text says.
+   */
+  public static boolean hasUnquotedExpansion(String script) {
+    boolean single = false;
+    boolean dbl = false;
+    for (int i = 0; i < script.length(); i++) {
+      char ch = script.charAt(i);
+      if (ch == '\\' && !single) {
+        i++;
+      } else if (ch == '\'' && !dbl) {
+        single = !single;
+      } else if (ch == '"' && !single) {
+        dbl = !dbl;
+      } else if (!single && !dbl && "*?[]{}~()#".indexOf(ch) >= 0) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  /** A word and how it was written: {@code quoted} if any part was quoted, {@code fullyQuoted} if all were. */
+  record Word(String text, boolean quoted, boolean fullyQuoted) {}
+
+  private static List<Word> tokenize(String s) {
+    List<Word> words = new ArrayList<>();
     StringBuilder cur = new StringBuilder();
     boolean inWord = false;
+    boolean anyQuoted = false;
+    boolean anyUnquoted = false;
     for (int i = 0; i < s.length(); i++) {
       char ch = s.charAt(i);
       if (ch == '\'') {
@@ -108,6 +151,7 @@ public final class Executables {
         cur.append(s, i + 1, end);
         i = end;
         inWord = true;
+        anyQuoted = true;
       } else if (ch == '"') {
         int j = i + 1;
         for (; j < s.length() && s.charAt(j) != '"'; j++) {
@@ -126,22 +170,27 @@ public final class Executables {
         }
         i = j;
         inWord = true;
+        anyQuoted = true;
       } else if (ch == '\\' && i + 1 < s.length()) {
         cur.append(s.charAt(++i));
         inWord = true;
+        anyUnquoted = true;
       } else if (Character.isWhitespace(ch)) {
         if (inWord) {
-          words.add(cur.toString());
+          words.add(new Word(cur.toString(), anyQuoted, anyQuoted && !anyUnquoted));
           cur.setLength(0);
           inWord = false;
+          anyQuoted = false;
+          anyUnquoted = false;
         }
       } else {
         cur.append(ch);
         inWord = true;
+        anyUnquoted = true;
       }
     }
     if (inWord) {
-      words.add(cur.toString());
+      words.add(new Word(cur.toString(), anyQuoted, anyQuoted && !anyUnquoted));
     }
     return words;
   }
