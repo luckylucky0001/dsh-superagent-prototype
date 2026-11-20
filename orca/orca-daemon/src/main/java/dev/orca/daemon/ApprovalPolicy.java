@@ -65,24 +65,81 @@ public final class ApprovalPolicy {
 
   /**
    * A command is allowed when every {@code &&}-separated part matches an allowed prefix word by word and
-   * nothing can smuggle in another command (no ;, |, backticks, $, redirections, newlines or backslashes).
+   * nothing can smuggle in another command. Outside quotes: no {@code ; | & < >} (other than the
+   * {@code &&} separators), no newlines, no globs or subshells. Anywhere: no {@code $}, backticks,
+   * backslashes or carriage returns (they expand or escape even inside double quotes). A newline inside
+   * quotes is literal (a multi-line commit message). The first part may be {@code cd DIR} when DIR is in
+   * the workspace: TRAE CLI writes {@code cd <workspace> && git add -A && git commit -m "…"}.
    */
   boolean commandAllowed(String command) {
     String c = dev.orca.agent.core.Executables.unwrapShell(command);
-    if (c == null || c.isEmpty() || c.chars().anyMatch(ch -> ";|`$<>\n\r\\".indexOf(ch) >= 0) || c.contains("&&&")
+    if (c == null || c.isEmpty() || c.chars().anyMatch(ch -> "`$\\\r".indexOf(ch) >= 0)
         || dev.orca.agent.core.Executables.hasUnquotedExpansion(c)) {
       return false;
     }
-    for (String part : c.split("&&")) {
-      if (!partAllowed(words(part.trim()))) {
+    List<String> parts = splitUnquoted(c);
+    if (parts == null) {
+      return false;
+    }
+    for (int i = 0; i < parts.size(); i++) {
+      List<String> w = words(parts.get(i).trim());
+      if (i == 0 && parts.size() > 1 && cdInsideWorkspace(w)) {
+        continue;
+      }
+      if (!partAllowed(w)) {
         return false;
       }
     }
     return true;
   }
 
+  /**
+   * Splits on {@code &&} outside quotes; null when an unquoted {@code ; | & < >} or newline appears, or a
+   * quote is left open.
+   */
+  static List<String> splitUnquoted(String c) {
+    List<String> parts = new java.util.ArrayList<>();
+    StringBuilder cur = new StringBuilder();
+    char quote = 0;
+    for (int i = 0; i < c.length(); i++) {
+      char ch = c.charAt(i);
+      if (quote != 0) {
+        if (ch == quote) {
+          quote = 0;
+        }
+        cur.append(ch);
+      } else if (ch == '\'' || ch == '"') {
+        quote = ch;
+        cur.append(ch);
+      } else if (ch == '&' && i + 1 < c.length() && c.charAt(i + 1) == '&') {
+        if (i + 2 < c.length() && c.charAt(i + 2) == '&') {
+          return null;
+        }
+        parts.add(cur.toString());
+        cur.setLength(0);
+        i++;
+      } else if (";|&<>\n".indexOf(ch) >= 0) {
+        return null;
+      } else {
+        cur.append(ch);
+      }
+    }
+    if (quote != 0) {
+      return null;
+    }
+    parts.add(cur.toString());
+    return parts.stream().anyMatch(p -> p.isBlank()) ? null : parts;
+  }
+
+  /** {@code cd DIR} with one plain argument inside the workspace (it only changes the directory). */
+  private boolean cdInsideWorkspace(List<String> words) {
+    return words.size() == 2 && words.get(0).equals("cd") && !words.get(1).startsWith("-")
+        && insideWorkspace(words.get(1)) && !inGitDir(words.get(1));
+  }
+
   private boolean partAllowed(List<String> words) {
-    if (words.isEmpty() || words.stream().anyMatch(w -> w.contains("&"))) {
+    // unquoted & ; | < > were refused while splitting; inside quotes they are plain text
+    if (words.isEmpty()) {
       return false;
     }
     for (String b : BUILT_IN) {

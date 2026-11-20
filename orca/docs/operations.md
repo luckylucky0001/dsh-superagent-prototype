@@ -76,6 +76,16 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 - **完全访问权限**：`full` 档位只在以 `--isolated` 启动的机器上生效，只应用于一次性虚拟机或容器。
 - **凭证**：Agent 使用这台机器上已登录的 Codex / TRAE 账号和 git 凭证；推送分支同样使用本机 git 凭证。请为构建机使用专用账号，不要放个人令牌。
 
+### 在没有浏览器的机器上登录 TRAE 企业版
+
+`traecli login` 会在本机打开浏览器并等待回调到 `127.0.0.1:<端口>`。构建机通常没有浏览器，可以这样完成：
+
+1. 在构建机上运行 `BROWSER=echo traecli login`：它不会打开浏览器，而是把登录网址打印出来，并继续等待回调。
+2. 在自己电脑的浏览器里打开该网址，用企业账号完成 SSO。
+3. 浏览器最后会跳到 `http://127.0.0.1:<端口>/authorize?...` 并显示无法访问（因为那个端口在构建机上）。复制这个完整地址，粘贴到构建机上 traecli 的提示“Paste callback URL to verify automatically”处（或在另一个终端执行 `curl "<该地址>"`），登录即完成，`traecli login status` 显示已登录。
+
+注意：这个回调地址里带有登录令牌，只在构建机上使用，不要发到聊天群或工单里。也可以改用个人访问令牌：`TRAECLI_PERSONAL_ACCESS_TOKEN=... traecli login --with-trae-pat`。
+
 ## 6. 故障排查
 
 | 现象 | 先看 | 处理 |

@@ -207,4 +207,26 @@ class DaemonUnitTest {
     assertEquals("Read /work/issues/WMS-50/a.py", TaskRunner.relativize(other, dir).data().get("title"),
         "a sibling folder with a longer name is not touched");
   }
+
+  @Test
+  void policyAcceptsTraeStyleCommitsButNothingThatEscapes() {
+    Path ws = Path.of("/work/issues/WMS-5");
+    ApprovalPolicy p = new ApprovalPolicy(Permission.WORKSPACE, ws, List.of("python3 -m unittest"));
+    // exactly what TRAE CLI asked for in the demo
+    org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed(
+        "cd /work/issues/WMS-5 && git add -A && git commit -m \"Add cycle count functionality\n\n- wms/counting.py: cycle_count() validates input; never negative\""));
+    org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("cd wms && git status"));
+    org.junit.jupiter.api.Assertions.assertTrue(p.commandAllowed("git commit -m 'a | b && c > d'"), "operators inside quotes are text");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("cd /etc && git add -A"), "cd outside the workspace");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("cd .. && git commit -m x"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("cd /work/issues/WMS-5/.git && git status"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("cd /work/issues/WMS-5 && rm -rf wms"), "cd does not allow the rest");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("cd /work/issues/WMS-5"), "a lone cd is not a command to approve");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git add -A\nrm -rf /"), "an unquoted newline is a second command");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git commit -m \"$(rm -rf /)\""), "$ expands inside double quotes");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git commit -m \"x`id`\""));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git commit -m 'open"), "an open quote");
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git add -A &&& git status"));
+    org.junit.jupiter.api.Assertions.assertFalse(p.commandAllowed("git status && cd /etc && git status"), "cd only as the first part");
+  }
 }
