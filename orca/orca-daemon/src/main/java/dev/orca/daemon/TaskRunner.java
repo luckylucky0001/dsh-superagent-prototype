@@ -146,7 +146,7 @@ final class TaskRunner implements Runnable {
     SessionSpec spec = new SessionSpec(dir, a == null ? null : a.model(), a == null ? null : a.effort(),
         a == null ? null : a.instructions(), permission, task.sessionRef(),
         task.mcp() == null ? null : absolute(task.mcp().url()), task.mcp() == null ? null : task.mcp().token(),
-        allowed, extra, a == null ? null : a.env());
+        allowed, extra, agentEnv(a));
     String prompt = task.prompt();
     try {
       session = provider.open(spec, handler);
@@ -173,7 +173,8 @@ final class TaskRunner implements Runnable {
     List<Path> images = download(dir);
     buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", task.prompt(),
         "images", images.isEmpty() ? null : images.stream().map(p -> p.getFileName().toString()).toList()));
-    TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout), buffer::add);
+    dev.orca.agent.core.AgentEventSink sink = e -> buffer.add(relativize(e, dir));
+    TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout), sink);
     Map<String, Object> usage = new LinkedHashMap<>(r.usage());
     while (r.ok() && !cancelRequested && !followUps.isEmpty()) {
       List<String> texts = new ArrayList<>();
@@ -183,7 +184,7 @@ final class TaskRunner implements Runnable {
       }
       String follow = String.join("\n\n", texts);
       buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", follow, "followUp", true));
-      r = session.runTurn(new TurnSpec(follow, List.of(), task.outputSchema(), timeout), buffer::add);
+      r = session.runTurn(new TurnSpec(follow, List.of(), task.outputSchema(), timeout), sink);
       usage.putAll(r.usage());
     }
     if (r.ok() && task.repo() != null) {
@@ -195,6 +196,50 @@ final class TaskRunner implements Runnable {
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";
     };
     return completed(status, r.finalText(), r.structured(), session.sessionRef(), r.errorCode(), r.error(), usage);
+  }
+
+  /**
+   * Commits made during the task carry the agent as author (the machine's git identity stays the
+   * committer), so history shows which teammate wrote what.
+   */
+  static Map<String, String> agentEnv(Wire.AgentSpec a) {
+    Map<String, String> env = new LinkedHashMap<>();
+    if (a != null && a.name() != null && !a.name().isBlank()) {
+      env.put("GIT_AUTHOR_NAME", a.name() + " (Orca agent)");
+      env.put("GIT_AUTHOR_EMAIL", a.name().toLowerCase(java.util.Locale.ROOT).replaceAll("[^a-z0-9._-]", "-")
+          + "@agents.orca.invalid");
+    }
+    if (a != null && a.env() != null) {
+      env.putAll(a.env());
+    }
+    return env;
+  }
+
+  /**
+   * File changes are reported relative to the workspace: easier to read, and the machine's directory
+   * layout stays on the machine.
+   */
+  static AgentEvent relativize(AgentEvent e, Path dir) {
+    if (!(e.data().get("changes") instanceof List<?> changes) || changes.isEmpty()) {
+      return e;
+    }
+    String prefix = dir.toAbsolutePath().normalize() + java.io.File.separator;
+    Map<String, Object> data = new LinkedHashMap<>(e.data());
+    List<Object> out = new ArrayList<>();
+    for (Object c : changes) {
+      if (c instanceof Map<?, ?> m && m.get("path") instanceof String path && path.startsWith(prefix)) {
+        Map<Object, Object> copy = new LinkedHashMap<>(m);
+        copy.put("path", path.substring(prefix.length()));
+        out.add(copy);
+      } else {
+        out.add(c);
+      }
+    }
+    data.put("changes", out);
+    if (data.get("title") instanceof String title) {
+      data.put("title", title.replace(prefix, ""));
+    }
+    return new AgentEvent(e.seq(), e.ts(), e.type(), data);
   }
 
   /** Server paths are relative so they work from wherever this daemon reaches the server. */
@@ -254,7 +299,7 @@ final class TaskRunner implements Runnable {
       commit.addAll(List.of("-c", "user.name=Orca Agent", "-c", "user.email=agent@orca.local"));
     }
     commit.addAll(List.of("commit", "-q", "-m", message));
-    Executables.Output c = Executables.run(commit, Map.of(), 60);
+    Executables.Output c = Executables.run(commit, agentEnv(task.agent()), 60);
     Executables.Output head = Executables.run(List.of("git", "-C", dir.toString(), "rev-parse", "--short", "HEAD"), Map.of(), 10);
     buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", c.exitCode() == 0 ? "info" : "warn",
         "message", c.exitCode() == 0 ? "committed the remaining changes as " + head.stdout().trim()

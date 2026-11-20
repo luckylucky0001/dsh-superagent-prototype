@@ -100,7 +100,7 @@ function SkillModal({ skill, onClose }: { skill: Skill | 'new' | null; onClose: 
   return (
     <Modal open={skill !== null} width={760} title={existing ? t('skills.edit') : t('skills.new')} onCancel={onClose}
       okText={t('common.save')} confirmLoading={save.isPending} onOk={() => form.submit()} destroyOnHidden>
-      <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
+      <Form name="skill" form={form} layout="vertical" onFinish={(v) => save.mutate(v)}>
         <Form.Item name="name" label={t('common.name')} rules={[{ required: true }]}>
           <Input placeholder="release-rules" maxLength={100} />
         </Form.Item>

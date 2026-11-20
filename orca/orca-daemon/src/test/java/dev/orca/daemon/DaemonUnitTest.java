@@ -125,4 +125,18 @@ class DaemonUnitTest {
     assertEquals(List.of(), ExtraArgs.filter(List.of("-c", "notify=[\"bash\",\"-c\",\"x\"]", "-c",
         "model_providers.x.base_url=\"https://e.vil\""), true), "only known-safe config keys pass");
   }
+
+  @org.junit.jupiter.api.Test
+  void fileChangesAreReportedRelativeToTheWorkspace() {
+    java.nio.file.Path dir = java.nio.file.Path.of("/work/issues/INV-1");
+    dev.orca.protocol.AgentEvent e = dev.orca.protocol.AgentEvent.of(dev.orca.protocol.AgentEvent.TOOL_COMPLETED,
+        "kind", "file_change", "title", "/work/issues/INV-1/invoice/totals.py",
+        "changes", java.util.List.of(java.util.Map.of("path", "/work/issues/INV-1/invoice/totals.py", "kind", "update"),
+            java.util.Map.of("path", "/etc/hosts", "kind", "update")));
+    dev.orca.protocol.AgentEvent r = TaskRunner.relativize(e, dir);
+    org.junit.jupiter.api.Assertions.assertEquals("invoice/totals.py", r.data().get("title"));
+    java.util.List<?> changes = (java.util.List<?>) r.data().get("changes");
+    org.junit.jupiter.api.Assertions.assertEquals("invoice/totals.py", ((java.util.Map<?, ?>) changes.get(0)).get("path"));
+    org.junit.jupiter.api.Assertions.assertEquals("/etc/hosts", ((java.util.Map<?, ?>) changes.get(1)).get("path"));
+  }
 }

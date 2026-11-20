@@ -16,6 +16,13 @@ export function TaskMeta({ task }: { task: Task }) {
   const agents = useAgentMap();
   const agent = agents.get(task.agentId);
   const tokens = taskTokensOf(task.usage);
+  const running = !!task.startedAt && !task.finishedAt;
+  const [, tick] = useState(0);
+  useEffect(() => {
+    if (!running) return undefined;
+    const id = window.setInterval(() => tick((n) => n + 1), 1000);
+    return () => window.clearInterval(id);
+  }, [running]);
   return (
     <Flex align="center" gap={10} wrap="wrap" style={{ minWidth: 0 }}>
       <Space size={6}>

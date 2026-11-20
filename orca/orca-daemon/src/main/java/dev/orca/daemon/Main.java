@@ -27,6 +27,10 @@ public final class Main {
       return;
     }
     String cmd = argv[0];
+    if (List.of(argv).contains("--help") || List.of(argv).contains("-h")) {
+      usage();
+      return;
+    }
     Map<String, String> flags = parse(Arrays.copyOfRange(argv, 1, argv.length));
     DaemonConfig cfg = DaemonConfig.load()
         .with(flags.get("server"), flags.get("token"), flags.get("name"),
@@ -59,6 +63,11 @@ public final class Main {
       case "start" -> {
         if (flags.containsKey("save")) {
           cfg.save();
+        }
+        if (cfg.server() == null || cfg.token() == null) {
+          System.err.println("not registered: run `orca-daemon register --server URL --code CODE` first"
+              + " (settings are read from " + DaemonConfig.file() + ")");
+          System.exit(2);
         }
         new Daemon(cfg, Daemon.defaultProviders(cfg, Providers::trae)).run();
       }

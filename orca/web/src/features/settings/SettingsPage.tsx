@@ -55,7 +55,7 @@ function MyAccount() {
             <div><Typography.Text type="secondary">{me.data.email}</Typography.Text> <RoleTag role={me.data.role} /></div>
           </div>
         </Space>
-        <Form form={nameForm} layout="vertical" initialValues={{ name: me.data.name }} onFinish={(v) => save.mutate({ name: v.name.trim() })}>
+        <Form name="profile" form={nameForm} layout="vertical" initialValues={{ name: me.data.name }} onFinish={(v) => save.mutate({ name: v.name.trim() })}>
           <Form.Item name="name" label={t('settings.name')} rules={[{ required: true, whitespace: true, message: t('form.required') }]}>
             <Input />
           </Form.Item>
@@ -63,7 +63,7 @@ function MyAccount() {
         </Form>
       </Card>
       <Card size="small" title={t('settings.changePassword')}>
-        <Form form={pwForm} layout="vertical" onFinish={(v) => save.mutate({ password: v.password })}>
+        <Form name="password" form={pwForm} layout="vertical" onFinish={(v) => save.mutate({ password: v.password })}>
           <Form.Item name="password" label={t('settings.newPassword')}
             rules={[{ required: true, message: t('form.required') }, { min: MIN_PASSWORD, message: t('settings.passwordMin', { n: MIN_PASSWORD }) }]}>
             <Input.Password autoComplete="new-password" />
@@ -105,7 +105,7 @@ function AddMemberModal({ open, onClose }: { open: boolean; onClose: () => void 
   return (
     <Modal open={open} onCancel={onClose} title={t('settings.addMember')} okText={t('common.create')}
       onOk={() => form.submit()} confirmLoading={create.isPending} destroyOnHidden>
-      <Form form={form} layout="vertical" preserve={false} initialValues={{ role: 'member' }} onFinish={(v) => create.mutate(v)}>
+      <Form name="member" form={form} layout="vertical" preserve={false} initialValues={{ role: 'member' }} onFinish={(v) => create.mutate(v)}>
         <Form.Item name="email" label={t('login.email')} rules={[{ required: true, type: 'email', message: t('settings.emailInvalid') }]}>
           <Input autoComplete="off" />
         </Form.Item>
@@ -139,7 +139,7 @@ function ResetPasswordModal({ member, onClose }: { member: Member | null; onClos
   return (
     <Modal open={!!member} onCancel={onClose} title={t('settings.resetPasswordFor', { name: member?.name ?? '' })}
       onOk={() => form.submit()} confirmLoading={reset.isPending} destroyOnHidden>
-      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => reset.mutate(v.password)}>
+      <Form name="resetPassword" form={form} layout="vertical" preserve={false} onFinish={(v) => reset.mutate(v.password)}>
         <Form.Item name="password" label={t('settings.newPassword')}
           rules={[{ required: true, message: t('form.required') }, { min: MIN_PASSWORD, message: t('settings.passwordMin', { n: MIN_PASSWORD }) }]}>
           <Input.Password autoComplete="new-password" />
@@ -264,7 +264,7 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
   return (
     <Modal open={open} onCancel={onClose} title={t('settings.newProject')} okText={t('common.create')}
       onOk={() => form.submit()} confirmLoading={create.isPending} destroyOnHidden width={600}>
-      <Form form={form} layout="vertical" preserve={false} onFinish={(v) => create.mutate(v)}>
+      <Form name="project" form={form} layout="vertical" preserve={false} onFinish={(v) => create.mutate(v)}>
         <Flex gap={12} align="start">
           <Form.Item name="key" label={t('settings.projectKey')} style={{ width: 150 }}
             normalize={(v: string) => v?.toUpperCase()}

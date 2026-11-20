@@ -46,7 +46,7 @@ export function RunWorkflowModal({ workflow, open, onClose }: { workflow: Workfl
     <Modal open={open} onCancel={onClose} title={t('wf.runTitle', { name: workflow?.name ?? '' })} okText={t('wf.run')}
       onOk={() => form.submit()} confirmLoading={run.isPending} destroyOnHidden>
       {!workflow?.enabled && <Alert type="info" showIcon message={t('wf.runDisabledNote')} style={{ marginBottom: 12 }} />}
-      <Form form={form} layout="vertical" onFinish={(v) => run.mutate(v)} preserve={false}>
+      <Form name="runWorkflow" form={form} layout="vertical" onFinish={(v) => run.mutate(v)} preserve={false}>
         {inputs.length === 0 && <Typography.Text type="secondary">{t('wf.noInputs')}</Typography.Text>}
         {inputs.map((name) => (
           <Form.Item key={name} name={name} label={<span className="orca-mono">{name}</span>}

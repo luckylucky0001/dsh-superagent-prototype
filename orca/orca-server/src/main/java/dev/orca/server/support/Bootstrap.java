@@ -115,14 +115,14 @@ public class Bootstrap implements ApplicationRunner {
     return Map.of(
         "nodes", List.of(
             node("start", "trigger.issue", "Assigned to an agent", Map.of("event", "assigned", "target", "agent"), 0, 0),
-            node("mark", "issue.update", "Mark in progress", Map.of("issue", "{{ trigger.issue.id }}", "status", "in_progress"), 0, 120),
+            node("mark", "issue.update", "Mark in progress", Map.of("issue", "{{ trigger.issue.id }}", "status", "in_progress"), 0, 170),
             node("work", "agent.run", "Agent works", Map.of("agent", "{{ trigger.agentId }}", "issue", "{{ trigger.issue.id }}",
-                "session", "continue", "prompt", WORK_PROMPT), 0, 240, 1, "CONTINUE"),
+                "session", "continue", "prompt", WORK_PROMPT), 0, 340, 1, "CONTINUE"),
             node("reply", "issue.comment", "Post the result", Map.of("issue", "{{ trigger.issue.id }}",
-                "body", "{{ nodes.work.output.text }}", "author", "{{ trigger.agentId }}", "taskId", "{{ nodes.work.output.taskId }}"), -160, 360),
-            node("review", "issue.update", "Move to review", Map.of("issue", "{{ trigger.issue.id }}", "status", "in_review"), -160, 480),
+                "body", "{{ nodes.work.output.text }}", "author", "{{ trigger.agentId }}", "taskId", "{{ nodes.work.output.taskId }}"), -130, 510),
+            node("review", "issue.update", "Move to review", Map.of("issue", "{{ trigger.issue.id }}", "status", "in_review"), -130, 680),
             node("failed", "issue.comment", "Report the failure", Map.of("issue", "{{ trigger.issue.id }}",
-                "body", "The agent run failed: {{ nodes.work.output.error }}", "taskId", "{{ nodes.work.output.taskId }}"), 160, 360)),
+                "body", "The agent run failed: {{ nodes.work.output.error }}", "taskId", "{{ nodes.work.output.taskId }}"), 150, 510)),
         "edges", List.of(edge("e1", "start", "out", "mark"), edge("e2", "mark", "out", "work"),
             edge("e3", "work", "out", "reply"), edge("e4", "reply", "out", "review"),
             edge("e5", "work", "error", "failed")));
@@ -134,11 +134,11 @@ public class Bootstrap implements ApplicationRunner {
             node("start", "trigger.issue", "Comment for an agent", Map.of("event", "commented", "target", "agent"), 0, 0),
             node("work", "agent.run", "Agent continues", Map.of("agent", "{{ trigger.agentId }}", "issue", "{{ trigger.issue.id }}",
                 "session", "continue", "prompt", "A teammate commented on {{ trigger.issue.key }}:\n\n{{ trigger.comment.body }}"),
-                0, 120, 1, "CONTINUE"),
+                0, 170, 1, "CONTINUE"),
             node("reply", "issue.comment", "Reply", Map.of("issue", "{{ trigger.issue.id }}", "body", "{{ nodes.work.output.text }}",
-                "author", "{{ trigger.agentId }}", "taskId", "{{ nodes.work.output.taskId }}"), -160, 240),
+                "author", "{{ trigger.agentId }}", "taskId", "{{ nodes.work.output.taskId }}"), -130, 340),
             node("failed", "issue.comment", "Report the failure", Map.of("issue", "{{ trigger.issue.id }}",
-                "body", "The agent run failed: {{ nodes.work.output.error }}", "taskId", "{{ nodes.work.output.taskId }}"), 160, 240)),
+                "body", "The agent run failed: {{ nodes.work.output.error }}", "taskId", "{{ nodes.work.output.taskId }}"), 150, 340)),
         "edges", List.of(edge("e1", "start", "out", "work"), edge("e2", "work", "out", "reply"),
             edge("e3", "work", "error", "failed")));
   }
@@ -150,14 +150,14 @@ public class Bootstrap implements ApplicationRunner {
             node("loop", "agent.review_loop", "Implement ⇄ review", Map.of("implementer", "{{ trigger.input.implementer }}",
                 "reviewer", "{{ trigger.input.reviewer }}", "issue", "{{ trigger.input.issueId }}", "maxRounds", 3,
                 "prompt", "Implement the issue in the current directory, run the tests, commit, and summarise the change."),
-                0, 120),
+                0, 170),
             node("approve", "human.approval", "Approve", Map.of("issue", "{{ trigger.input.issueId }}",
-                "title", "Approve {{ trigger.input.issueId }} (review passed in {{ nodes.loop.output.rounds }} round(s))",
-                "body", "{{ nodes.loop.output.summary }}"), -160, 240),
-            node("done", "issue.update", "Mark done", Map.of("issue", "{{ trigger.input.issueId }}", "status", "done"), -160, 360),
+                "title", "Approve the change (review passed in {{ nodes.loop.output.rounds }} round(s))",
+                "body", "{{ nodes.loop.output.summary }}"), -130, 340),
+            node("done", "issue.update", "Mark done", Map.of("issue", "{{ trigger.input.issueId }}", "status", "done"), -130, 510),
             node("report", "issue.comment", "Report open points", Map.of("issue", "{{ trigger.input.issueId }}",
                 "body", "The review did not pass after {{ nodes.loop.output.rounds }} rounds:\n\n- "
-                    + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 160, 240)),
+                    + "{{ join(nodes.loop.output.issues, '\n- ') }}"), 150, 340)),
         "edges", List.of(edge("e1", "start", "out", "loop"), edge("e2", "loop", "passed", "approve"),
             edge("e3", "approve", "approved", "done"), edge("e4", "loop", "failed", "report")));
   }
@@ -173,7 +173,7 @@ public class Bootstrap implements ApplicationRunner {
             node("start", "trigger.manual", "Run by hand", Map.of("inputs", "issueId, implementer, reviewer"), 0, 0),
             node("implement", "agent.run", "Implement", Map.of("agent", "{{ trigger.input.implementer }}",
                 "issue", "{{ trigger.input.issueId }}", "session", "continue",
-                "prompt", "Implement the issue in the current directory, run the tests, and summarise the change."), 0, 120),
+                "prompt", "Implement the issue in the current directory, run the tests, and summarise the change."), 0, 170),
             node("review", "agent.run", "Cross-review", Map.of("agent", "{{ trigger.input.reviewer }}",
                 "issue", "{{ trigger.input.issueId }}", "session", "new", "outputSchema", verdict,
                 "prompt", "You are reviewing a teammate's work in the current directory. Use shell commands to inspect it: "
@@ -181,14 +181,14 @@ public class Bootstrap implements ApplicationRunner {
                     + "tests if you can; if the sandbox prevents it, review the code by reading it. Verdict 'pass' only if the "
                     + "change does what the issue asks; if you cannot find the change, the verdict is 'changes_requested'."
                     + "\n\nThe author's summary:\n\n"
-                    + "{{ nodes.implement.output.text }}"), 0, 240),
-            node("check", "logic.condition", "Passed?", Map.of("when", "nodes.review.output.structured.verdict == 'pass'"), 0, 360),
+                    + "{{ nodes.implement.output.text }}"), 0, 340),
+            node("check", "logic.condition", "Passed?", Map.of("when", "nodes.review.output.structured.verdict == 'pass'"), 0, 510),
             node("approve", "human.approval", "Approve the change", Map.of("issue", "{{ trigger.input.issueId }}",
-                "title", "Approve the change for {{ trigger.input.issueId }}",
-                "body", "Review summary: {{ nodes.review.output.structured.summary }}"), -160, 480),
-            node("done", "issue.update", "Mark done", Map.of("issue", "{{ trigger.input.issueId }}", "status", "done"), -160, 600),
+                "title", "Approve the reviewed change",
+                "body", "Review summary: {{ nodes.review.output.structured.summary }}"), -130, 680),
+            node("done", "issue.update", "Mark done", Map.of("issue", "{{ trigger.input.issueId }}", "status", "done"), -130, 850),
             node("rework", "issue.comment", "Ask for changes", Map.of("issue", "{{ trigger.input.issueId }}",
-                "body", "Review requested changes:\n\n{{ join(nodes.review.output.structured.issues, '\\n- ') }}"), 160, 480)),
+                "body", "Review requested changes:\n\n{{ join(nodes.review.output.structured.issues, '\\n- ') }}"), 150, 680)),
         "edges", List.of(edge("e1", "start", "out", "implement"), edge("e2", "implement", "out", "review"),
             edge("e3", "review", "out", "check"), edge("e4", "check", "true", "approve"),
             edge("e5", "approve", "approved", "done"), edge("e6", "check", "false", "rework")));

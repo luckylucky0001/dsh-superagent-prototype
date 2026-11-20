@@ -81,7 +81,7 @@ function QuestionForm({ item }: { item: InboxItem }) {
     answer.mutate({ answers });
   };
   return (
-    <Form form={form} layout="vertical" onFinish={submit} requiredMark="optional" style={{ maxWidth: 640 }}>
+    <Form name="inboxInput" form={form} layout="vertical" onFinish={submit} requiredMark="optional" style={{ maxWidth: 640 }}>
       {questions.length > 0 && <QuestionFields questions={questions} />}
       {schema && <SchemaFields schema={schema} />}
       {questions.length === 0 && !schema && (

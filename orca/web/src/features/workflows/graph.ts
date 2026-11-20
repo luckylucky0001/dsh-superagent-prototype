@@ -48,7 +48,8 @@ export function portsOf(def: NodeDef, d: NodeDescriptor | undefined): string[] {
 export function edgeLabel(e: { sourcePort?: string | null; condition?: string | null }, multiPort: boolean): string | undefined {
   const port = e.sourcePort ?? DEFAULT_PORT;
   const parts: string[] = [];
-  if (multiPort || port === ERROR_PORT) parts.push(port);
+  // multi-port nodes already name their ports under the handles; repeat only the error port on the edge
+  if (port === ERROR_PORT && !multiPort) parts.push(port);
   if (e.condition) parts.push(e.condition.length > 32 ? `${e.condition.slice(0, 30)}…` : e.condition);
   return parts.length ? parts.join(' · ') : undefined;
 }

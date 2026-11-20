@@ -125,7 +125,7 @@ export function NewIssueModal({ open, onClose, defaultStatus, defaultProjectId }
       width={680}
       destroyOnHidden
     >
-      <Form form={form} layout="vertical" onFinish={(v) => create.mutate(v)} preserve={false}
+      <Form name="issue" form={form} layout="vertical" onFinish={(v) => create.mutate(v)} preserve={false}
         initialValues={{ priority: 'none', status: defaultStatus ?? 'todo', projectId: defaultProjectId ?? projects.data?.[0]?.id }}>
         <Form.Item name="projectId" label={t('issues.project')}>
           <Select loading={projects.isLoading}

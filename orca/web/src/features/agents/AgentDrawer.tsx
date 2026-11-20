@@ -10,8 +10,8 @@ import { StatusTag } from '@/components/StatusTag';
 import { useNotify } from '@/components/useNotify';
 
 /** Model picker filled from the runtime's model list; any other id can be typed in. */
-function ModelSelect({ value, onChange, models, placeholder, onPicked }: {
-  value?: string; onChange?: (v: string | undefined) => void; models: ModelInfo[]; placeholder: string; onPicked: () => void;
+function ModelSelect({ id, value, onChange, models, placeholder, onPicked }: {
+  id?: string; value?: string; onChange?: (v: string | undefined) => void; models: ModelInfo[]; placeholder: string; onPicked: () => void;
 }) {
   const t = useT();
   const [search, setSearch] = useState('');
@@ -33,6 +33,7 @@ function ModelSelect({ value, onChange, models, placeholder, onPicked }: {
   ];
   return (
     <Select
+      id={id}
       showSearch
       allowClear
       value={value}
@@ -155,7 +156,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         </Space>
       }
     >
-      <Form form={form} layout="vertical" onFinish={(v) => save.mutate(v)} requiredMark>
+      <Form name="agent" form={form} layout="vertical" onFinish={(v) => save.mutate(v)} requiredMark>
         <Form.Item name="name" label={t('agents.name')} extra={t('agents.nameHelp')}
           rules={[
             { required: true, message: t('form.required') },
