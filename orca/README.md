@@ -4,7 +4,7 @@
 
 **Ships with:** the server (web UI built in), the runtime daemon with a one-line installer and `orca-daemon doctor`, the `orca` command-line client with personal access tokens, nine built-in agent skills (engineering discipline, language conventions, warehouse and automotive-logistics rules), Docker Compose files and a release package.
 
-📘 **[Technical design & Codex walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and a live demo with real Codex runs on an automotive parts-warehouse (WMS) codebase: putaway, FIFO line-side picking with a three-round review loop, Codex's built-in reviewer and approval escalation.
+📘 **[Technical design & Codex / TRAE walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and a live demo with real Codex and TRAE CLI runs on an automotive parts-warehouse (WMS) codebase: putaway, FIFO line-side picking with a three-round review loop, Codex's built-in reviewer, approval escalation, and a cycle-count feature implemented by TRAE and reviewed by Codex until approved.
 
 ---
 
