@@ -37,6 +37,8 @@ import java.util.concurrent.atomic.AtomicInteger;
 /** One {@code traecli acp serve} process holding one ACP session. */
 final class TraeSession implements AgentSession {
 
+  /** Stops while the agent waits for a person, so that time does not count against the turn. */
+  private final dev.orca.agent.core.TurnClock clock = new dev.orca.agent.core.TurnClock();
   private final JsonRpcConnection conn;
   private final Interaction.Handler handler;
   private final SessionSpec spec;
@@ -225,12 +227,13 @@ final class TraeSession implements AgentSession {
     String turnId = "turn-" + segmentNo;
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", turnId));
     streaming = true;
+    clock.reset();
     CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
     TurnResult.Status status = TurnResult.Status.COMPLETED;
     String code = null;
     String error = null;
     try {
-      Object result = f.get(turn.timeout().toMillis(), TimeUnit.MILLISECONDS);
+      Object result = clock.await(f, turn.timeout());
       String stop = Json.str(result, "stopReason");
       if ("cancelled".equals(stop)) {
         status = TurnResult.Status.INTERRUPTED;
@@ -426,7 +429,7 @@ final class TraeSession implements AgentSession {
             ak.name().toLowerCase(), "title", title, "command", command));
         Decision d;
         try {
-          d = handler.approve(r);
+          d = clock.paused(() -> handler.approve(r));
         } catch (RuntimeException e) {
           d = Decision.DECLINE;
         }
@@ -441,7 +444,7 @@ final class TraeSession implements AgentSession {
             "schema", r.schema()));
         Interaction.InputReply reply;
         try {
-          reply = handler.input(r);
+          reply = clock.paused(() -> handler.input(r));
         } catch (RuntimeException e) {
           reply = Interaction.InputReply.decline();
         }

@@ -63,6 +63,8 @@ final class CodexSession implements AgentSession {
   private volatile CompletableFuture<Map<String, Object>> turnDone;
   private volatile String finalText;
   private volatile String lastFinalEmitted;
+  /** Stops while the agent waits for a person, so that time does not count against the turn. */
+  private final dev.orca.agent.core.TurnClock clock = new dev.orca.agent.core.TurnClock();
   private volatile String lastMessage;
   private volatile Map<String, Object> usage = Map.of();
   private long baseline = -1;
@@ -212,6 +214,7 @@ final class CodexSession implements AgentSession {
     this.finalText = null;
     this.lastMessage = null;
     this.lastFinalEmitted = null;
+    clock.reset();
     this.usage = Map.of();
     this.turnId = null;
     this.turnDone = new CompletableFuture<>();
@@ -253,9 +256,8 @@ final class CodexSession implements AgentSession {
 
     Map<String, Object> completed;
     try {
-      completed = CompletableFuture.anyOf(turnDone, conn.closedFuture())
-          .thenApply(x -> turnDone.getNow(null))
-          .get(turn.timeout().toMillis(), TimeUnit.MILLISECONDS);
+      completed = clock.await(CompletableFuture.anyOf(turnDone, conn.closedFuture())
+          .thenApply(x -> turnDone.getNow(null)), turn.timeout());
     } catch (TimeoutException e) {
       interrupt();
       awaitQuietly(turnDone, Duration.ofSeconds(15));
@@ -482,7 +484,7 @@ final class CodexSession implements AgentSession {
         "paths", r.paths().isEmpty() ? null : r.paths()));
     Decision d;
     try {
-      d = handler.approve(r);
+      d = clock.paused(() -> handler.approve(r));
     } catch (RuntimeException e) {
       log.warn("approval handler failed; declining", e);
       d = Decision.DECLINE;
@@ -497,7 +499,7 @@ final class CodexSession implements AgentSession {
         "questions", r.questions().isEmpty() ? null : r.questions(), "schema", r.schema()));
     Interaction.InputReply reply;
     try {
-      reply = handler.input(r);
+      reply = clock.paused(() -> handler.input(r));
     } catch (RuntimeException e) {
       log.warn("input handler failed; declining", e);
       reply = Interaction.InputReply.decline();
