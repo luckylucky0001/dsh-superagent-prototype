@@ -75,6 +75,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `ORCA_PUBLIC_URL` | `http://localhost:8080` | 用于生成 daemon 接入命令 |
 | `ORCA_TIMEZONE` | `Asia/Singapore` | 定时触发器默认时区 |
 | `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
+| `ORCA_NOTIFY_WEBHOOK_URL` / `ORCA_NOTIFY_FORMAT` | 空 / `slack` | 收件箱新事项推送到群（`feishu`、`dingtalk`、`wecom`、`slack`、`teams`） |
 | `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
 
 ## 功能一览

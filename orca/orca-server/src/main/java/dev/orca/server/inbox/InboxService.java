@@ -28,10 +28,12 @@ public class InboxService {
 
   private final InboxRepo items;
   private final Realtime realtime;
+  private final InboxNotifier notifier;
 
-  public InboxService(InboxRepo items, Realtime realtime) {
+  public InboxService(InboxRepo items, Realtime realtime, InboxNotifier notifier) {
     this.items = items;
     this.realtime = realtime;
+    this.notifier = notifier;
   }
 
   @Transactional
@@ -155,7 +157,11 @@ public class InboxService {
   }
 
   private InboxItem save(InboxItem i) {
+    boolean fresh = PENDING.equals(i.status) && !items.existsById(i.id);
     InboxItem saved = items.save(i);
+    if (fresh) {
+      notifier.created(saved);
+    }
     realtime.publish("inbox.updated", Realtime.ids("id", i.id, "status", i.status, "kind", i.kind));
     return saved;
   }

@@ -37,6 +37,29 @@ class EndToEndTest {
   @LocalServerPort
   int port;
 
+  static final java.util.List<String> NOTIFICATIONS = new java.util.concurrent.CopyOnWriteArrayList<>();
+  static final com.sun.net.httpserver.HttpServer CHAT;
+
+  static {
+    try {
+      CHAT = com.sun.net.httpserver.HttpServer.create(new java.net.InetSocketAddress("127.0.0.1", 0), 0);
+      CHAT.createContext("/hook", ex -> {
+        NOTIFICATIONS.add(new String(ex.getRequestBody().readAllBytes(), java.nio.charset.StandardCharsets.UTF_8));
+        ex.sendResponseHeaders(200, -1);
+        ex.close();
+      });
+      CHAT.start();
+    } catch (java.io.IOException e) {
+      throw new IllegalStateException(e);
+    }
+  }
+
+  @org.springframework.test.context.DynamicPropertySource
+  static void chatWebhook(org.springframework.test.context.DynamicPropertyRegistry r) {
+    r.add("orca.notify.webhook-url", () -> "http://127.0.0.1:" + CHAT.getAddress().getPort() + "/hook");
+    r.add("orca.notify.format", () -> "feishu");
+  }
+
   private final HttpClient http = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
   private String agentId;
 
@@ -136,6 +159,8 @@ class EndToEndTest {
     Object item = ((List<?>) call("GET", "/api/inbox?status=pending", null)).stream()
         .filter(i -> run.equals(Json.str(i, "runId"))).findFirst().orElseThrow();
     assertEquals("Ship v2?", Json.str(item, "title"));
+    await("chat notification", () -> NOTIFICATIONS.stream().anyMatch(n -> n.contains("Approval needed: Ship v2?")
+        && n.contains("\"msg_type\":\"text\"")));
     call("POST", "/api/inbox/" + Json.str(item, "id") + "/answer", Map.of("decision", "approved", "comment", "lgtm"));
 
     Object done = call("GET", "/api/runs/" + run, null);
