@@ -45,6 +45,7 @@
         <artifactId>spring-boot-maven-plugin</artifactId>
         <configuration>
           <mainClass>dev.orca.daemon.Main</mainClass>
+          <classifier>exec</classifier>
         </configuration>
         <executions>
           <execution>
