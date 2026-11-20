@@ -20,7 +20,7 @@ import {
 } from 'antd';
 import { EditOutlined, RobotOutlined, SendOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
-import { qk, useAgentMap, useAgents } from '@/api/queries';
+import { qk, useAgentMap, useAgents, useMemberMap, useProjectMap } from '@/api/queries';
 import { ISSUE_PRIORITIES, ISSUE_STATUSES, type Comment, type Issue, type IssuePatch, type Task } from '@/api/types';
 import { useMe } from '@/app/auth';
 import { useT } from '@/app/i18n';
@@ -31,12 +31,13 @@ import { PriorityIcon, StatusTag } from '@/components/StatusTag';
 import { fmtDateTime, fromNow } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
 import { TaskCard } from '@/features/tasks/TaskCard';
-import { useAgentOptions, useLabelOptions } from './NewIssueModal';
+import { assigneeValue, parseAssignee, useAssigneeOptions, useLabelOptions } from './NewIssueModal';
 
 function CommentItem({ comment }: { comment: Comment }) {
   const t = useT();
   const me = useMe();
   const agents = useAgentMap();
+  const members = useMemberMap();
   const agent = comment.authorType === 'agent' && comment.authorId ? agents.get(comment.authorId) : undefined;
   let name: string;
   let avatar: React.ReactNode;
@@ -47,7 +48,8 @@ function CommentItem({ comment }: { comment: Comment }) {
     name = 'Orca';
     avatar = <MemberAvatar size={32} name="Orca" />;
   } else {
-    name = comment.authorId && comment.authorId === me.data?.id ? me.data.name : t('common.member');
+    name = (comment.authorId && members.get(comment.authorId)?.name)
+      ?? (comment.authorId && comment.authorId === me.data?.id ? me.data.name : t('common.member'));
     avatar = <MemberAvatar size={32} name={name} />;
   }
   return (
@@ -153,7 +155,8 @@ function Description({ issue, onSave, saving }: { issue: Issue; onSave: (d: stri
 
 function Properties({ issue, update }: { issue: Issue; update: (p: IssuePatch) => void }) {
   const t = useT();
-  const agentOptions = useAgentOptions();
+  const assigneeOptions = useAssigneeOptions();
+  const project = useProjectMap().get(issue.projectId);
   const labelOptions = useLabelOptions();
   const runs = useQuery({ queryKey: qk.issueRuns(issue.id), queryFn: () => api.issueRuns(issue.id) });
   return (
@@ -172,14 +175,17 @@ function Properties({ issue, update }: { issue: Issue; update: (p: IssuePatch) =
         <div>
           <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('issues.assignee')}</Typography.Text>
           <Select
-            value={issue.assigneeType === 'agent' ? issue.assigneeId ?? undefined : undefined}
+            value={assigneeValue(issue.assigneeType, issue.assigneeId)}
             style={{ width: '100%' }}
             allowClear
             showSearch
             optionFilterProp="searchText"
             placeholder={t('issues.unassigned')}
-            options={agentOptions}
-            onChange={(v?: string) => (v ? update({ assigneeType: 'agent', assigneeId: v }) : update({ clearAssignee: true }))}
+            options={assigneeOptions}
+            onChange={(v?: string) => {
+              const a = parseAssignee(v);
+              update(a ?? { clearAssignee: true });
+            }}
           />
           <Typography.Text type="secondary" style={{ fontSize: 11 }}>{t('issues.assignHint')}</Typography.Text>
         </div>
@@ -191,6 +197,7 @@ function Properties({ issue, update }: { issue: Issue; update: (p: IssuePatch) =
         <Divider style={{ margin: '2px 0' }} />
         <Descriptions size="small" column={1} colon={false}
           items={[
+            { key: 'p', label: t('issues.project'), children: project ? `${project.key} · ${project.name}` : '—' },
             { key: 'c', label: t('common.created'), children: fmtDateTime(issue.createdAt) },
             { key: 'u', label: t('common.updated'), children: fromNow(issue.updatedAt) },
           ]} />
@@ -242,7 +249,7 @@ export function IssueDetail() {
           next.assigneeType = null;
         } else if (patch.assigneeId) {
           next.assigneeId = patch.assigneeId;
-          next.assigneeType = 'agent';
+          next.assigneeType = patch.assigneeType ?? 'agent';
         }
         qc.setQueryData(qk.issue(key), next);
       }
@@ -251,7 +258,7 @@ export function IssueDetail() {
     onSuccess: (updated, patch) => {
       qc.setQueryData(qk.issue(key), updated);
       void qc.invalidateQueries({ queryKey: qk.issues });
-      if (patch.assigneeId) notify.success(t('issues.assignedToast'));
+      if (patch.assigneeId && patch.assigneeType === 'agent') notify.success(t('issues.assignedToast'));
     },
     onError: (e, _p, ctx) => {
       if (ctx?.prev) qc.setQueryData(qk.issue(key), ctx.prev);

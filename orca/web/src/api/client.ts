@@ -9,6 +9,10 @@ import type {
   IssuePatch,
   LoginResponse,
   Member,
+  MemberInput,
+  ProjectInput,
+  Stats,
+  WorkflowVersionDetail,
   NodeDescriptor,
   Project,
   RegistrationCode,
@@ -104,8 +108,18 @@ export const api = {
   logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   me: () => request<Member>('GET', '/auth/me'),
 
+  // members
+  members: () => request<Member[]>('GET', '/members'),
+  createMember: (input: MemberInput) => request<Member>('POST', '/members', input),
+  updateMember: (id: string, input: MemberInput) => request<Member>('PATCH', `/members/${enc(id)}`, input),
+  deleteMember: (id: string) => request<unknown>('DELETE', `/members/${enc(id)}`),
+
+  // usage
+  stats: (days: number) => request<Stats>('GET', `/stats${q({ days })}`),
+
   // projects & issues
   projects: () => request<Project[]>('GET', '/projects'),
+  createProject: (input: ProjectInput) => request<Project>('POST', '/projects', input),
   issues: (projectId?: string) => request<Issue[]>('GET', `/issues${q({ projectId })}`),
   issue: (idOrKey: string) => request<Issue>('GET', `/issues/${enc(idOrKey)}`),
   createIssue: (input: IssueInput) => request<Issue>('POST', '/issues', input),
@@ -153,6 +167,8 @@ export const api = {
   validateWorkflow: (definition: WorkflowDefinition) =>
     request<ValidationIssue[]>('POST', '/workflows/validate', definition),
   workflowVersions: (id: string) => request<WorkflowVersion[]>('GET', `/workflows/${enc(id)}/versions`),
+  workflowVersion: (id: string, version: number) =>
+    request<WorkflowVersionDetail>('GET', `/workflows/${enc(id)}/versions/${version}`),
   runWorkflow: (id: string, input: Record<string, unknown>, nodeId?: string) =>
     request<Run>('POST', `/workflows/${enc(id)}/runs`, { input, nodeId }),
   cronPreview: (expr: string, timezone?: string) =>

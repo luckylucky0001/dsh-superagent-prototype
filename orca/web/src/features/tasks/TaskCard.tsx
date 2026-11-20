@@ -3,7 +3,7 @@ import { Link } from 'react-router-dom';
 import { Alert, Button, Card, Flex, Space, Tooltip, Typography } from 'antd';
 import { DownOutlined, ExportOutlined, RightOutlined } from '@ant-design/icons';
 import { useAgentMap } from '@/api/queries';
-import { ACTIVE_TASK_STATUSES, type Task } from '@/api/types';
+import { ACTIVE_TASK_STATUSES, taskTokensOf, type Task } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { StatusTag } from '@/components/StatusTag';
@@ -15,7 +15,7 @@ export function TaskMeta({ task }: { task: Task }) {
   const t = useT();
   const agents = useAgentMap();
   const agent = agents.get(task.agentId);
-  const tokens = task.usage?.totalTokens;
+  const tokens = taskTokensOf(task.usage);
   return (
     <Flex align="center" gap={10} wrap="wrap" style={{ minWidth: 0 }}>
       <Space size={6}>

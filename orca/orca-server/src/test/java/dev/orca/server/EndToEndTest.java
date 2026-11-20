@@ -192,4 +192,29 @@ class EndToEndTest {
       assertEquals("SUCCEEDED", Json.get(done, "state.nodes.both.status"));
     }
   }
+
+  @Test
+  void reviewLoopAlternatesImplementerAndReviewerUntilTheLimit() throws Exception {
+    Object issue = call("POST", "/api/issues", Map.of("title", "Loop me"));
+    String key = Json.str(issue, "key");
+    Map<String, Object> def = Map.of(
+        "nodes", List.of(
+            Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+            Map.of("id", "loop", "type", "agent.review_loop", "config", Map.of("implementer", "Builder", "reviewer", "Builder",
+                "prompt", "implement it", "issue", "{{ trigger.input.issueId }}", "maxRounds", 2)),
+            Map.of("id", "ok", "type", "logic.set", "config", Map.of("values", Map.of("r", "passed"))),
+            Map.of("id", "ko", "type", "logic.set", "config", Map.of("values", Map.of("r", "{{ nodes.loop.output.rounds }}")))),
+        "edges", List.of(Map.of("id", "e1", "source", "start", "target", "loop"),
+            Map.of("id", "e2", "source", "loop", "sourcePort", "passed", "target", "ok"),
+            Map.of("id", "e3", "source", "loop", "sourcePort", "failed", "target", "ko")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Loop", "definition", def)), "id");
+    String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of("input", Map.of("issueId", key))), "id");
+    await("loop finished", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
+    Object done = call("GET", "/api/runs/" + run, null);
+    assertEquals("SKIPPED", Json.get(done, "state.nodes.ok.status"));
+    assertEquals(2, ((Number) Json.get(done, "state.nodes.ko.output.r")).intValue());
+    List<?> tasks = (List<?>) call("GET", "/api/issues/" + key + "/tasks", null);
+    assertEquals(List.of("run", "structured", "run", "structured"), tasks.stream().map(t -> Json.str(t, "kind")).toList());
+    assertTrue(Json.str(tasks.get(2), "prompt").contains("The reviewer requested changes (round 1 of 2)"));
+  }
 }

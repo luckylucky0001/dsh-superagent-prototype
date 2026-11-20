@@ -18,7 +18,7 @@ import {
 } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useRuntimeMap, useTaskEvents } from '@/api/queries';
-import { ACTIVE_TASK_STATUSES, TERMINAL_TASK_STATUSES, type Task, type Usage } from '@/api/types';
+import { ACTIVE_TASK_STATUSES, taskTokensOf, TERMINAL_TASK_STATUSES, type Task, type Usage } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { Markdown } from '../Markdown';
 import { DiffView, JsonView } from '../CodeBlock';
@@ -102,7 +102,9 @@ function ItemView({ item, taskId }: { item: TranscriptItem; taskId: string }) {
       );
     }
     case 'approval': {
-      const approved = item.decision && /approv|accept|allow/i.test(item.decision);
+      const outcome = decisionOutcome(item.decision);
+      const approved = outcome === 'approved' || outcome === 'approvedSession';
+      const by = item.by === 'policy' || item.by === 'human' ? item.by : 'none';
       return (
         <Alert
           type={!item.decision ? 'warning' : approved ? 'success' : 'error'}
@@ -113,9 +115,11 @@ function ItemView({ item, taskId }: { item: TranscriptItem; taskId: string }) {
               <span>{item.title ?? t('transcript.approvalRequested')}</span>
               {item.approvalKind && <Tag bordered={false}>{item.approvalKind}</Tag>}
               {item.decision ? (
-                <Tag color={approved ? 'success' : 'error'} icon={approved ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
-                  {item.decision}{item.by ? ` · ${t.dyn(`transcript.by.${item.by}`, item.by)}` : ''}
-                </Tag>
+                <Tooltip title={item.decision}>
+                  <Tag color={approved ? 'success' : outcome === 'cancelled' ? 'default' : 'error'} icon={approved ? <CheckCircleOutlined /> : <CloseCircleOutlined />}>
+                    {outcome ? t.dyn(`transcript.decision.${outcome}.${by}`, item.decision ?? '') : item.decision}
+                  </Tag>
+                </Tooltip>
               ) : (
                 <Tag color="warning">{t('transcript.awaitingApproval')}</Tag>
               )}
@@ -175,6 +179,17 @@ function ItemView({ item, taskId }: { item: TranscriptItem; taskId: string }) {
   }
 }
 
+/** Maps provider decisions (accept, accept_for_session, decline, cancel, approved, rejected…) to an outcome. */
+function decisionOutcome(d: string | undefined): 'approved' | 'approvedSession' | 'declined' | 'cancelled' | null {
+  if (!d) return null;
+  const s = d.toLowerCase();
+  if (s.includes('session')) return 'approvedSession';
+  if (/^(accept|approve|approved|allow|yes)/.test(s)) return 'approved';
+  if (/cancel|abort/.test(s)) return 'cancelled';
+  if (/decline|deny|denied|reject|no/.test(s)) return 'declined';
+  return null;
+}
+
 function UsageFooter({ usage }: { usage: Usage }) {
   const t = useT();
   const window = usage.contextWindow ?? 0;
@@ -182,12 +197,20 @@ function UsageFooter({ usage }: { usage: Usage }) {
   const pct = window > 0 ? Math.min(100, Math.round((used / window) * 100)) : null;
   return (
     <Flex className="orca-tx-usage" gap={16} wrap="wrap" align="center">
-      <Tooltip title={t('transcript.usageTooltip')}>
-        <span>{t('transcript.tokens')}: {fmtTokens(usage.totalTokens)}</span>
+      <Tooltip title={usage.taskTokens !== undefined ? t('transcript.taskTokensTooltip') : t('transcript.usageTooltip')}>
+        <span>{t('transcript.tokens')}: {fmtTokens(taskTokensOf(usage))}</span>
       </Tooltip>
-      <span>{t('transcript.input')}: {fmtTokens(usage.inputTokens)}{usage.cachedInputTokens ? ` (${t('transcript.cached')} ${fmtTokens(usage.cachedInputTokens)})` : ''}</span>
-      <span>{t('transcript.output')}: {fmtTokens(usage.outputTokens)}</span>
-      {!!usage.reasoningTokens && <span>{t('transcript.reasoningTokens')}: {fmtTokens(usage.reasoningTokens)}</span>}
+      <Tooltip
+        title={
+          <>
+            <div>{t('transcript.input')}: {fmtTokens(usage.inputTokens)}{usage.cachedInputTokens ? ` (${t('transcript.cached')} ${fmtTokens(usage.cachedInputTokens)})` : ''}</div>
+            <div>{t('transcript.output')}: {fmtTokens(usage.outputTokens)}</div>
+            {!!usage.reasoningTokens && <div>{t('transcript.reasoningTokens')}: {fmtTokens(usage.reasoningTokens)}</div>}
+          </>
+        }
+      >
+        <span>{t('transcript.session')}: {fmtTokens(usage.totalTokens)}</span>
+      </Tooltip>
       {pct !== null && (
         <Tooltip title={`${fmtTokens(used)} / ${fmtTokens(window)}`}>
           <Flex align="center" gap={6}>

@@ -4,6 +4,8 @@ import { useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Dropdown, Flex, Layout, Menu, Segmented, Space, Tooltip, Typography } from 'antd';
 import {
   ApartmentOutlined,
+  BarChartOutlined,
+  SettingOutlined,
   CloudServerOutlined,
   InboxOutlined,
   LogoutOutlined,
@@ -20,7 +22,7 @@ import { useI18n } from './i18n';
 import { OrcaLogo } from './OrcaLogo';
 import { RealtimeProvider, useRealtimeStatus } from './realtime';
 
-const SECTIONS = ['issues', 'inbox', 'agents', 'runtimes', 'workflows', 'runs'] as const;
+const SECTIONS = ['issues', 'inbox', 'agents', 'runtimes', 'workflows', 'runs', 'usage', 'settings'] as const;
 
 function ConnectionDot() {
   const { t } = useI18n();
@@ -62,7 +64,9 @@ function Shell() {
     { key: 'runtimes', icon: <CloudServerOutlined />, label: <Link to="/runtimes">{t('nav.runtimes')}</Link> },
     { key: 'workflows', icon: <ApartmentOutlined />, label: <Link to="/workflows">{t('nav.workflows')}</Link> },
     { key: 'runs', icon: <NodeIndexOutlined />, label: <Link to="/runs">{t('nav.runs')}</Link> },
+    { key: 'usage', icon: <BarChartOutlined />, label: <Link to="/usage">{t('nav.usage')}</Link> },
   ];
+  const bottomItems = [{ key: 'settings', icon: <SettingOutlined />, label: <Link to="/settings">{t('nav.settings')}</Link> }];
 
   const logout = async () => {
     try {
@@ -80,7 +84,8 @@ function Shell() {
           <OrcaLogo size={28} />
           {!collapsed && <span>Orca</span>}
         </Link>
-        <Menu mode="inline" selectedKeys={[section]} items={items} style={{ borderInlineEnd: 0 }} />
+        <Menu mode="inline" selectedKeys={[section]} items={items} style={{ borderInlineEnd: 0, flex: 1 }} />
+        <Menu mode="inline" selectedKeys={[section]} items={bottomItems} style={{ borderInlineEnd: 0, paddingBottom: 8 }} />
       </Layout.Sider>
       <Layout>
         <Layout.Header className="orca-header">

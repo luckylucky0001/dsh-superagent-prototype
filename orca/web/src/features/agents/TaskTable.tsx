@@ -1,7 +1,7 @@
 import { Link } from 'react-router-dom';
 import { Table, Typography } from 'antd';
 import { useAgentMap, useIssueMap } from '@/api/queries';
-import type { Task } from '@/api/types';
+import { taskTokensOf, type Task } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { ProviderTag } from '@/components/AgentAvatar';
 import { StatusTag } from '@/components/StatusTag';
@@ -35,7 +35,7 @@ export function TaskTable({ tasks, loading, showAgent }: { tasks: Task[]; loadin
         { title: t('agents.model'), key: 'model', render: (_: unknown, r) => <><ProviderTag provider={r.provider} small /> <span className="orca-mono" style={{ fontSize: 12 }}>{r.model ?? '—'}</span></> },
         { title: t('tasks.queuedAt'), dataIndex: 'queuedAt', render: (v: number) => fmtTime(v) },
         { title: t('common.duration'), key: 'dur', render: (_: unknown, r) => fmtDuration(durationBetween(r.startedAt, r.finishedAt)) },
-        { title: t('transcript.tokens'), key: 'tok', render: (_: unknown, r) => fmtTokens(r.usage?.totalTokens) },
+        { title: t('transcript.tokens'), key: 'tok', render: (_: unknown, r) => fmtTokens(taskTokensOf(r.usage)) },
       ]}
     />
   );

@@ -1,13 +1,13 @@
-import { useMemo, useState, type DragEvent } from 'react';
+import { useEffect, useMemo, useState, type DragEvent } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Badge, Button, Flex, Input, Select, Space, Switch, Tag, Tooltip, Typography } from 'antd';
 import { PlusOutlined, SearchOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
-import { qk, useAgentMap, useIssues } from '@/api/queries';
-import type { Agent, Issue, IssueStatus } from '@/api/types';
+import { qk, useAgentMap, useMemberMap, useProjects } from '@/api/queries';
+import type { Agent, Issue, IssueStatus, Member } from '@/api/types';
 import { useT } from '@/app/i18n';
-import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
+import { AgentAvatar, MemberAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { PageHeader } from '@/components/PageHeader';
 import { QueryState } from '@/components/QueryState';
 import { PriorityIcon } from '@/components/StatusTag';
@@ -26,8 +26,31 @@ const DOT: Record<string, string> = {
   cancelled: '#8c8c8c',
 };
 
-function IssueCard({ issue, agent, onDragStart, onDragEnd, dragging }: {
-  issue: Issue; agent?: Agent; dragging: boolean;
+const PROJECT_KEY = 'orca.project';
+const ALL = '__all';
+
+/** The board's project filter, remembered in localStorage ('__all' = every project). */
+export function useSelectedProject(): [string, (id: string) => void] {
+  const [value, setValue] = useState<string>(() => {
+    try {
+      return localStorage.getItem(PROJECT_KEY) ?? ALL;
+    } catch {
+      return ALL;
+    }
+  });
+  const set = (id: string) => {
+    setValue(id);
+    try {
+      localStorage.setItem(PROJECT_KEY, id);
+    } catch {
+      /* ignore */
+    }
+  };
+  return [value, set];
+}
+
+function IssueCard({ issue, agent, member, onDragStart, onDragEnd, dragging }: {
+  issue: Issue; agent?: Agent; member?: Member; dragging: boolean;
   onDragStart: (e: DragEvent) => void; onDragEnd: () => void;
 }) {
   const t = useT();
@@ -53,13 +76,18 @@ function IssueCard({ issue, agent, onDragStart, onDragEnd, dragging }: {
         <Typography.Text type="secondary" style={{ fontSize: 11 }}>{fromNow(issue.updatedAt)}</Typography.Text>
       </Flex>
       <Typography.Paragraph style={{ margin: 0, fontWeight: 500 }} ellipsis={{ rows: 3 }}>{issue.title}</Typography.Paragraph>
-      {(issue.labels.length > 0 || agent) && (
+      {(issue.labels.length > 0 || agent || member) && (
         <Flex justify="space-between" align="center" style={{ marginTop: 8 }} gap={6}>
           <Flex gap={4} wrap="wrap" style={{ minWidth: 0 }}>
             {issue.labels.map((l) => (
               <Tag key={l} bordered={false} style={{ marginInlineEnd: 0, fontSize: 11 }}>{l}</Tag>
             ))}
           </Flex>
+          {member && (
+            <Tooltip title={member.name}>
+              <span style={{ flex: 'none' }}><MemberAvatar name={member.name} size={22} /></span>
+            </Tooltip>
+          )}
           {agent && (
             <Tooltip title={`${agent.name} · ${agent.model ?? agent.provider}`}>
               <Space size={4} style={{ flex: 'none' }}>
@@ -78,8 +106,16 @@ export function IssuesBoard() {
   const t = useT();
   const notify = useNotify();
   const qc = useQueryClient();
-  const issues = useIssues();
+  const [project, setProject] = useSelectedProject();
+  const projects = useProjects();
+  const projectId = project === ALL ? undefined : project;
+  const issues = useQuery({ queryKey: qk.projectIssues(projectId), queryFn: () => api.issues(projectId) });
   const agents = useAgentMap();
+  const members = useMemberMap();
+  // a remembered project that no longer exists falls back to all projects
+  useEffect(() => {
+    if (projectId && projects.data && !projects.data.some((p) => p.id === projectId)) setProject(ALL);
+  }, [projectId, projects.data]); // eslint-disable-line react-hooks/exhaustive-deps
   const [showCancelled, setShowCancelled] = useState(false);
   const [creating, setCreating] = useState<IssueStatus | null>(null);
   const [search, setSearch] = useState('');
@@ -90,13 +126,14 @@ export function IssuesBoard() {
   const move = useMutation({
     mutationFn: ({ id, status }: { id: string; status: IssueStatus }) => api.updateIssue(id, { status }),
     onMutate: async ({ id, status }) => {
-      await qc.cancelQueries({ queryKey: qk.issues });
-      const prev = qc.getQueryData<Issue[]>(qk.issues);
-      qc.setQueryData<Issue[]>(qk.issues, (list) => list?.map((i) => (i.id === id ? { ...i, status, updatedAt: Date.now() } : i)));
+      const key = qk.projectIssues(projectId);
+      await qc.cancelQueries({ queryKey: key });
+      const prev = qc.getQueryData<Issue[]>(key);
+      qc.setQueryData<Issue[]>(key, (list) => list?.map((i) => (i.id === id ? { ...i, status, updatedAt: Date.now() } : i)));
       return { prev };
     },
     onError: (e, _v, ctx) => {
-      if (ctx?.prev) qc.setQueryData(qk.issues, ctx.prev);
+      if (ctx?.prev) qc.setQueryData(qk.projectIssues(projectId), ctx.prev);
       notify.error(e);
     },
     onSettled: () => void qc.invalidateQueries({ queryKey: qk.issues }),
@@ -109,7 +146,7 @@ export function IssuesBoard() {
     const q = search.trim().toLowerCase();
     for (const i of issues.data ?? []) {
       if (q && !`${i.key} ${i.title} ${i.labels.join(' ')}`.toLowerCase().includes(q)) continue;
-      if (assignee === '__none' ? !!i.assigneeId : assignee && i.assigneeId !== assignee) continue;
+      if (assignee === '__none' ? !!i.assigneeId : assignee && `${i.assigneeType}:${i.assigneeId}` !== assignee) continue;
       m.get(i.status)?.push(i);
     }
     for (const list of m.values()) {
@@ -133,10 +170,16 @@ export function IssuesBoard() {
         title={t('nav.issues')}
         extra={
           <>
+            <Select value={project} onChange={setProject} style={{ width: 200 }} loading={projects.isLoading}
+              options={[{ value: ALL, label: t('issues.allProjects') }, ...(projects.data ?? []).map((p) => ({ value: p.id, label: `${p.key} · ${p.name}` }))]} />
             <Input allowClear prefix={<SearchOutlined />} placeholder={t('issues.search')} value={search}
               onChange={(e) => setSearch(e.target.value)} style={{ width: 220 }} />
             <Select allowClear placeholder={t('issues.assignee')} value={assignee} onChange={setAssignee} style={{ width: 170 }}
-              options={[{ value: '__none', label: t('issues.unassigned') }, ...[...agents.values()].map((a) => ({ value: a.id, label: a.name }))]} />
+              options={[
+                { value: '__none', label: t('issues.unassigned') },
+                ...[...agents.values()].map((a) => ({ value: `agent:${a.id}`, label: `${a.name} · ${a.provider}` })),
+                ...[...members.values()].map((m) => ({ value: `member:${m.id}`, label: m.name })),
+              ]} />
             <Space size={6}>
               <Switch size="small" checked={showCancelled} onChange={setShowCancelled} />
               <Typography.Text type="secondary">{t('issues.showCancelled')}</Typography.Text>
@@ -178,6 +221,7 @@ export function IssuesBoard() {
                     key={i.id}
                     issue={i}
                     agent={i.assigneeType === 'agent' && i.assigneeId ? agents.get(i.assigneeId) : undefined}
+                    member={i.assigneeType === 'member' && i.assigneeId ? members.get(i.assigneeId) : undefined}
                     dragging={dragId === i.id}
                     onDragStart={(e) => {
                       e.dataTransfer.setData('text/orca-issue', i.id);
@@ -200,7 +244,8 @@ export function IssuesBoard() {
           })}
         </div>
       </QueryState>
-      <NewIssueModal open={creating !== null} defaultStatus={creating ?? undefined} onClose={() => setCreating(null)} />
+      <NewIssueModal open={creating !== null} defaultStatus={creating ?? undefined} defaultProjectId={projectId}
+        onClose={() => setCreating(null)} />
     </>
   );
 }

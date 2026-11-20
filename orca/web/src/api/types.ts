@@ -8,6 +8,48 @@ export interface Member {
   role: string;
 }
 
+export type MemberRole = 'owner' | 'admin' | 'member';
+
+export interface MemberInput {
+  email?: string;
+  name?: string;
+  password?: string;
+  role?: MemberRole;
+}
+
+export interface ProjectInput {
+  key: string;
+  name: string;
+  description?: string;
+  repoUrl?: string;
+  defaultBranch?: string;
+}
+
+export interface DayStats {
+  day: string;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  tokens: number;
+}
+
+export interface AgentStats {
+  agentId: string;
+  name: string;
+  provider: Provider;
+  runs: number;
+  succeeded: number;
+  failed: number;
+  tokens: number;
+  busyMs: number;
+}
+
+export interface Stats {
+  timezone: string;
+  days: DayStats[];
+  agents: AgentStats[];
+}
+
 export interface LoginResponse {
   member: Member;
   token: string;
@@ -167,6 +209,14 @@ export interface Usage {
   totalTokens?: number;
   contextWindow?: number;
   lastTotalTokens?: number;
+  /** Tokens of this task only; totalTokens covers the whole provider session. */
+  taskTokens?: number;
+}
+
+/** Tokens spent by one task: taskTokens when the server reports it, else the session total. */
+export function taskTokensOf(u: Usage | null | undefined): number | undefined {
+  if (!u) return undefined;
+  return u.taskTokens ?? u.totalTokens;
 }
 
 export interface Task {
@@ -293,7 +343,13 @@ export interface WorkflowInput {
 export interface WorkflowVersion {
   version: number;
   createdAt: number;
-  createdBy: string;
+  createdBy: string | null;
+}
+
+export interface WorkflowVersionDetail {
+  version: number;
+  createdAt?: number;
+  definition: WorkflowDefinition;
 }
 
 export interface ValidationIssue {

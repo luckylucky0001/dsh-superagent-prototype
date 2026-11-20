@@ -25,6 +25,11 @@ body {
   overflow: auto;
 }
 
+.orca-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+}
+
 .orca-sider .ant-layout-sider-trigger {
   border-inline-end: 1px solid #eef0f3;
   border-top: 1px solid #eef0f3;

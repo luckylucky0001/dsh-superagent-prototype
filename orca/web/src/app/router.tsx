@@ -13,6 +13,8 @@ import { WorkflowEditor } from '@/features/workflows/WorkflowEditor';
 import { RunsPage } from '@/features/runs/RunsPage';
 import { RunDetail } from '@/features/runs/RunDetail';
 import { TaskPage } from '@/features/tasks/TaskPage';
+import { SettingsPage } from '@/features/settings/SettingsPage';
+import { UsagePage } from '@/features/usage/UsagePage';
 import { NotFound } from './NotFound';
 
 export const router = createBrowserRouter([
@@ -38,6 +40,8 @@ export const router = createBrowserRouter([
       { path: 'runs', element: <RunsPage /> },
       { path: 'runs/:id', element: <RunDetail /> },
       { path: 'tasks/:id', element: <TaskPage /> },
+      { path: 'usage', element: <UsagePage /> },
+      { path: 'settings', element: <SettingsPage /> },
       { path: '*', element: <NotFound /> },
     ],
   },

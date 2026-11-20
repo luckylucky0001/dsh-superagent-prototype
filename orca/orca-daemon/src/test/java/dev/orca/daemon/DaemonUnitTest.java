@@ -86,6 +86,10 @@ class DaemonUnitTest {
     assertEquals("orca/app-1", dev.orca.agent.core.Executables.run(
         List.of("git", "-C", p.toString(), "branch", "--show-current"), Map.of(), 10).stdout().trim());
     assertTrue(Files.exists(p.resolve("a.txt")));
+    Files.createDirectories(p.resolve("__pycache__"));
+    Files.writeString(p.resolve("__pycache__/x.pyc"), "x");
+    assertEquals("", dev.orca.agent.core.Executables.run(List.of("git", "-C", p.toString(), "status", "--porcelain"),
+        Map.of(), 10).stdout().trim(), "caches are excluded locally");
     assertEquals(p, ws.prepare("issues/APP-1", new dev.orca.protocol.Wire.RepoSpec(src.toUri().toString(), "orca/app-1", "main")),
         "a second task reuses the clone");
   }

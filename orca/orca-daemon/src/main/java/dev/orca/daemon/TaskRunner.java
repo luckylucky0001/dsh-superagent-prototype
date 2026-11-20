@@ -3,6 +3,7 @@ package dev.orca.daemon;
 import dev.orca.agent.core.AgentException;
 import dev.orca.agent.core.AgentProvider;
 import dev.orca.agent.core.AgentSession;
+import dev.orca.agent.core.Executables;
 import dev.orca.agent.core.Interaction;
 import dev.orca.agent.core.Permission;
 import dev.orca.agent.core.SessionSpec;
@@ -156,12 +157,45 @@ final class TaskRunner implements Runnable {
       r = session.runTurn(new TurnSpec(follow, List.of(), task.outputSchema(), timeout), buffer::add);
       usage.putAll(r.usage());
     }
+    if (r.ok() && task.repo() != null) {
+      autoCommit(dir, r.finalText());
+    }
     String status = switch (r.status()) {
       case COMPLETED -> "succeeded";
       case INTERRUPTED -> cancelRequested ? "cancelled" : "failed";
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";
     };
     return completed(status, r.finalText(), r.structured(), session.sessionRef(), r.errorCode(), r.error(), usage);
+  }
+
+  /**
+   * Captures the agent's work on the issue branch when it left changes uncommitted (Codex keeps .git
+   * read-only in its sandbox, and smaller models often do not ask to escalate).
+   */
+  private void autoCommit(Path dir, String finalText) {
+    Executables.Output st = Executables.run(List.of("git", "-C", dir.toString(), "status", "--porcelain"), Map.of(), 30);
+    if (st.exitCode() != 0 || st.stdout().isBlank()) {
+      return;
+    }
+    String summary = finalText == null ? "" : finalText.strip().lines().findFirst().orElse("").replaceAll("[`*#>]", "");
+    if (summary.length() > 72) {
+      summary = summary.substring(0, 69) + "...";
+    }
+    String key = task.workspaceKey().contains("/") ? task.workspaceKey().substring(task.workspaceKey().lastIndexOf('/') + 1)
+        : task.workspaceKey();
+    String message = key + ": " + (summary.isBlank() ? "changes by " + (task.agent() == null ? "agent" : task.agent().name())
+        : summary) + "\n\nCommitted by Orca for task " + task.taskId();
+    Executables.run(List.of("git", "-C", dir.toString(), "add", "-A"), Map.of(), 60);
+    List<String> commit = new ArrayList<>(List.of("git", "-C", dir.toString()));
+    if (Executables.run(List.of("git", "-C", dir.toString(), "config", "user.email"), Map.of(), 10).stdout().isBlank()) {
+      commit.addAll(List.of("-c", "user.name=Orca Agent", "-c", "user.email=agent@orca.local"));
+    }
+    commit.addAll(List.of("commit", "-q", "-m", message));
+    Executables.Output c = Executables.run(commit, Map.of(), 60);
+    Executables.Output head = Executables.run(List.of("git", "-C", dir.toString(), "rev-parse", "--short", "HEAD"), Map.of(), 10);
+    buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", c.exitCode() == 0 ? "info" : "warn",
+        "message", c.exitCode() == 0 ? "committed the remaining changes as " + head.stdout().trim()
+            : "could not commit the remaining changes: " + Executables.plain(c.stderr())));
   }
 
   private Wire.TaskCompleted completed(String status, String text, Object structured, String ref, String code,

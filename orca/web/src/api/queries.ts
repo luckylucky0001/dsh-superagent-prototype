@@ -1,13 +1,16 @@
 import { useMemo } from 'react';
 import { useQuery, type QueryClient } from '@tanstack/react-query';
 import { api } from './client';
-import type { Agent, Issue, Runtime, TaskEvent } from './types';
+import type { Agent, Issue, Member, Project, Runtime, TaskEvent } from './types';
 
 /** Query keys; realtime events invalidate by these prefixes. */
 export const qk = {
   me: ['me'] as const,
   projects: ['projects'] as const,
+  members: ['members'] as const,
+  stats: (days: number) => ['stats', days] as const,
   issues: ['issues'] as const,
+  projectIssues: (projectId?: string) => ['issues', 'project', projectId ?? 'all'] as const,
   issue: (idOrKey: string) => ['issue', idOrKey] as const,
   comments: (issueId: string) => ['comments', issueId] as const,
   issueTasks: (issueId: string) => ['tasks', 'issue', issueId] as const,
@@ -53,6 +56,24 @@ export function useIssues() {
 export function useIssueMap(): Map<string, Issue> {
   const { data } = useIssues();
   return useMemo(() => new Map((data ?? []).map((i) => [i.id, i])), [data]);
+}
+
+export function useMembers() {
+  return useQuery({ queryKey: qk.members, queryFn: api.members, staleTime: 60_000 });
+}
+
+export function useMemberMap(): Map<string, Member> {
+  const { data } = useMembers();
+  return useMemo(() => new Map((data ?? []).map((m) => [m.id, m])), [data]);
+}
+
+export function useProjects() {
+  return useQuery({ queryKey: qk.projects, queryFn: api.projects, staleTime: 60_000 });
+}
+
+export function useProjectMap(): Map<string, Project> {
+  const { data } = useProjects();
+  return useMemo(() => new Map((data ?? []).map((p) => [p.id, p])), [data]);
 }
 
 export function useComponents() {

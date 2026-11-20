@@ -25,7 +25,7 @@ import {
   SafetyCertificateOutlined,
 } from '@ant-design/icons';
 import { api, ApiError } from '@/api/client';
-import { qk, useComponents } from '@/api/queries';
+import { qk, useComponents, useMemberMap } from '@/api/queries';
 import type { NodeDef, NodeDescriptor, ValidationIssue, Workflow, WorkflowDefinition } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { QueryState } from '@/components/QueryState';
@@ -48,29 +48,33 @@ import {
 import { EdgeInspector, NodeInspector } from './Inspector';
 import { DND_TYPE, Palette } from './Palette';
 import { manualTrigger, RunWorkflowModal } from './RunWorkflowModal';
+import { VersionPreview } from './VersionPreview';
 
 type Selection = { kind: 'node' | 'edge'; id: string } | null;
 
 const EMPTY: WorkflowDefinition = { nodes: [], edges: [] };
 
-function Versions({ workflowId }: { workflowId: string }) {
+function Versions({ workflowId, current, onView }: { workflowId: string; current: number; onView: (v: number) => void }) {
   const t = useT();
+  const members = useMemberMap();
   const versions = useQuery({ queryKey: qk.workflowVersions(workflowId), queryFn: () => api.workflowVersions(workflowId) });
   return (
-    <div style={{ width: 280, maxHeight: 320, overflow: 'auto' }}>
+    <div style={{ width: 340, maxHeight: 360, overflow: 'auto' }}>
       <List
         size="small"
         loading={versions.isLoading}
         dataSource={[...(versions.data ?? [])].sort((a, b) => b.version - a.version)}
         renderItem={(v) => (
-          <List.Item>
-            <Space>
-              <Tag bordered={false}>v{v.version}</Tag>
-              <Typography.Text style={{ fontSize: 12 }}>{fmtDateTime(v.createdAt)}</Typography.Text>
+          <List.Item actions={[<Button key="view" size="small" type="link" onClick={() => onView(v.version)}>{t('wf.view')}</Button>]}>
+            <Space direction="vertical" size={0}>
+              <Space size={6}>
+                <Tag bordered={false} color={v.version === current ? 'blue' : undefined}>v{v.version}</Tag>
+                <Typography.Text style={{ fontSize: 12 }}>{fmtDateTime(v.createdAt)}</Typography.Text>
+              </Space>
+              <Typography.Text type="secondary" style={{ fontSize: 12 }}>
+                {v.createdBy ? members.get(v.createdBy)?.name ?? v.createdBy : t('wf.system')}
+              </Typography.Text>
             </Space>
-            <Typography.Text type="secondary" style={{ fontSize: 12 }}>
-              {v.createdBy && v.createdBy !== 'null' ? v.createdBy : t('wf.system')}
-            </Typography.Text>
           </List.Item>
         )}
       />
@@ -98,6 +102,8 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
   const [newIds, setNewIds] = useState<Set<string>>(() => new Set());
   const [jsonInvalid, setJsonInvalid] = useState<Set<string>>(() => new Set());
   const [running, setRunning] = useState(false);
+  const [viewing, setViewing] = useState<number | null>(null);
+  const [versionsOpen, setVersionsOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
   const skipBlock = useRef(false);
 
@@ -371,6 +377,28 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
     return () => window.removeEventListener('keydown', h);
   }, []);
 
+  /** Loads an old version into the editor; saving it creates a new version. */
+  const restore = async (version: number) => {
+    try {
+      const detail = await qc.fetchQuery({
+        queryKey: ['workflow', workflow!.id, 'version', version],
+        queryFn: () => api.workflowVersion(workflow!.id, version),
+        staleTime: Infinity,
+      });
+      const f = defToFlow(detail.definition, descriptors);
+      setNodes(f.nodes);
+      setEdges(f.edges);
+      setSelection(null);
+      setProblems(null);
+      setJsonInvalid(new Set());
+      setViewing(null);
+      notify.message.info(t('wf.restored', { v: version }));
+      window.requestAnimationFrame(() => void flow.fitView({ padding: 0.25, maxZoom: 1.1, duration: 250 }));
+    } catch (e) {
+      notify.error(e);
+    }
+  };
+
   const focusProblem = (p: ValidationIssue) => {
     if (p.nodeId) {
       const n = nodes.find((x) => x.id === p.nodeId);
@@ -425,7 +453,8 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
           </Tooltip>
           <Button icon={<SafetyCertificateOutlined />} loading={validate.isPending} onClick={() => validate.mutate()}>{t('wf.validate')}</Button>
           {workflow && (
-            <Popover trigger="click" title={t('wf.versions')} content={<Versions workflowId={workflow.id} />} placement="bottomRight">
+            <Popover trigger="click" title={t('wf.versions')} open={versionsOpen} onOpenChange={setVersionsOpen} placement="bottomRight"
+              content={<Versions workflowId={workflow.id} current={workflow.currentVersion} onView={(v) => { setVersionsOpen(false); setViewing(v); }} />}>
               <Button icon={<HistoryOutlined />}>{t('wf.versions')}</Button>
             </Popover>
           )}
@@ -546,6 +575,10 @@ function EditorBody({ workflow, components }: { workflow: Workflow | null; compo
         </div>
       </div>
       <RunWorkflowModal workflow={workflow} open={running} onClose={() => setRunning(false)} />
+      {workflow && (
+        <VersionPreview workflowId={workflow.id} version={viewing} current={workflow.currentVersion}
+          onClose={() => setViewing(null)} onRestore={(v) => void restore(v)} />
+      )}
     </>
   );
 }

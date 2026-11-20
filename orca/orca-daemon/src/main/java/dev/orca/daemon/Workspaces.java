@@ -48,6 +48,7 @@ public final class Workspaces {
         if (repo.branch() != null && !repo.branch().isBlank()) {
           git(dir, "checkout", "--quiet", "-B", repo.branch());
         }
+        excludeCaches(dir);
       } else {
         // keep local work; just refresh remote refs so the agent can rebase if it wants to
         Executables.run(List.of("git", "-C", dir.toString(), "fetch", "--quiet", "--all"), Map.of(), 120);
@@ -55,6 +56,17 @@ public final class Workspaces {
       return dir;
     } catch (IOException e) {
       throw new AgentException(ErrorCodes.AGENT_ERROR, "could not prepare workspace: " + e.getMessage(), e);
+    }
+  }
+
+  /** Local-only ignores so build caches never end up in commits; the repository itself is untouched. */
+  static void excludeCaches(Path dir) throws IOException {
+    Path exclude = dir.resolve(".git/info/exclude");
+    Files.createDirectories(exclude.getParent());
+    String existing = Files.exists(exclude) ? Files.readString(exclude) : "";
+    if (!existing.contains("# orca")) {
+      Files.writeString(exclude, existing + "\n# orca: build and tool caches\n__pycache__/\n*.pyc\n.pytest_cache/\n"
+          + "node_modules/\n.venv/\n.mypy_cache/\n.ruff_cache/\n.gradle/\n.DS_Store\n");
     }
   }
 
