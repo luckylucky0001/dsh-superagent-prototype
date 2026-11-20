@@ -16,6 +16,8 @@ public interface TaskRepo extends JpaRepository<Task, String> {
 
   List<Task> findTop100ByOrderByQueuedAtDesc();
 
+  List<Task> findByQueuedAtGreaterThan(long since);
+
   List<Task> findByAgentIdAndIssueIdAndStatusOrderByFinishedAtDesc(String agentId, String issueId, String status);
 
   long countByRuntimeIdAndStatusIn(String runtimeId, Collection<String> statuses);

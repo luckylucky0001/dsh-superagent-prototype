@@ -38,7 +38,10 @@ public record AgentEvent(long seq, long ts, String type, Map<String, Object> dat
   public static final String PLAN = "plan";
   /** {@code diff}: unified diff of the turn so far. */
   public static final String DIFF = "diff";
-  /** {@code inputTokens, cachedInputTokens, outputTokens, reasoningTokens, totalTokens, contextWindow}. */
+  /**
+   * {@code inputTokens, cachedInputTokens, outputTokens, reasoningTokens, totalTokens} (session totals),
+   * {@code taskTokens} (this task only, when known), {@code contextWindow}, {@code lastTotalTokens}.
+   */
   public static final String USAGE = "usage";
   /** {@code requestId, kind (command|file_change|permissions|other), title, detail}. */
   public static final String APPROVAL_REQUESTED = "approval.requested";

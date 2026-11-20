@@ -64,6 +64,7 @@ final class CodexSession implements AgentSession {
   private volatile String finalText;
   private volatile String lastMessage;
   private volatile Map<String, Object> usage = Map.of();
+  private long baseline = -1;
 
   private CodexSession(JsonRpcConnection conn, Interaction.Handler handler, SessionSpec spec, Duration timeout,
       BufferedWriter recorder) {
@@ -332,7 +333,20 @@ final class CodexSession implements AgentSession {
         }
         return;
       }
-      case "thread/tokenUsage/updated" -> usage = CodexEvents.usage(Json.obj(params, "tokenUsage"));
+      case "thread/tokenUsage/updated" -> {
+        // Codex reports thread totals; a resumed thread already carries earlier tasks' tokens, so the
+        // first report of this session fixes a baseline and taskTokens counts only this session's work.
+        Map<String, Object> tu = Json.obj(params, "tokenUsage");
+        Map<String, Object> u = CodexEvents.usage(tu);
+        long total = ((Number) u.get("totalTokens")).longValue();
+        if (baseline < 0) {
+          baseline = Math.max(0, total - Json.num(Json.obj(tu, "last"), "totalTokens", total));
+        }
+        u.put("taskTokens", total - baseline);
+        usage = u;
+        sink.accept(new AgentEvent(0, System.currentTimeMillis(), AgentEvent.USAGE, u));
+        return;
+      }
       case "item/started" -> {
         Map<String, Object> item = Json.obj(params, "item");
         if ("fileChange".equals(Json.str(item, "type"))) {
