@@ -28,6 +28,7 @@ public final class FakeCodexAppServer {
   private static volatile String activeTurn;
   private static volatile CompletableFuture<String> hangRelease = new CompletableFuture<>();
   private static int turnCounter;
+  private static volatile String instructions = "";
 
   public static void main(String[] args) throws Exception {
     if (List.of(args).contains("--version")) {
@@ -62,6 +63,7 @@ public final class FakeCodexAppServer {
             Map.of("id", "gpt-6.2-sol", "displayName", "GPT-6.2 Sol", "description", "default", "isDefault", true,
                 "hidden", false, "supportedReasoningEfforts", List.of("low"), "defaultReasoningEffort", "low"))));
         case "thread/start" -> {
+          instructions = String.valueOf(params.getOrDefault("developerInstructions", ""));
           reply(id, Map.of("thread", Map.of("id", THREAD, "model", String.valueOf(params.getOrDefault("model", "gpt-6.2-sol")))));
           notify("thread/started", Map.of("thread", Map.of("id", THREAD)));
         }
@@ -148,7 +150,8 @@ public final class FakeCodexAppServer {
             "changes", List.of(Map.of("path", "a.txt", "kind", Map.of("type", "add"), "diff", "+hi")))));
         notify("item/completed", item(turnId, Map.of("type", "fileChange", "id", "fc-1", "status", "completed",
             "changes", List.of(Map.of("path", "a.txt", "kind", Map.of("type", "add"), "diff", "+hi")))));
-        message(turnId, structured ? "```json\n{\"ok\": true, \"echo\": " + Json.write(text) + "}\n```" : "ECHO: " + text);
+        message(turnId, structured ? "```json\n{\"ok\": true, \"echo\": " + Json.write(text) + "}\n```"
+            : text.contains("show instructions") ? "INSTRUCTIONS: " + instructions : "ECHO: " + text);
       }
     }
     notify("thread/tokenUsage/updated", Map.of("threadId", THREAD, "turnId", turnId, "tokenUsage", Map.of(

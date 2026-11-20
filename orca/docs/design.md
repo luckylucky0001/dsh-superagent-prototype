@@ -39,7 +39,8 @@
 |---|---|
 | Member / ApiToken | 角色 owner / admin / member（成员管理在 `/api/members`）；只存 token 的 SHA-256：会话 token（Web）、运行时 token（daemon）、一次性注册码、任务 MCP token |
 | Runtime | 一台跑 daemon 的机器；`providers[]` 记录每个 CLI 的版本、登录、套餐、模型、能力、错误 |
-| Agent | 名称（即 @ 提及名）、provider、绑定运行时、模型/推理强度、指令、权限档位、命令白名单、并发、超时 |
+| Agent | 名称（即 @ 提及名）、provider、绑定运行时、模型/推理强度、指令、技能、权限档位、命令白名单、并发、超时 |
+| Skill | 可复用的 Markdown 指令；派发任务时按 Agent 的选择拼入其指令（`## Skill: <name>`），与 CLI 无关 |
 | Project / Issue / Comment | Issue key 形如 `ORCA-12`；状态 backlog → todo → in_progress → in_review → done（可 cancelled） |
 | Task | 一次 Agent 执行：queued → dispatched → running ⇄ waiting_input → succeeded / failed / cancelled / timed_out；记录 provider 会话（Codex thread / ACP session）、工作目录键、结果、结构化输出、错误码、用量 |
 | TaskEvent | `(task_id, seq)` 唯一的统一事件，重放幂等 |

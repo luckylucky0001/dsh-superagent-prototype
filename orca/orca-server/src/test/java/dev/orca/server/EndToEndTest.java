@@ -242,4 +242,20 @@ class EndToEndTest {
     assertEquals(List.of("run", "structured", "run", "structured"), tasks.stream().map(t -> Json.str(t, "kind")).toList());
     assertTrue(Json.str(tasks.get(2), "prompt").contains("The reviewer requested changes (round 1 of 2)"));
   }
+
+  @Test
+  void skillsAreGivenToAgents() throws Exception {
+    String skill = Json.str(call("POST", "/api/skills", Map.of("name", "release-rules",
+        "content", "Always bump the CHANGELOG before tagging.")), "id");
+    String runtimeId = Json.str(((List<?>) call("GET", "/api/runtimes", null)).get(0), "id");
+    String agent = Json.str(call("POST", "/api/agents", Map.of("name", "Releaser", "provider", "codex",
+        "runtimeId", runtimeId, "skills", List.of(skill), "instructions", "You ship releases.")), "id");
+    Object issue = call("POST", "/api/issues", Map.of("title", "Release", "description", "show instructions",
+        "assigneeType", "agent", "assigneeId", agent));
+    String key = Json.str(issue, "key");
+    await("reply", quietly(() -> !((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).isEmpty()));
+    String body = Json.str(((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).get(0), "body");
+    assertTrue(body.contains("You ship releases.") && body.contains("## Skill: release-rules")
+        && body.contains("Always bump the CHANGELOG") && body.contains("You are Releaser"), body);
+  }
 }

@@ -2,7 +2,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Drawer, Flex, Form, Input, InputNumber, Radio, Select, Space, Typography } from 'antd';
 import { api } from '@/api/client';
-import { qk, useRuntimes } from '@/api/queries';
+import { qk, useRuntimes, useSkills } from '@/api/queries';
 import type { Agent, AgentInput, ModelInfo, Permission, Provider } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { PROVIDER_LABELS } from '@/components/AgentAvatar';
@@ -60,6 +60,7 @@ interface Values {
   effort?: string;
   permission: Permission;
   allowedCommands?: string[];
+  skills?: string[];
   instructions?: string;
   maxConcurrency: number;
   timeoutMinutes: number;
@@ -90,6 +91,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
             effort: agent.effort ?? undefined,
             permission: agent.permission,
             allowedCommands: agent.allowedCommands,
+            skills: agent.skills ?? [],
             instructions: agent.instructions ?? undefined,
             maxConcurrency: agent.maxConcurrency,
             timeoutMinutes: agent.timeoutMinutes,
@@ -104,6 +106,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
     );
   }, [open, agent, form, runtimes.data]);
 
+  const skills = useSkills();
   const runtime = runtimes.data?.find((r) => r.id === runtimeId);
   const providerStatus = runtime?.providers.find((p) => p.provider === provider);
   const models = useMemo(() => providerStatus?.models ?? [], [providerStatus]);
@@ -121,6 +124,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         effort: v.effort ?? '',
         permission: v.permission,
         allowedCommands: v.allowedCommands ?? [],
+        skills: v.skills ?? [],
         instructions: v.instructions ?? '',
         maxConcurrency: v.maxConcurrency,
         timeoutMinutes: v.timeoutMinutes,
@@ -208,6 +212,10 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         )}
         <Form.Item name="allowedCommands" label={t('agents.allowedCommands')} extra={t('agents.allowedCommandsHelp')}>
           <Select mode="tags" tokenSeparators={[',']} placeholder="git, npm test, mvn -q verify" />
+        </Form.Item>
+        <Form.Item name="skills" label={t('skills.title')} extra={t('skills.agentHelp')}>
+          <Select mode="multiple" allowClear placeholder={t('skills.pick')}
+            options={(skills.data ?? []).map((sk) => ({ value: sk.id, label: sk.name }))} />
         </Form.Item>
         <Form.Item name="instructions" label={t('agents.instructions')} extra={t('agents.instructionsHelp')}>
           <Input.TextArea autoSize={{ minRows: 4, maxRows: 16 }} />

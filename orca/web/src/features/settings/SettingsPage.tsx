@@ -13,6 +13,7 @@ import { PageHeader } from '@/components/PageHeader';
 import { QueryState } from '@/components/QueryState';
 import { fmtDateTime } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
+import { SkillsTab } from './SkillsTab';
 
 const ROLE_COLORS: Record<string, string> = { owner: 'gold', admin: 'blue', member: 'default' };
 const MIN_PASSWORD = 8;
@@ -355,6 +356,7 @@ export function SettingsPage() {
           { key: 'account', label: t('settings.myAccount'), children: <MyAccount /> },
           { key: 'members', label: t('settings.members'), children: <Members /> },
           { key: 'projects', label: t('settings.projects'), children: <Projects /> },
+          { key: 'skills', label: t('skills.title'), children: <SkillsTab /> },
         ]}
       />
     </div>

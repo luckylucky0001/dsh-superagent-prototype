@@ -25,6 +25,8 @@ import type {
   WorkflowDefinition,
   WorkflowInput,
   WorkflowVersion,
+  Skill,
+  SkillInput,
 } from './types';
 
 /** An error response from the API; {@code message} is the server's {@code error} text. */
@@ -107,6 +109,12 @@ export const api = {
   login: (email: string, password: string) => request<LoginResponse>('POST', '/auth/login', { email, password }),
   logout: () => request<{ ok: boolean }>('POST', '/auth/logout'),
   me: () => request<Member>('GET', '/auth/me'),
+
+  // skills
+  skills: () => request<Skill[]>('GET', '/skills'),
+  createSkill: (input: SkillInput) => request<Skill>('POST', '/skills', input),
+  updateSkill: (id: string, input: SkillInput) => request<Skill>('PUT', `/skills/${enc(id)}`, input),
+  deleteSkill: (id: string) => request<unknown>('DELETE', `/skills/${enc(id)}`),
 
   // members
   members: () => request<Member[]>('GET', '/members'),

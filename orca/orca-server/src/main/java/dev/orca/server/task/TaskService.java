@@ -76,14 +76,17 @@ public class TaskService {
   private final Realtime realtime;
   private final ApplicationEventPublisher publisher;
   private final OrcaProperties props;
+  private final dev.orca.server.repo.SkillRepo skills;
   private final dev.orca.server.auth.AuthService auth;
   private final boolean mcpEnabled;
 
   public TaskService(TaskRepo tasks, TaskEventRepo events, AgentRepo agents, IssueRepo issues, ProjectRepo projects,
       CommentRepo comments, RuntimeService runtimes, DaemonGateway gateway, InboxService inbox, Realtime realtime,
-      ApplicationEventPublisher publisher, OrcaProperties props, dev.orca.server.auth.AuthService auth,
+      ApplicationEventPublisher publisher, OrcaProperties props, dev.orca.server.repo.SkillRepo skills,
+      dev.orca.server.auth.AuthService auth,
       @org.springframework.beans.factory.annotation.Value("${orca.mcp.enabled:true}") boolean mcpEnabled) {
     this.auth = auth;
+    this.skills = skills;
     this.mcpEnabled = mcpEnabled;
     this.tasks = tasks;
     this.events = events;
@@ -264,7 +267,16 @@ public class TaskService {
 
   private Wire.TaskAssign assignment(Task t, Agent a) {
     String guide = PLATFORM_GUIDE.formatted(a.name);
-    String instructions = a.instructions == null || a.instructions.isBlank() ? guide : a.instructions + "\n\n" + guide;
+    StringBuilder ins = new StringBuilder();
+    if (a.instructions != null && !a.instructions.isBlank()) {
+      ins.append(a.instructions).append("\n\n");
+    }
+    for (String ref : JsonCols.strings(a.skillsJson)) {
+      skills.findById(ref).or(() -> skills.findByNameIgnoreCase(ref)).ifPresent(sk ->
+          ins.append("## Skill: ").append(sk.name).append("\n\n").append(sk.content.strip()).append("\n\n"));
+    }
+    ins.append(guide);
+    String instructions = ins.toString();
     Wire.AgentSpec spec = new Wire.AgentSpec(a.id, a.name, a.model, a.effort, instructions, a.permission,
         JsonCols.strings(a.allowedCommandsJson), JsonCols.strings(a.extraArgsJson), Map.of());
     Wire.RepoSpec repo = null;

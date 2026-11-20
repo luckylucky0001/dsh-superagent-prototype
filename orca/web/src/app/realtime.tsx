@@ -69,6 +69,9 @@ function handle(qc: QueryClient, type: string, data: Payload) {
     case 'member.updated':
       inv(['members']);
       break;
+    case 'skill.updated':
+      inv(['skills']);
+      break;
     default:
       break;
   }
@@ -87,6 +90,7 @@ const EVENT_TYPES = [
   'workflow.updated',
   'project.updated',
   'member.updated',
+  'skill.updated',
 ];
 
 /**

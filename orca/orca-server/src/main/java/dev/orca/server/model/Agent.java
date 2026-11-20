@@ -18,6 +18,7 @@ public class Agent {
   public String permission;
   public String allowedCommandsJson;
   public String extraArgsJson;
+  public String skillsJson;
   public int maxConcurrency;
   public int timeoutMinutes;
   public boolean archived;

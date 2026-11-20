@@ -86,6 +86,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 - **收件箱**：审批、Agent 提问、工作流表单、失败提醒。
 - **MCP 回写**：Agent 运行中可通过 Orca 的 MCP 工具读 Issue、发进展、改状态（每个任务一个短期 token）。
 - **Git**：项目配置仓库后，每个 Issue 一个分支 `orca/<key>`，同一 Issue 的 Agent 共享工作目录；遗留改动自动提交。
+- **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。
 - **成员与用量**：成员/角色管理，按 Agent、按天的运行与 token 统计。
 
 ## Agent 权限档位

@@ -8,6 +8,7 @@ export const qk = {
   me: ['me'] as const,
   projects: ['projects'] as const,
   members: ['members'] as const,
+  skills: ['skills'] as const,
   stats: (days: number) => ['stats', days] as const,
   issues: ['issues'] as const,
   projectIssues: (projectId?: string) => ['issues', 'project', projectId ?? 'all'] as const,
@@ -56,6 +57,10 @@ export function useIssues() {
 export function useIssueMap(): Map<string, Issue> {
   const { data } = useIssues();
   return useMemo(() => new Map((data ?? []).map((i) => [i.id, i])), [data]);
+}
+
+export function useSkills() {
+  return useQuery({ queryKey: qk.skills, queryFn: api.skills, staleTime: 60_000 });
 }
 
 export function useMembers() {

@@ -134,6 +134,7 @@ export interface Agent {
   permission: Permission;
   allowedCommands: string[];
   extraArgs: string[];
+  skills: string[];
   maxConcurrency: number;
   timeoutMinutes: number;
   archived: boolean;
@@ -465,4 +466,19 @@ export interface InboxAnswer {
 
 export function normStatus(s: string | null | undefined): string {
   return (s ?? '').toLowerCase();
+}
+
+export interface Skill {
+  id: string;
+  name: string;
+  description: string | null;
+  content: string;
+  createdAt: number;
+  updatedAt: number;
+}
+
+export interface SkillInput {
+  name: string;
+  description?: string;
+  content: string;
 }
