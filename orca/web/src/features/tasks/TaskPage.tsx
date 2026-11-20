@@ -5,6 +5,7 @@ import { Alert, Breadcrumb, Button, Card, Col, Descriptions, Input, Row, Space, 
 import { SendOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useAgentMap, useIssueMap, useRuntimeMap } from '@/api/queries';
+import { useMe } from '@/app/auth';
 import { useT } from '@/app/i18n';
 import { JsonView } from '@/components/CodeBlock';
 import { QueryState } from '@/components/QueryState';
@@ -21,7 +22,10 @@ export function TaskPage() {
   const agents = useAgentMap();
   const issues = useIssueMap();
   const runtimes = useRuntimeMap();
+  const me = useMe();
   const d = task.data;
+  // only the person who asked continues the conversation (the server enforces this too)
+  const mine = !d?.origin?.by || d.origin.by === me.data?.id;
   const issue = d?.issueId ? issues.get(d.issueId) : undefined;
   const runId = typeof d?.origin?.runId === 'string' ? d.origin.runId : null;
 
@@ -48,7 +52,7 @@ export function TaskPage() {
               <Card title={t('tasks.transcript')} size="small">
                 <Transcript task={d} maxHeight="calc(100vh - 320px)" />
               </Card>
-              {d.kind === 'ask' && d.status === 'succeeded' && <AskFollowUp task={d} />}
+              {d.kind === 'ask' && d.status === 'succeeded' && mine && <AskFollowUp task={d} />}
               {typeof d.origin?.followUpOf === 'string' && (
                 <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
                   {t('tasks.followUpOf')} <Link to={`/tasks/${d.origin.followUpOf}`} className="orca-mono">{d.origin.followUpOf}</Link>

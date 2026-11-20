@@ -445,6 +445,8 @@ class EndToEndTest {
   @Test
   void theDaemonTokenCanBeCheckedWithoutTouchingTheConnection() throws Exception {
     HttpClient bare = HttpClient.newHttpClient();
+    Res health = raw(bare, "GET", "/api/health", null, null);
+    assertTrue(health.status() == 200 && health.body().contains("\"version\""), "health tells the version: " + health.body());
     String code = Json.str(call("POST", "/api/runtimes/registration-codes", null), "code");
     Object reg = call("POST", "/api/daemon/register", Map.of("code", code, "name", "doctor-check"));
     Res ok = raw(bare, "GET", "/api/daemon/whoami", null, Json.str(reg, "token"));

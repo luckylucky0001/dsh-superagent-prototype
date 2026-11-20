@@ -81,7 +81,14 @@ final class Doctor {
       try {
         HttpResponse<String> h = http.send(HttpRequest.newBuilder(URI.create(base + "/api/health"))
             .timeout(Duration.ofSeconds(10)).GET().build(), HttpResponse.BodyHandlers.ofString());
-        check(h.statusCode() == 200, "server reachable (" + base + ")", "the server answered " + h.statusCode());
+        String serverVersion = h.statusCode() == 200 ? Json.str(Json.readMap(h.body()), "version") : null;
+        check(h.statusCode() == 200, "server reachable (" + base + (serverVersion != null ? ", Orca " + serverVersion : "") + ")",
+            "the server answered " + h.statusCode());
+        if (serverVersion != null && !"dev".equals(serverVersion)
+            && Executables.compareVersions(serverVersion, Daemon.VERSION) < 0) {
+          warn(false, "this daemon (" + Daemon.VERSION + ") is newer than the server (" + serverVersion + ")",
+              "upgrade the server first; newer daemon features stay off until then");
+        }
         // a plain HTTP check: opening the daemon WebSocket here would displace a running daemon's connection
         HttpResponse<String> who = http.send(HttpRequest.newBuilder(URI.create(base + "/api/daemon/whoami"))
             .timeout(Duration.ofSeconds(10)).header("Authorization", "Bearer " + cfg.token()).GET().build(),

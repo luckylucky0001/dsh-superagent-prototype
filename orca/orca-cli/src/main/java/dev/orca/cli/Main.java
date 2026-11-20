@@ -71,6 +71,12 @@ public final class Main {
       String cmd = a.positional.get(0);
       if (cmd.equals("version")) {
         out.println("orca " + VERSION);
+        try {
+          loadConfig();
+          out.println("server " + Json.str(call("GET", "/api/health", null, false), "version") + " at " + server);
+        } catch (IOException | RuntimeException e) {
+          // not signed in or unreachable: the client version is still useful
+        }
         return 0;
       }
       if (cmd.equals("login")) {

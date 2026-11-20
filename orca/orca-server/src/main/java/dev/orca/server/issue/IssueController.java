@@ -87,8 +87,12 @@ public class IssueController {
         .map(r -> Views.RunView.of(r, workflows.name(r.workflowId), null, false)).toList();
   }
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private org.springframework.boot.info.BuildProperties build;
+
+  /** Unauthenticated liveness check; also tells daemons and the CLI which server version they talk to. */
   @GetMapping("/health")
   public Map<String, Object> health() {
-    return Map.of("ok", true);
+    return Map.of("ok", true, "version", build == null ? "dev" : build.getVersion());
   }
 }

@@ -27,7 +27,7 @@ import org.junit.jupiter.api.condition.EnabledIfEnvironmentVariable;
 
 /**
  * Talks to a real, logged-in Codex CLI. Run with
- * {@code ORCA_CODEX_BIN=/path/to/codex mvn test -pl orca-agent -Dgroups=live}.
+ * {@code ORCA_CODEX_BIN=/path/to/codex mvn test -pl orca-agent -Dgroups=live -Dorca.excludedGroups=none}.
  * Uses the cheapest model by default ({@code ORCA_TEST_CODEX_MODEL}, default gpt-6-luna).
  */
 @Tag("live")
