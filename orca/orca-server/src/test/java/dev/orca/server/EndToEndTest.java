@@ -155,4 +155,41 @@ class EndToEndTest {
     assertEquals(422, res.statusCode());
     assertTrue(res.body().contains("\"nodeId\":\"a\""), res.body());
   }
+
+  @Test
+  void concurrentSignalsOnOneRunAreNotLost() throws Exception {
+    Map<String, Object> def = Map.of(
+        "nodes", List.of(
+            Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+            Map.of("id", "a", "type", "human.approval", "config", Map.of("title", "A")),
+            Map.of("id", "b", "type", "human.approval", "config", Map.of("title", "B")),
+            Map.of("id", "both", "type", "logic.join", "config", Map.of())),
+        "edges", List.of(Map.of("id", "e1", "source", "start", "target", "a"),
+            Map.of("id", "e2", "source", "start", "target", "b"),
+            Map.of("id", "e3", "source", "a", "sourcePort", "approved", "target", "both"),
+            Map.of("id", "e4", "source", "b", "sourcePort", "approved", "target", "both")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Parallel", "definition", def)), "id");
+    for (int round = 0; round < 5; round++) {
+      String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of()), "id");
+      List<String> items = ((List<?>) call("GET", "/api/inbox?status=pending", null)).stream()
+          .filter(i -> run.equals(Json.str(i, "runId"))).map(i -> Json.str(i, "id")).toList();
+      assertEquals(2, items.size());
+      java.util.concurrent.CountDownLatch go = new java.util.concurrent.CountDownLatch(1);
+      List<Thread> threads = items.stream().map(id -> Thread.ofPlatform().start(() -> {
+        try {
+          go.await();
+          call("POST", "/api/inbox/" + id + "/answer", Map.of("decision", "approved"));
+        } catch (Exception e) {
+          throw new RuntimeException(e);
+        }
+      })).toList();
+      go.countDown();
+      for (Thread t : threads) {
+        t.join();
+      }
+      Object done = call("GET", "/api/runs/" + run, null);
+      assertEquals("succeeded", Json.str(done, "status"), "round " + round + ": " + Json.write(Json.get(done, "state.nodes")));
+      assertEquals("SUCCEEDED", Json.get(done, "state.nodes.both.status"));
+    }
+  }
 }

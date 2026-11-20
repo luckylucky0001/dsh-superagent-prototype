@@ -29,7 +29,6 @@ import dev.orca.workflow.spi.NodeDescriptor;
 import java.time.Clock;
 import java.util.List;
 import java.util.Map;
-import java.util.concurrent.ConcurrentHashMap;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
@@ -56,7 +55,6 @@ public class WorkflowService {
   private final ComponentRegistry registry;
   private final WorkflowEngine engine;
   private final WorkflowValidator validator;
-  private final Map<String, Object> locks = new ConcurrentHashMap<>();
 
   public WorkflowService(WorkflowRepo workflows, WorkflowVersionRepo versions, WorkflowRunRepo runs,
       InboxService inbox, Realtime realtime, List<NodeComponent> components) {
@@ -210,10 +208,9 @@ public class WorkflowService {
     run.stateJson = "{}";
     runs.saveAndFlush(run);
     log.info("run {} of '{}' started from {}", run.id, w.name, triggerNodeId);
-    synchronized (lock(run.id)) {
-      RunState state = engine.start(run.id, w.id, def, triggerNodeId, payload);
-      return store(run, state);
-    }
+    runs.lockById(run.id);
+    RunState state = engine.start(run.id, w.id, def, triggerNodeId, payload);
+    return store(run, state);
   }
 
   @Transactional(propagation = Propagation.REQUIRED)
@@ -232,11 +229,10 @@ public class WorkflowService {
   }
 
   private WorkflowRun mutate(String runId, Function<WorkflowRun, RunState> change) {
-    synchronized (lock(runId)) {
-      WorkflowRun run = runs.findById(runId).orElseThrow(() -> ApiException.notFound("run"));
-      RunState after = change.apply(run);
-      return store(run, after);
-    }
+    // The row lock (not a JVM lock) is held until commit, so a second signal always reads the first one's result.
+    WorkflowRun run = runs.lockById(runId).orElseThrow(() -> ApiException.notFound("run"));
+    RunState after = change.apply(run);
+    return store(run, after);
   }
 
   private WorkflowRun store(WorkflowRun run, RunState s) {
@@ -245,7 +241,6 @@ public class WorkflowService {
     run.error = s.error;
     if (s.status.terminal()) {
       run.finishedAt = s.finishedAt;
-      locks.remove(run.id);
       inbox.closeRun(run.id);
       if (s.status == RunStatus.FAILED) {
         Workflow w = workflows.findById(run.workflowId).orElse(null);
@@ -272,10 +267,6 @@ public class WorkflowService {
 
   public List<WorkflowRun> runsForIssue(String issueId) {
     return runs.findByIssueIdOrderByStartedAtAsc(issueId);
-  }
-
-  private Object lock(String runId) {
-    return locks.computeIfAbsent(runId, k -> new Object());
   }
 
   // ---------------------------------------------------------------- task results and deadlines
