@@ -100,7 +100,7 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 ## 7. 安全
 
 - Web 会话 cookie（HttpOnly、SameSite=Lax）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较）。
-- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝，只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
+- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
 - 工作目录键严格校验，不能逃出工作根目录。
 - `http.request` 只允许 `ORCA_HTTP_ALLOWED_HOSTS` 中的主机，不跟随重定向；通知组件额外允许常见 IM webhook 主机。
 - MCP 回写 token 通过环境变量传给 CLI，不出现在命令行参数里。
@@ -120,6 +120,5 @@ React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板�
 ## 11. 后续
 
 - git / PR 节点（GitHub/GitLab/Gitee）、`traecli review` / Codex review 节点、有轮数上限的循环子流程。
-- 权限升级转人工审批（目前由策略直接拒绝）。
 - 多实例（行锁、跨实例推送）、OIDC/SSO、RBAC、审计、用量报表。
 - TRAE CLI 登录后的实机联调（见 providers.md 待验证清单）；评估以 app-server 统一两种 CLI。

@@ -19,6 +19,8 @@ public class Agent {
   public String allowedCommandsJson;
   public String extraArgsJson;
   public String skillsJson;
+  /** When the daemon's policy would deny a request, ask a person in the inbox instead. */
+  public boolean escalateApprovals;
   public int maxConcurrency;
   public int timeoutMinutes;
   public boolean archived;

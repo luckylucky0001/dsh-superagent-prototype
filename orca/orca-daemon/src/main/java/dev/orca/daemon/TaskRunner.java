@@ -42,6 +42,8 @@ final class TaskRunner implements Runnable {
   private final Runnable onDone;
   private final EventBuffer buffer = new EventBuffer();
   private final Map<String, CompletableFuture<Interaction.InputReply>> inputs = new ConcurrentHashMap<>();
+  /** Approval requests a person decided (escalated from the policy). */
+  private final java.util.Set<String> decidedByPerson = ConcurrentHashMap.newKeySet();
   private final ConcurrentLinkedQueue<String> followUps = new ConcurrentLinkedQueue<>();
   private volatile AgentSession session;
   private volatile boolean cancelRequested;
@@ -128,9 +130,11 @@ final class TaskRunner implements Runnable {
     Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
     List<String> allowed = ApprovalPolicy.sanitize(a == null ? List.of() : a.allowedCommands());
     ApprovalPolicy policy = new ApprovalPolicy(permission, dir, allowed);
+    boolean escalate = a != null && a.escalateApprovals() && permission != Permission.READ_ONLY;
     Interaction.Handler handler = new Interaction.Handler() {
       public Interaction.Decision approve(Interaction.ApprovalRequest r) {
-        return policy.decide(r);
+        Interaction.Decision d = policy.decide(r);
+        return d == Interaction.Decision.DECLINE && escalate ? askPerson(r) : d;
       }
 
       public Interaction.InputReply input(Interaction.InputRequest r) {
@@ -173,7 +177,7 @@ final class TaskRunner implements Runnable {
     List<Path> images = download(dir);
     buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", task.prompt(),
         "images", images.isEmpty() ? null : images.stream().map(p -> p.getFileName().toString()).toList()));
-    dev.orca.agent.core.AgentEventSink sink = e -> buffer.add(relativize(e, dir));
+    dev.orca.agent.core.AgentEventSink sink = e -> buffer.add(attribute(relativize(e, dir)));
     TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout), sink);
     Map<String, Object> usage = new LinkedHashMap<>(r.usage());
     while (r.ok() && !cancelRequested && !followUps.isEmpty()) {
@@ -213,6 +217,16 @@ final class TaskRunner implements Runnable {
       env.putAll(a.env());
     }
     return env;
+  }
+
+  /** Approvals a person decided are reported as such rather than as the policy's. */
+  private AgentEvent attribute(AgentEvent e) {
+    if (!AgentEvent.APPROVAL_RESOLVED.equals(e.type()) || !decidedByPerson.contains(String.valueOf(e.data().get("requestId")))) {
+      return e;
+    }
+    Map<String, Object> data = new LinkedHashMap<>(e.data());
+    data.put("by", "person");
+    return new AgentEvent(e.seq(), e.ts(), e.type(), data);
   }
 
   /**
@@ -315,6 +329,67 @@ final class TaskRunner implements Runnable {
   private String sessionRefOrNull() {
     AgentSession s = session;
     return s == null ? null : s.sessionRef();
+  }
+
+  /**
+   * The policy would decline; the agent is configured to ask a person instead. The question goes to
+   * the inbox like any agent question, and the answer becomes the decision.
+   */
+  private Interaction.Decision askPerson(Interaction.ApprovalRequest r) {
+    String requestId = "approval-" + r.requestId();
+    List<String> paths = r.paths() == null ? List.of() : r.paths();
+    String what = r.command() != null ? r.command()
+        : !paths.isEmpty() ? String.join(", ", paths) : String.valueOf(r.title());
+    String agentName = task.agent() == null ? "The agent" : task.agent().name();
+    String title = agentName + " asks to " + (r.command() != null ? "run a command outside its policy"
+        : r.kind() == Interaction.ApprovalKind.FILE_CHANGE ? "change files outside its workspace" : "get more permissions");
+    Map<String, Object> approval = new LinkedHashMap<>();
+    approval.put("kind", r.kind().name().toLowerCase(java.util.Locale.ROOT));
+    approval.put("command", r.command());
+    approval.put("paths", paths.isEmpty() ? null : paths);
+    approval.put("reason", r.reason());
+    approval.put("cwd", r.cwd() == null ? null : relativeCwd(r.cwd()));
+    approval.values().removeIf(java.util.Objects::isNull);
+    Map<String, Object> question = new LinkedHashMap<>();
+    question.put("id", "decision");
+    question.put("header", "Approval");
+    question.put("question", (r.reason() == null || r.reason().isBlank() ? "" : r.reason() + "\n\n") + what);
+    question.put("options", List.of(Map.of("label", APPROVE_ONCE), Map.of("label", APPROVE_TASK), Map.of("label", DENY)));
+    buffer.add(AgentEvent.of(AgentEvent.INPUT_REQUESTED, "requestId", requestId, "title", title,
+        "questions", List.of(question), "approval", approval));
+    Interaction.InputReply reply = awaitInput(new Interaction.InputRequest(requestId, title, List.of(question), null));
+    Interaction.Decision d = decisionFrom(reply);
+    buffer.add(AgentEvent.of(AgentEvent.INPUT_RESOLVED, "requestId", requestId, "declined", reply.declined(),
+        "answers", reply.answers()));
+    decidedByPerson.add(r.requestId());
+    return d;
+  }
+
+  static final String APPROVE_ONCE = "Allow once";
+  static final String APPROVE_TASK = "Allow for this task";
+  static final String DENY = "Deny";
+
+  static Interaction.Decision decisionFrom(Interaction.InputReply reply) {
+    if (reply == null || reply.declined()) {
+      return Interaction.Decision.DECLINE;
+    }
+    List<String> v = reply.answers().getOrDefault("decision", List.of());
+    String choice = v.isEmpty() ? "" : v.get(0);
+    return switch (choice) {
+      case APPROVE_ONCE, "accept" -> Interaction.Decision.ACCEPT;
+      case APPROVE_TASK, "accept_for_session" -> Interaction.Decision.ACCEPT_FOR_SESSION;
+      default -> Interaction.Decision.DECLINE;
+    };
+  }
+
+  private String relativeCwd(String cwd) {
+    try {
+      Path root = workspaces.root().toAbsolutePath().normalize();
+      Path p = Path.of(cwd).toAbsolutePath().normalize();
+      return p.startsWith(root) ? root.relativize(p).toString() : cwd;
+    } catch (RuntimeException e) {
+      return cwd;
+    }
   }
 
   private Interaction.InputReply awaitInput(Interaction.InputRequest r) {

@@ -69,6 +69,17 @@ public final class Main {
               + " (settings are read from " + DaemonConfig.file() + ")");
           System.exit(2);
         }
+        // one daemon per configuration: two processes with the same token would keep displacing each other
+        java.nio.file.Files.createDirectories(DaemonConfig.file().getParent());
+        java.nio.channels.FileChannel lockFile = java.nio.channels.FileChannel.open(
+            DaemonConfig.file().resolveSibling("daemon.lock"), java.nio.file.StandardOpenOption.CREATE,
+            java.nio.file.StandardOpenOption.WRITE);
+        java.nio.channels.FileLock lock = lockFile.tryLock();
+        if (lock == null) {
+          System.err.println("another orca-daemon is already running with " + DaemonConfig.file()
+              + "; stop it first, or use a different ORCA_HOME for a second runtime");
+          System.exit(3);
+        }
         new Daemon(cfg, Daemon.defaultProviders(cfg, Providers::trae)).run();
       }
       case "probe" -> System.out.println(Json.MAPPER.writerWithDefaultPrettyPrinter().writeValueAsString(

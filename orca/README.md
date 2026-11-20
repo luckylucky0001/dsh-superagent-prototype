@@ -107,6 +107,8 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 
 工作区档位还内置放行 `git add/commit/status/diff/log`（Codex 沙箱把 `.git` 设为只读，提交会以审批请求出现）。Agent 配置里的附加 CLI 参数默认被 daemon 忽略，机器主人用 `orca-daemon start --allow-extra-args` 才会生效，且沙箱/审批相关参数始终被丢弃——运行时机器的主人始终掌握最终权限。
 
+Agent 可开启 **Ask a person when blocked**（受阻时询问人）：策略将拒绝某个命令或改动时，不直接拒绝，而是送到收件箱，由人选择“允许一次 / 本任务内允许 / 拒绝”，Agent 等待回答。只读档位不参与。
+
 ## 测试
 
 ```bash

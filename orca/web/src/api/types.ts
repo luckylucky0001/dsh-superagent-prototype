@@ -138,6 +138,8 @@ export interface Agent {
   maxConcurrency: number;
   timeoutMinutes: number;
   archived: boolean;
+  /** Ask a person in the inbox when the runtime's policy would deny a request. */
+  escalateApprovals: boolean;
   createdAt: number;
   updatedAt: number;
 }
@@ -437,6 +439,8 @@ export interface JsonSchema {
 export interface InboxForm {
   questions?: Question[];
   schema?: JsonSchema;
+  /** Present when an agent asks to go beyond its runtime policy. */
+  approval?: { kind: string; command?: string; paths?: string[]; reason?: string; cwd?: string };
 }
 
 export interface InboxItem {

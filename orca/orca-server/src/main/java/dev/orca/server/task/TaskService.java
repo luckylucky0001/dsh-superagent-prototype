@@ -281,7 +281,7 @@ public class TaskService {
     ins.append(guide);
     String instructions = ins.toString();
     Wire.AgentSpec spec = new Wire.AgentSpec(a.id, a.name, a.model, a.effort, instructions, a.permission,
-        JsonCols.strings(a.allowedCommandsJson), JsonCols.strings(a.extraArgsJson), Map.of());
+        JsonCols.strings(a.allowedCommandsJson), JsonCols.strings(a.extraArgsJson), Map.of(), a.escalateApprovals);
     Wire.RepoSpec repo = null;
     if (t.issueId != null) {
       Issue issue = issues.findById(t.issueId).orElse(null);

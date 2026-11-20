@@ -45,11 +45,13 @@ public final class Views {
 
   public record AgentView(String id, String name, String description, String provider, String runtimeId, String model,
       String effort, String instructions, String permission, List<String> allowedCommands, List<String> extraArgs,
-      List<String> skills, int maxConcurrency, int timeoutMinutes, boolean archived, long createdAt, long updatedAt) {
+      List<String> skills, int maxConcurrency, int timeoutMinutes, boolean archived, boolean escalateApprovals,
+      long createdAt, long updatedAt) {
     public static AgentView of(Agent a) {
       return new AgentView(a.id, a.name, a.description, a.provider, a.runtimeId, a.model, a.effort, a.instructions,
           a.permission, JsonCols.strings(a.allowedCommandsJson), JsonCols.strings(a.extraArgsJson),
-          JsonCols.strings(a.skillsJson), a.maxConcurrency, a.timeoutMinutes, a.archived, a.createdAt, a.updatedAt);
+          JsonCols.strings(a.skillsJson), a.maxConcurrency, a.timeoutMinutes, a.archived, a.escalateApprovals,
+          a.createdAt, a.updatedAt);
     }
   }
 

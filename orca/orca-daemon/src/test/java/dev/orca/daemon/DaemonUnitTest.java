@@ -139,4 +139,17 @@ class DaemonUnitTest {
     org.junit.jupiter.api.Assertions.assertEquals("invoice/totals.py", ((java.util.Map<?, ?>) changes.get(0)).get("path"));
     org.junit.jupiter.api.Assertions.assertEquals("/etc/hosts", ((java.util.Map<?, ?>) changes.get(1)).get("path"));
   }
+
+  @org.junit.jupiter.api.Test
+  void escalatedApprovalAnswersMapToDecisions() {
+    var once = new dev.orca.agent.core.Interaction.InputReply(java.util.Map.of("decision", java.util.List.of(TaskRunner.APPROVE_ONCE)), false);
+    var task = new dev.orca.agent.core.Interaction.InputReply(java.util.Map.of("decision", java.util.List.of(TaskRunner.APPROVE_TASK)), false);
+    var deny = new dev.orca.agent.core.Interaction.InputReply(java.util.Map.of("decision", java.util.List.of(TaskRunner.DENY)), false);
+    org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.ACCEPT, TaskRunner.decisionFrom(once));
+    org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.ACCEPT_FOR_SESSION, TaskRunner.decisionFrom(task));
+    org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.DECLINE, TaskRunner.decisionFrom(deny));
+    org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.DECLINE,
+        TaskRunner.decisionFrom(dev.orca.agent.core.Interaction.InputReply.decline()));
+    org.junit.jupiter.api.Assertions.assertEquals(dev.orca.agent.core.Interaction.Decision.DECLINE, TaskRunner.decisionFrom(null));
+  }
 }

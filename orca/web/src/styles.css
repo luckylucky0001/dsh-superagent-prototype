@@ -506,3 +506,15 @@ body {
 .orca-var:hover {
   background: #f0f5ff;
 }
+
+/* command or paths an agent asks to go beyond its policy for */
+.orca-approval-cmd {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}

@@ -90,6 +90,7 @@ export function AgentDetail() {
                     { key: 'model', label: t('agents.model'), children: <span className="orca-mono">{a.model ?? t('agents.modelDefault')}</span> },
                     { key: 'effort', label: t('agents.effort'), children: a.effort ?? '—' },
                     { key: 'perm', label: t('agents.permission'), children: <Tag bordered={false} color={PERMISSION_COLORS[a.permission]}>{t.dyn(`agents.permShort.${a.permission}`, a.permission)}</Tag> },
+                    { key: 'esc', label: t('agents.escalate'), children: a.permission !== 'read_only' && a.escalateApprovals ? t('agents.escalateOn') : t('agents.escalateOff') },
                     { key: 'cmds', label: t('agents.allowedCommands'), children: a.allowedCommands.length ? <Space size={4} wrap>{a.allowedCommands.map((c) => <Tag key={c} className="orca-mono">{c}</Tag>)}</Space> : '—' },
                     { key: 'conc', label: t('agents.maxConcurrency'), children: a.maxConcurrency },
                     { key: 'to', label: t('agents.timeoutMinutes'), children: a.timeoutMinutes },

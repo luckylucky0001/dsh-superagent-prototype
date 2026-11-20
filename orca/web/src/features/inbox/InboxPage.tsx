@@ -68,6 +68,39 @@ function ApprovalForm({ item }: { item: InboxItem }) {
   );
 }
 
+/** An agent asks to go beyond its runtime's policy: show exactly what, then three clear choices. */
+function TaskApprovalForm({ item }: { item: InboxItem }) {
+  const t = useT();
+  const answer = useAnswer(item);
+  const [which, setWhich] = useState<string | null>(null);
+  const a = item.form?.approval ?? { kind: 'other' };
+  const send = (label: string) => {
+    setWhich(label);
+    answer.mutate({ answers: { decision: label } });
+  };
+  return (
+    <Space direction="vertical" style={{ display: 'flex' }} size={10}>
+      {a.reason && <Typography.Text type="secondary">{a.reason}</Typography.Text>}
+      {a.command && <pre className="orca-mono orca-approval-cmd">{a.command}</pre>}
+      {a.paths && a.paths.length > 0 && (
+        <pre className="orca-mono orca-approval-cmd">{a.paths.join('\n')}</pre>
+      )}
+      {a.cwd && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{t('inbox.approvalCwd', { cwd: a.cwd })}</Typography.Text>}
+      <Space wrap>
+        <Button type="primary" icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow once'} onClick={() => send('Allow once')}>
+          {t('inbox.allowOnce')}
+        </Button>
+        <Button icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow for this task'} onClick={() => send('Allow for this task')}>
+          {t('inbox.allowTask')}
+        </Button>
+        <Button danger icon={<CloseOutlined />} loading={answer.isPending && which === 'Deny'} onClick={() => send('Deny')}>
+          {t('inbox.deny')}
+        </Button>
+      </Space>
+    </Space>
+  );
+}
+
 function QuestionForm({ item }: { item: InboxItem }) {
   const t = useT();
   const answer = useAnswer(item);
@@ -120,7 +153,7 @@ function InboxCard({ item }: { item: InboxItem }) {
           <div style={{ minWidth: 0 }}>
             <Typography.Text strong style={{ fontSize: 15 }}>{item.title}</Typography.Text>
             <Flex gap={8} wrap="wrap" align="center" style={{ marginTop: 2 }}>
-              <Tag bordered={false} style={{ marginInlineEnd: 0 }}>{t.dyn(`inbox.kind.${item.kind}`, item.kind)}</Tag>
+              <Tag bordered={false} style={{ marginInlineEnd: 0 }}>{item.form?.approval ? t('inbox.kind.approval') : t.dyn(`inbox.kind.${item.kind}`, item.kind)}</Tag>
               {issue && <Link to={`/issues/${issue.key}`} style={{ fontSize: 12 }}>{issue.key} · {issue.title}</Link>}
               {!issue && item.issueId && <Typography.Text type="secondary" style={{ fontSize: 12 }}>{item.issueId}</Typography.Text>}
               {item.runId && <Link to={`/runs/${item.runId}`} style={{ fontSize: 12 }}>{t('inbox.viewRun')}</Link>}
@@ -144,7 +177,8 @@ function InboxCard({ item }: { item: InboxItem }) {
         {pending ? (
           item.kind === 'approval' ? <ApprovalForm item={item} />
             : item.kind === 'alert' ? <AlertActions item={item} />
-              : <QuestionForm item={item} />
+              : item.form?.approval ? <TaskApprovalForm item={item} />
+                : <QuestionForm item={item} />
         ) : (
           item.answer !== null && item.answer !== undefined && (
             <div>

@@ -75,7 +75,8 @@ public final class Wire {
   public record FileRef(String id, String name, String url) {}
 
   public record AgentSpec(String id, String name, String model, String effort, String instructions,
-      String permission, List<String> allowedCommands, List<String> extraArgs, Map<String, String> env) {}
+      String permission, List<String> allowedCommands, List<String> extraArgs, Map<String, String> env,
+      boolean escalateApprovals) {}
 
   public record RepoSpec(String url, String branch, String baseBranch) {}
 

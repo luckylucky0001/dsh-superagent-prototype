@@ -69,16 +69,81 @@ public final class Executables {
     }
   }
 
-  private static final java.util.regex.Pattern SHELL_WRAPPER =
-      java.util.regex.Pattern.compile("^(?:/usr)?(?:/bin/)?(?:ba|z)?sh\\s+-l?c\\s+(['\"])(.*)\\1\\s*$", java.util.regex.Pattern.DOTALL);
+  private static final java.util.Set<String> SHELLS = java.util.Set.of("sh", "bash", "zsh", "dash");
 
-  /** {@code /bin/bash -lc 'npm test'} becomes {@code npm test}; anything else is returned trimmed. */
+  /**
+   * {@code /bin/bash -lc 'npm test'} becomes {@code npm test}; anything else is returned trimmed. The
+   * wrapper is split with POSIX quoting rules, so scripts that mix quote styles
+   * ({@code "echo "'$HOME'}) come back as the shell would see them.
+   */
   public static String unwrapShell(String command) {
     if (command == null) {
       return null;
     }
-    java.util.regex.Matcher m = SHELL_WRAPPER.matcher(command.trim());
-    return m.matches() ? m.group(2).trim() : command.trim();
+    String c = command.trim();
+    List<String> words = shellWords(c);
+    if (words == null || words.size() != 3) {
+      return c;
+    }
+    String shell = words.get(0).substring(words.get(0).lastIndexOf('/') + 1);
+    String flag = words.get(1);
+    if (!SHELLS.contains(shell) || !(flag.equals("-c") || flag.equals("-lc") || flag.equals("-cl"))) {
+      return c;
+    }
+    return words.get(2).trim();
+  }
+
+  /** Splits a command line into words like a POSIX shell (quotes, backslashes); null if unbalanced. */
+  static List<String> shellWords(String s) {
+    List<String> words = new ArrayList<>();
+    StringBuilder cur = new StringBuilder();
+    boolean inWord = false;
+    for (int i = 0; i < s.length(); i++) {
+      char ch = s.charAt(i);
+      if (ch == '\'') {
+        int end = s.indexOf('\'', i + 1);
+        if (end < 0) {
+          return null;
+        }
+        cur.append(s, i + 1, end);
+        i = end;
+        inWord = true;
+      } else if (ch == '"') {
+        int j = i + 1;
+        for (; j < s.length() && s.charAt(j) != '"'; j++) {
+          char d = s.charAt(j);
+          if (d == '\\' && j + 1 < s.length() && "\"\\$`\n".indexOf(s.charAt(j + 1)) >= 0) {
+            j++;
+            if (s.charAt(j) != '\n') {
+              cur.append(s.charAt(j));
+            }
+          } else {
+            cur.append(d);
+          }
+        }
+        if (j >= s.length()) {
+          return null;
+        }
+        i = j;
+        inWord = true;
+      } else if (ch == '\\' && i + 1 < s.length()) {
+        cur.append(s.charAt(++i));
+        inWord = true;
+      } else if (Character.isWhitespace(ch)) {
+        if (inWord) {
+          words.add(cur.toString());
+          cur.setLength(0);
+          inWord = false;
+        }
+      } else {
+        cur.append(ch);
+        inWord = true;
+      }
+    }
+    if (inWord) {
+      words.add(cur.toString());
+    }
+    return words;
   }
 
   /** Strips ANSI colour codes from CLI output. */

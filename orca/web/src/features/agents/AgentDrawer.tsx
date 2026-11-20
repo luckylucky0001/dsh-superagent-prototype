@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Drawer, Flex, Form, Input, InputNumber, Radio, Select, Space, Typography } from 'antd';
+import { Alert, Button, Drawer, Flex, Form, Input, InputNumber, Radio, Select, Space, Switch, Typography } from 'antd';
 import { api } from '@/api/client';
 import { qk, useRuntimes, useSkills } from '@/api/queries';
 import type { Agent, AgentInput, ModelInfo, Permission, Provider } from '@/api/types';
@@ -61,6 +61,7 @@ interface Values {
   effort?: string;
   permission: Permission;
   allowedCommands?: string[];
+  escalateApprovals?: boolean;
   skills?: string[];
   instructions?: string;
   maxConcurrency: number;
@@ -92,6 +93,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
             effort: agent.effort ?? undefined,
             permission: agent.permission,
             allowedCommands: agent.allowedCommands,
+            escalateApprovals: agent.escalateApprovals,
             skills: agent.skills ?? [],
             instructions: agent.instructions ?? undefined,
             maxConcurrency: agent.maxConcurrency,
@@ -125,6 +127,7 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
         effort: v.effort ?? '',
         permission: v.permission,
         allowedCommands: v.allowedCommands ?? [],
+        escalateApprovals: !!v.escalateApprovals,
         skills: v.skills ?? [],
         instructions: v.instructions ?? '',
         maxConcurrency: v.maxConcurrency,
@@ -210,6 +213,11 @@ export function AgentDrawer({ open, agent, onClose, onSaved }: { open: boolean; 
           <Alert type={runtime && !runtime.isolated ? 'error' : 'warning'} showIcon style={{ marginBottom: 16 }}
             message={t('agents.fullWarning')}
             description={runtime && !runtime.isolated ? t('agents.fullNotIsolated', { runtime: runtime.name }) : undefined} />
+        )}
+        {permission !== 'read_only' && (
+          <Form.Item name="escalateApprovals" label={t('agents.escalate')} extra={t('agents.escalateHelp')} valuePropName="checked">
+            <Switch />
+          </Form.Item>
         )}
         <Form.Item name="allowedCommands" label={t('agents.allowedCommands')} extra={t('agents.allowedCommandsHelp')}>
           <Select mode="tags" tokenSeparators={[',']} placeholder="git, npm test, mvn -q verify" />

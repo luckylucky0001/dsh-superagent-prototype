@@ -58,7 +58,15 @@ final class ServerLink implements Link {
         Thread.currentThread().interrupt();
         return;
       } catch (Exception e) {
-        log.warn("connection to {} failed: {}", uri, rootMessage(e));
+        String why = rootMessage(e);
+        if (why != null && why.contains("401")) {
+          // the token was revoked (runtime removed in the UI) or belongs to another server: say so, retry slowly
+          log.error("the server rejected this runtime's token; if the runtime was removed, register again with "
+              + "`orca-daemon register --server URL --code CODE`");
+          backoff = Math.max(backoff, 300_000);
+        } else {
+          log.warn("connection to {} failed: {}", uri, why);
+        }
       }
       ready = false;
       socket = null;
@@ -71,7 +79,7 @@ final class ServerLink implements Link {
         Thread.currentThread().interrupt();
         return;
       }
-      backoff = Math.min(backoff * 2, 30_000);
+      backoff = backoff >= 300_000 ? backoff : Math.min(backoff * 2, 30_000);
     }
   }
 

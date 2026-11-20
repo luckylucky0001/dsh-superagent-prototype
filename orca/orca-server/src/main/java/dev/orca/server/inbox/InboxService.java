@@ -49,6 +49,9 @@ public class InboxService {
     if (data.get("schema") != null) {
       form.put("schema", data.get("schema"));
     }
+    if (data.get("approval") != null) {
+      form.put("approval", data.get("approval"));
+    }
     InboxItem i = base(QUESTION, title);
     i.taskId = t.id;
     i.requestId = requestId;
