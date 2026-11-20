@@ -37,6 +37,8 @@ orca:
     name: ${ORCA_ADMIN_NAME:Admin}
   default-timezone: ${ORCA_TIMEZONE:Asia/Singapore}
   downloads-dir: ${ORCA_DOWNLOADS_DIR:}
+  # uploaded attachments (screenshots etc.); back this folder up together with the database
+  storage-dir: ${ORCA_STORAGE_DIR:${user.home}/.orca/server/files}
   lease-seconds: 60
   heartbeat-seconds: 15
   http:

@@ -106,6 +106,7 @@ public class MemberController {
     if ("owner".equals(m.role) || m.id.equals(CurrentUser.id())) {
       throw ApiException.bad("the owner and yourself cannot be removed");
     }
+    auth.revokeMemberTokens(m.id, null);
     members.delete(m);
     realtime.publish("member.updated", dev.orca.server.realtime.Realtime.ids("id", id, "deleted", true));
     return Map.of("ok", true);

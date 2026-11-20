@@ -52,7 +52,7 @@ public class AttachmentController {
   private final Path root;
 
   public AttachmentController(AttachmentRepo attachments, IssueService issues, AuthService auth, TaskRepo tasks,
-      @Value("${orca.storage-dir:${user.home}/.orca/server/files}") String storage) {
+      @Value("${orca.storage-dir}") String storage) {
     this.attachments = attachments;
     this.issues = issues;
     this.auth = auth;

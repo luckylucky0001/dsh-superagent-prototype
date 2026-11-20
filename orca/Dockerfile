@@ -19,7 +19,8 @@ COPY web ./
 RUN npm run build
 
 FROM eclipse-temurin:21-jre
-RUN useradd --system --create-home --home-dir /var/lib/orca orca
+RUN useradd --system --create-home --home-dir /var/lib/orca orca \
+    && mkdir -p /var/lib/orca/files && chown orca:orca /var/lib/orca/files
 WORKDIR /opt/orca
 COPY --from=build /src/orca-server/target/orca-server.jar /opt/orca/orca-server.jar
 COPY --from=build /src/orca-daemon/target/orca-daemon-exec.jar /opt/orca/downloads/orca-daemon.jar
@@ -29,6 +30,7 @@ COPY --from=web /web/dist /opt/orca/web
 USER orca
 ENV ORCA_WEB_DIR=file:/opt/orca/web/ \
     ORCA_DOWNLOADS_DIR=/opt/orca/downloads \
+    ORCA_STORAGE_DIR=/var/lib/orca/files \
     JAVA_TOOL_OPTIONS="-XX:MaxRAMPercentage=75"
 EXPOSE 8080
 ENTRYPOINT ["java", "-jar", "/opt/orca/orca-server.jar"]

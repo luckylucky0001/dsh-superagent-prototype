@@ -58,6 +58,14 @@ class EndToEndTest {
   static void chatWebhook(org.springframework.test.context.DynamicPropertyRegistry r) {
     r.add("orca.notify.webhook-url", () -> "http://127.0.0.1:" + CHAT.getAddress().getPort() + "/hook");
     r.add("orca.notify.format", () -> "feishu");
+    // keep uploads out of the real ~/.orca
+    r.add("orca.storage-dir", () -> {
+      try {
+        return Files.createTempDirectory("orca-e2e-files").toString();
+      } catch (java.io.IOException e) {
+        throw new IllegalStateException(e);
+      }
+    });
   }
 
   private final HttpClient http = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();

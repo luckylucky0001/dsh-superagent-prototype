@@ -97,6 +97,7 @@ docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
 | `ORCA_HTTP_ALLOWED_HOSTS` | 空 | `http.request` 节点可访问的主机白名单（防 SSRF） |
 | `ORCA_NOTIFY_WEBHOOK_URL` / `ORCA_NOTIFY_FORMAT` | 空 / `slack` | 收件箱新事项推送到群（`feishu`、`dingtalk`、`wecom`、`slack`、`teams`） |
 | `ORCA_WEB_DIR` | `classpath:/static/` | 前端静态文件目录，如 `file:/opt/orca/web/` |
+| `ORCA_STORAGE_DIR` | `~/.orca/server/files`（镜像内为 `/var/lib/orca/files`，挂载卷 `orca-files`） | 上传附件的存放目录，需与数据库一起备份 |
 | `ORCA_DOWNLOADS_DIR` | 空（镜像内为 `/opt/orca/downloads`） | 在 `/downloads/` 下发 daemon、CLI 与安装脚本；有安装脚本时「添加运行时」显示一键安装命令 |
 
 ### 接入运行时（构建机 / 开发机）
@@ -126,6 +127,8 @@ orca inbox && orca approve inb_... --comment "ok"
 ```
 
 所有命令都支持 `--json`；CI 中可直接用 `ORCA_SERVER` / `ORCA_TOKEN` 环境变量。完整参考见 [docs/cli.md](docs/cli.md)。
+
+备份、恢复、升级、令牌管理与故障排查见 **[运维手册 docs/operations.md](docs/operations.md)**。
 
 ## 功能一览
 
