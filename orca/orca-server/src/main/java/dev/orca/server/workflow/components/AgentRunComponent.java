@@ -63,8 +63,8 @@ public class AgentRunComponent implements NodeComponent {
       return NodeResult.fatal("no agent given");
     }
     Agent agent = agents.findById(ref).or(() -> agents.findByNameIgnoreCase(ref)).orElse(null);
-    if (agent == null) {
-      return NodeResult.fatal("agent '" + ref + "' does not exist");
+    if (agent == null || agent.archived) {
+      return NodeResult.fatal("agent '" + ref + "' " + (agent == null ? "does not exist" : "is archived"));
     }
     String issue = ctx.string("issue");
     if (issue != null && (issue.isBlank() || issue.equals("null"))) {

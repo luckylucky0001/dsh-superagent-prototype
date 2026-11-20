@@ -68,8 +68,8 @@ public class ReviewLoopComponent implements NodeComponent {
   public NodeResult execute(NodeContext ctx) {
     Agent impl = agent(ctx.string("implementer"));
     Agent rev = agent(ctx.string("reviewer"));
-    if (impl == null || rev == null) {
-      return NodeResult.fatal("implementer and reviewer must be existing agents");
+    if (impl == null || rev == null || impl.archived || rev.archived) {
+      return NodeResult.fatal("implementer and reviewer must be existing, active agents");
     }
     Map<String, Object> state = new LinkedHashMap<>();
     state.put("phase", "implement");

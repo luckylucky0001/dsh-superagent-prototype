@@ -24,7 +24,6 @@ import java.util.Map;
 import java.util.Objects;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.http.HttpStatus;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.scheduling.support.CronExpression;
@@ -42,10 +41,13 @@ public class TriggerService {
   private final ScheduleRepo schedules;
   private final OrcaProperties props;
   private final dev.orca.server.repo.IssueRepo issueRepo;
+  private final org.springframework.transaction.support.TransactionTemplate isolated;
 
   public TriggerService(WorkflowService workflows, AgentRepo agents, ScheduleRepo schedules, OrcaProperties props,
-      dev.orca.server.repo.IssueRepo issueRepo) {
+      dev.orca.server.repo.IssueRepo issueRepo, org.springframework.transaction.PlatformTransactionManager txm) {
     this.issueRepo = issueRepo;
+    this.isolated = new org.springframework.transaction.support.TransactionTemplate(txm);
+    this.isolated.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     this.workflows = workflows;
     this.agents = agents;
     this.schedules = schedules;
@@ -54,7 +56,11 @@ public class TriggerService {
 
   // ---------------------------------------------------------------- issue events
 
-  @EventListener
+  /**
+   * Runs after the change that caused it has committed, and starts each workflow in its own transaction:
+   * a workflow that fails to start must neither undo the person's change nor stop other workflows.
+   */
+  @org.springframework.transaction.event.TransactionalEventListener(fallbackExecution = true)
   public void onIssueEvent(IssueEvent e) {
     Map<String, Object> payload = payload(e);
     for (Workflow w : workflows.enabled()) {
@@ -64,7 +70,7 @@ public class TriggerService {
           continue;
         }
         try {
-          workflows.start(w, n.id(), payload, e.issue().id);
+          isolated.executeWithoutResult(st -> workflows.start(w, n.id(), payload, e.issue().id));
         } catch (RuntimeException ex) {
           log.error("could not start workflow {} for {}", w.name, e.issue().issueKey, ex);
         }
@@ -187,8 +193,8 @@ public class TriggerService {
 
   // ---------------------------------------------------------------- schedules
 
+  /** Each schedule fires and records its next time in its own transaction, so one failure cannot replay others. */
   @Scheduled(fixedDelay = 30_000, initialDelay = 20_000)
-  @Transactional
   public void tick() {
     long now = Ids.now();
     for (Workflow w : workflows.enabled()) {
@@ -217,6 +223,9 @@ public class TriggerService {
           continue;
         }
         if (st.nextFireAt <= now) {
+          // advance first: a run that fails to start must not fire again every tick
+          st.nextFireAt = next(cron, zone, now);
+          schedules.save(st);
           Map<String, Object> payload = new LinkedHashMap<>();
           payload.put("event", "schedule");
           payload.put("firedAt", now);
@@ -225,12 +234,10 @@ public class TriggerService {
             payload.put("payload", m);
           }
           try {
-            workflows.start(w, n.id(), payload, null);
+            isolated.executeWithoutResult(tx -> workflows.start(w, n.id(), payload, null));
           } catch (RuntimeException ex) {
             log.error("scheduled run of {} failed to start", w.name, ex);
           }
-          st.nextFireAt = next(cron, zone, now);
-          schedules.save(st);
         }
       }
     }

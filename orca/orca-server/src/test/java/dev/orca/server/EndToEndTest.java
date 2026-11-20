@@ -298,4 +298,35 @@ class EndToEndTest {
     assertEquals(401, anon.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/members")).build(),
         HttpResponse.BodyHandlers.ofString()).statusCode());
   }
+
+  @Test
+  void aFailingWorkflowDoesNotUndoThePersonsChange() throws Exception {
+    String runtimeId = Json.str(((List<?>) call("GET", "/api/runtimes", null)).get(0), "id");
+    String temp = Json.str(call("POST", "/api/agents", Map.of("name", "Temp", "provider", "codex", "runtimeId", runtimeId)), "id");
+    String key = Json.str(call("POST", "/api/issues", Map.of("title", "Archived owner", "assigneeType", "agent",
+        "assigneeId", temp)), "key");
+    await("first run", quietly(() -> "in_review".equals(Json.str(call("GET", "/api/issues/" + key, null), "status"))));
+    call("DELETE", "/api/agents/" + temp, null);
+    call("POST", "/api/issues/" + key + "/comments", Map.of("body", "one more thing"));
+    await("failure reported", quietly(() -> ((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).stream()
+        .anyMatch(c -> String.valueOf(Json.str(c, "body")).contains("is archived"))));
+    assertTrue(((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).stream()
+        .anyMatch(c -> "one more thing".equals(Json.str(c, "body"))), "the person's comment is kept");
+  }
+
+  @Test
+  void cancellingARunDoesNotTakeItsErrorBranch() throws Exception {
+    String idle = Json.str(call("POST", "/api/agents", Map.of("name", "Idle", "provider", "codex")), "id");
+    String key = Json.str(call("POST", "/api/issues", Map.of("title", "Never runs", "assigneeType", "agent",
+        "assigneeId", idle)), "key");
+    List<?> runs = (List<?>) call("GET", "/api/issues/" + key + "/runs", null);
+    String run = Json.str(runs.get(0), "id");
+    call("POST", "/api/runs/" + run + "/cancel", null);
+    Thread.sleep(1500);
+    assertEquals("cancelled", Json.str(call("GET", "/api/runs/" + run, null), "status"));
+    assertTrue(((List<?>) call("GET", "/api/issues/" + key + "/comments", null)).isEmpty(), "no failure comment");
+    assertTrue(((List<?>) call("GET", "/api/inbox?status=pending", null)).stream()
+        .noneMatch(i -> run.equals(Json.str(i, "runId"))), "no failure alert");
+    assertEquals("cancelled", Json.str(((List<?>) call("GET", "/api/issues/" + key + "/tasks", null)).get(0), "status"));
+  }
 }

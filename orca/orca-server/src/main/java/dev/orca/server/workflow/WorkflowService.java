@@ -32,7 +32,6 @@ import java.util.Map;
 import java.util.function.Function;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.context.event.EventListener;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Propagation;
@@ -55,9 +54,13 @@ public class WorkflowService {
   private final ComponentRegistry registry;
   private final WorkflowEngine engine;
   private final WorkflowValidator validator;
+  private final org.springframework.transaction.support.TransactionTemplate isolated;
 
   public WorkflowService(WorkflowRepo workflows, WorkflowVersionRepo versions, WorkflowRunRepo runs,
-      InboxService inbox, Realtime realtime, List<NodeComponent> components) {
+      InboxService inbox, Realtime realtime, List<NodeComponent> components,
+      org.springframework.transaction.PlatformTransactionManager txm) {
+    this.isolated = new org.springframework.transaction.support.TransactionTemplate(txm);
+    this.isolated.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     this.workflows = workflows;
     this.versions = versions;
     this.runs = runs;
@@ -271,7 +274,12 @@ public class WorkflowService {
 
   // ---------------------------------------------------------------- task results and deadlines
 
-  @EventListener
+  /**
+   * After the task's end has committed, resume its node in a transaction of its own: a failure here
+   * must not roll back (and so lose) the agent's result, and a cancel that finishes a task while this
+   * run is being changed must not re-enter the run.
+   */
+  @org.springframework.transaction.event.TransactionalEventListener(fallbackExecution = true)
   public void onTaskFinished(TaskFinished e) {
     Task t = e.task();
     Map<String, Object> origin = JsonCols.map(t.originJson);
@@ -291,7 +299,7 @@ public class WorkflowService {
     payload.put("model", t.model);
     payload.put("usage", JsonCols.map(t.usageJson));
     try {
-      signal(String.valueOf(runId), String.valueOf(nodeId), t.id, payload);
+      isolated.executeWithoutResult(st -> signal(String.valueOf(runId), String.valueOf(nodeId), t.id, payload));
     } catch (RuntimeException ex) {
       log.error("could not resume run {} after task {}", runId, t.id, ex);
     }
