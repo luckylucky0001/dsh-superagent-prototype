@@ -178,7 +178,7 @@ class DaemonUnitTest {
     var out = new java.io.PrintStream(bytes, true, java.nio.charset.StandardCharsets.UTF_8);
     DaemonConfig cfg = new DaemonConfig("http://127.0.0.1:1", "orca_r_x", "t", 1, dir.resolve("work").toString(),
         List.of(dir.resolve("no-codex").toString()), List.of(dir.resolve("no-trae").toString()), Map.of(), false, null, false);
-    assertEquals(1, new Doctor(cfg, out).run());
+    assertEquals(1, new Doctor(cfg, out, dir.resolve("daemon.json")).run());
     String text = bytes.toString(java.nio.charset.StandardCharsets.UTF_8);
     assertTrue(text.contains("is writable"), text);
     assertTrue(text.contains("cannot reach it"), text);

@@ -367,7 +367,7 @@ class EndToEndTest {
     await("check done", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/runs/" + run, null), "status"))));
     String taskId = String.valueOf(Json.get(call("GET", "/api/runs/" + run, null), "state.nodes.check.output.taskId"));
     String cwd = Json.str(Json.obj(sessionEvent(taskId), "data"), "cwd");
-    assertTrue(cwd.endsWith("/runs/" + run + "/CHK"), cwd);
+    assertTrue(cwd.endsWith("/runs/" + run + "-CHK"), cwd);
     Process branch = new ProcessBuilder("git", "-C", cwd, "rev-parse", "--abbrev-ref", "HEAD").start();
     assertEquals("orca/runs-" + run.toLowerCase() + "-chk", new String(branch.getInputStream().readAllBytes()).trim(),
         "a branch of its own, so nothing lands on main");
@@ -401,6 +401,60 @@ class EndToEndTest {
         "the branch reached the remote");
   }
 
+  private record Res(int status, String body) {}
+
+  private Res raw(HttpClient client, String method, String path, Object body, String bearer) throws Exception {
+    HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + path))
+        .timeout(Duration.ofSeconds(30)).header("Content-Type", "application/json");
+    if (bearer != null) {
+      b.header("Authorization", "Bearer " + bearer);
+    }
+    b.method(method, body == null ? HttpRequest.BodyPublishers.noBody() : HttpRequest.BodyPublishers.ofString(Json.write(body)));
+    HttpResponse<String> res = client.send(b.build(), HttpResponse.BodyHandlers.ofString());
+    return new Res(res.statusCode(), res.body());
+  }
+
+  @Test
+  void personalAccessTokensCannotTakeOverTheAccount() throws Exception {
+    call("POST", "/api/members", Map.of("email", "pat-user@test.local", "name", "Pat", "password", "first-pass-1"));
+    HttpClient web = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
+    assertEquals(200, raw(web, "POST", "/api/auth/login", Map.of("email", "pat-user@test.local", "password", "first-pass-1"), null).status());
+    String me = Json.str(Json.MAPPER.readValue(raw(web, "GET", "/api/auth/me", null, null).body(), Object.class), "id");
+    String pat = Json.str(Json.MAPPER.readValue(
+        raw(web, "POST", "/api/auth/tokens", Map.of("label", "ci", "days", 7), null).body(), Object.class), "token");
+    HttpClient bare = HttpClient.newHttpClient();
+
+    // a PAT does everyday work...
+    assertEquals(200, raw(bare, "GET", "/api/issues", null, pat).status());
+    assertEquals(200, raw(bare, "GET", "/api/auth/tokens", null, pat).status());
+    // ...but cannot change the password, mint tokens, revoke tokens, manage members or add machines
+    assertEquals(403, raw(bare, "PATCH", "/api/members/" + me, Map.of("password", "stolen-pass-1"), pat).status());
+    assertEquals(403, raw(bare, "POST", "/api/auth/tokens", Map.of("label", "more", "days", 365), pat).status());
+    assertEquals(403, raw(bare, "POST", "/api/runtimes/registration-codes", null, pat).status());
+
+    // the web session needs the current password, and changing it signs out every other session and token
+    assertEquals(400, raw(web, "PATCH", "/api/members/" + me, Map.of("password", "second-pass-2"), null).status());
+    assertEquals(400, raw(web, "PATCH", "/api/members/" + me,
+        Map.of("password", "second-pass-2", "currentPassword", "wrong-pass"), null).status());
+    assertEquals(200, raw(web, "PATCH", "/api/members/" + me,
+        Map.of("password", "second-pass-2", "currentPassword", "first-pass-1"), null).status());
+    assertEquals(401, raw(bare, "GET", "/api/issues", null, pat).status(), "the token was revoked");
+    assertEquals(200, raw(web, "GET", "/api/auth/me", null, null).status(), "this session stays signed in");
+  }
+
+  @Test
+  void theDaemonTokenCanBeCheckedWithoutTouchingTheConnection() throws Exception {
+    HttpClient bare = HttpClient.newHttpClient();
+    String code = Json.str(call("POST", "/api/runtimes/registration-codes", null), "code");
+    Object reg = call("POST", "/api/daemon/register", Map.of("code", code, "name", "doctor-check"));
+    Res ok = raw(bare, "GET", "/api/daemon/whoami", null, Json.str(reg, "token"));
+    assertEquals(200, ok.status(), ok.body());
+    assertTrue(ok.body().contains("doctor-check"), ok.body());
+    assertEquals(401, raw(bare, "GET", "/api/daemon/whoami", null, "orca_d_wrong").status());
+    call("DELETE", "/api/runtimes/" + Json.str(reg, "runtimeId"), null);
+    assertEquals(401, raw(bare, "GET", "/api/daemon/whoami", null, Json.str(reg, "token")).status(), "removed runtime");
+  }
+
   @Test
   void askingAboutAProjectWorksInACheckoutOfItsRepository() throws Exception {
     Path repo = Files.createTempDirectory("orca-e2e-ask-repo");
@@ -414,7 +468,7 @@ class EndToEndTest {
     await("answer", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + first, null), "status"))));
     String cwd = Json.str(Json.obj(sessionEvent(first), "data"), "cwd");
     assertTrue(Files.isRegularFile(Path.of(cwd, "README.md")), "the agent starts in a checkout: " + cwd);
-    assertTrue(cwd.endsWith("/ASK"), cwd);
+    assertTrue(cwd.endsWith("-ASK"), cwd);
     String second = Json.str(call("POST", "/api/agents/" + agentId + "/ask",
         Map.of("prompt", "and the tests?", "followUp", first)), "id");
     await("follow-up", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + second, null), "status"))));
@@ -452,6 +506,19 @@ class EndToEndTest {
     assertTrue(cli(env, "agents", "--json").out().contains("\"Builder\""));
     assertEquals(1, cli(Map.of("ORCA_SERVER", "http://localhost:" + port, "ORCA_TOKEN", "orca_p_wrong",
         "ORCA_CLI_CONFIG", config.toString()), "whoami").code(), "a wrong token is refused");
+
+    String second = Json.str(call("POST", "/api/auth/tokens", Map.of("label", "laptop", "days", 7)), "token");
+    Path saved = Files.createTempDirectory("orca-cli-home").resolve("cli.json");
+    Map<String, String> fileEnv = Map.of("ORCA_CLI_CONFIG", saved.toString());
+    assertEquals(0, cli(fileEnv, "login", "--server", "http://localhost:" + port, "--token", second).code());
+    if (saved.getFileSystem().supportedFileAttributeViews().contains("posix")) {
+      assertEquals("rw-------", java.nio.file.attribute.PosixFilePermissions.toString(Files.getPosixFilePermissions(saved)));
+    }
+    assertEquals(2, cli(fileEnv, "issues", "--wiat").code(), "unknown options are refused");
+    assertEquals(0, cli(fileEnv, "logout").code());
+    assertTrue(Files.notExists(saved));
+    assertEquals(1, cli(Map.of("ORCA_SERVER", "http://localhost:" + port, "ORCA_TOKEN", second,
+        "ORCA_CLI_CONFIG", config.toString()), "whoami").code(), "logout revoked the token on the server");
   }
 
   record Cli(int code, String out, String err) {}

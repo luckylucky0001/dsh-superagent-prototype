@@ -65,6 +65,19 @@ public class RuntimeController {
     return downloads != null && !downloads.isBlank() && java.nio.file.Files.isRegularFile(java.nio.file.Path.of(downloads, file));
   }
 
+  /**
+   * Lets {@code orca-daemon doctor} check its runtime token over plain HTTP, without opening (and so
+   * displacing) the daemon connection. Authenticated by the runtime token itself.
+   */
+  @GetMapping("/api/daemon/whoami")
+  public Map<String, Object> whoami(jakarta.servlet.http.HttpServletRequest req) {
+    var t = auth.verify(dev.orca.server.auth.AuthFilter.token(req), AuthService.DAEMON)
+        .orElseThrow(() -> new ApiException(org.springframework.http.HttpStatus.UNAUTHORIZED,
+            "the runtime token is not valid (the runtime may have been removed)"));
+    var r = runtimes.find(t.runtimeId).orElseThrow(() -> ApiException.notFound("runtime"));
+    return Map.of("runtimeId", r.id, "name", r.name, "status", r.status);
+  }
+
   @PostMapping("/api/runtimes/{id}/probe")
   public Map<String, Object> probe(@PathVariable String id) {
     if (!gateway.send(id, Wire.frame(Wire.PROBE, Map.of()))) {

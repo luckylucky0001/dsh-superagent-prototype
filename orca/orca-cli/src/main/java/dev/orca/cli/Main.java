@@ -55,7 +55,13 @@ public final class Main {
 
   /** Runs one command; returns the process exit code (0 ok, 1 failed, 2 usage). */
   public int run(String[] argv) {
-    Args a = Args.parse(argv);
+    Args a;
+    try {
+      a = Args.parse(argv);
+    } catch (CliException e) {
+      err.println("error: " + e.getMessage());
+      return e.code;
+    }
     json = a.flag("json");
     if (a.positional.isEmpty() || a.flag("help") || a.flag("h")) {
       usage();
@@ -71,9 +77,7 @@ public final class Main {
         return login(a);
       }
       if (cmd.equals("logout")) {
-        Files.deleteIfExists(configFile());
-        out.println("signed out (removed " + configFile() + ")");
-        return 0;
+        return logout();
       }
       loadConfig();
       return switch (cmd) {
@@ -100,13 +104,41 @@ public final class Main {
     } catch (CliException e) {
       err.println("error: " + e.getMessage());
       return e.code;
+    } catch (NumberFormatException e) {
+      err.println("error: expected a number (" + e.getMessage() + ")");
+      return 2;
     } catch (IOException e) {
       err.println("error: cannot reach " + server + ": " + e.getMessage());
       return 1;
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
       return 130;
+    } catch (RuntimeException e) {
+      // e.g. an HTML page instead of JSON: a wrong --server URL or a proxy in between
+      err.println("error: unexpected response from " + server + " (is this the Orca server URL?): " + e.getMessage());
+      return 1;
     }
+  }
+
+  /** Revokes the saved token on the server (best effort), then forgets it locally. */
+  private int logout() throws IOException, InterruptedException {
+    Path f = configFile();
+    if (Files.exists(f) && Files.size(f) > 0) {
+      try {
+        Map<String, Object> m = Json.readMap(Files.readString(f));
+        server = trimSlash(Json.str(m, "server"));
+        token = Json.str(m, "token");
+        if (!server.isBlank() && token != null) {
+          call("POST", "/api/auth/logout", Map.of(), true);
+        }
+      } catch (IOException | RuntimeException e) {
+        err.println("warning: could not revoke the token on the server (" + e.getMessage()
+            + "); revoke it under Settings > API tokens");
+      }
+    }
+    Files.deleteIfExists(f);
+    out.println("signed out (token revoked, removed " + f + ")");
+    return 0;
   }
 
   // ---------------------------------------------------------------- commands
@@ -341,6 +373,14 @@ public final class Main {
       if (Set.of("succeeded", "failed", "cancelled", "timed_out").contains(status)) {
         if (!json && Json.str(t, "error") != null) {
           err.println("error: " + Json.str(t, "error"));
+        }
+        // events committed together with the final status may have arrived after the read above
+        Object rest = get("/api/tasks/" + enc(id) + "/events?after=" + after);
+        if (rest instanceof List<?> l) {
+          for (Object e : l) {
+            after = Math.max(after, Json.num(e, "seq", after));
+            printEvent(e);
+          }
         }
         err.println("task " + status);
         return "succeeded".equals(status) ? 0 : 1;
@@ -609,12 +649,24 @@ public final class Main {
 
   private void saveConfig() throws IOException {
     Path f = configFile();
-    Files.createDirectories(f.toAbsolutePath().getParent());
-    Files.writeString(f, Json.write(Map.of("server", server, "token", token)));
+    Path dir = f.toAbsolutePath().getParent();
+    boolean posix = dir.getFileSystem().supportedFileAttributeViews().contains("posix");
+    if (!Files.exists(dir)) {
+      if (posix) {
+        Files.createDirectories(dir, PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rwx------")));
+      } else {
+        Files.createDirectories(dir);
+      }
+    }
+    // the token never sits in a file others can read: write a private temp file, then move it into place
+    Path tmp = posix
+        ? Files.createTempFile(dir, ".cli", ".tmp", PosixFilePermissions.asFileAttribute(PosixFilePermissions.fromString("rw-------")))
+        : Files.createTempFile(dir, ".cli", ".tmp");
     try {
-      Files.setPosixFilePermissions(f, PosixFilePermissions.fromString("rw-------"));
-    } catch (UnsupportedOperationException ignored) {
-      // non-POSIX file system
+      Files.writeString(tmp, Json.write(Map.of("server", server, "token", token)));
+      Files.move(tmp, f, java.nio.file.StandardCopyOption.REPLACE_EXISTING, java.nio.file.StandardCopyOption.ATOMIC_MOVE);
+    } finally {
+      Files.deleteIfExists(tmp);
     }
   }
 
@@ -692,8 +744,17 @@ public final class Main {
           a.positional.add(s);
         }
       }
+      for (String k : a.options.keySet()) {
+        if (!KNOWN.contains(k)) {
+          throw new CliException(2, "unknown option --" + k + " (orca --help)");
+        }
+      }
       return a;
     }
+
+    private static final Set<String> KNOWN = Set.of("all", "assign", "comment", "description", "description-file",
+        "email", "follow-up", "h", "help", "input", "json", "label", "limit", "no-wait", "priority", "project",
+        "server", "status", "title", "token", "wait");
 
     private static final Set<String> FLAGS = Set.of("json", "help", "all", "wait", "no-wait");
 

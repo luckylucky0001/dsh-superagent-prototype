@@ -15,6 +15,8 @@ export interface MemberInput {
   name?: string;
   password?: string;
   role?: MemberRole;
+  /** required when changing your own password */
+  currentPassword?: string;
 }
 
 export interface ProjectInput {

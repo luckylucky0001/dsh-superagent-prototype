@@ -31,7 +31,7 @@ function MyAccount() {
   const qc = useQueryClient();
   const me = useMe();
   const [nameForm] = Form.useForm<{ name: string }>();
-  const [pwForm] = Form.useForm<{ password: string; confirm: string }>();
+  const [pwForm] = Form.useForm<{ current: string; password: string; confirm: string }>();
   const save = useMutation({
     mutationFn: (input: MemberInput) => api.updateMember(me.data!.id, input),
     onSuccess: (m, input) => {
@@ -63,7 +63,10 @@ function MyAccount() {
         </Form>
       </Card>
       <Card size="small" title={t('settings.changePassword')}>
-        <Form name="password" form={pwForm} layout="vertical" onFinish={(v) => save.mutate({ password: v.password })}>
+        <Form name="password" form={pwForm} layout="vertical" onFinish={(v) => save.mutate({ password: v.password, currentPassword: v.current })}>
+          <Form.Item name="current" label={t('settings.currentPassword')} rules={[{ required: true, message: t('form.required') }]}>
+            <Input.Password autoComplete="current-password" />
+          </Form.Item>
           <Form.Item name="password" label={t('settings.newPassword')}
             rules={[{ required: true, message: t('form.required') }, { min: MIN_PASSWORD, message: t('settings.passwordMin', { n: MIN_PASSWORD }) }]}>
             <Input.Password autoComplete="new-password" />

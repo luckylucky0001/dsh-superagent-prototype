@@ -40,7 +40,7 @@ public final class Workspaces {
     try {
       if (repo == null || repo.url() == null || repo.url().isBlank()) {
         Files.createDirectories(dir);
-        return dir;
+        return touched(dir);
       }
       if (!Files.isDirectory(dir.resolve(".git"))) {
         if (Files.isDirectory(dir)) {
@@ -71,10 +71,16 @@ public final class Workspaces {
         // keep local work; just refresh remote refs so the agent can rebase if it wants to
         Executables.run(List.of("git", "-C", dir.toString(), "fetch", "--quiet", "--all"), Map.of(), 120);
       }
-      return dir;
+      return touched(dir);
     } catch (IOException e) {
       throw new AgentException(ErrorCodes.AGENT_ERROR, "could not prepare workspace: " + e.getMessage(), e);
     }
+  }
+
+  /** Marks a workspace as used now, so cleanup (which looks at the folder's time) keeps it for another week. */
+  private static Path touched(Path dir) throws IOException {
+    Files.setLastModifiedTime(dir, java.nio.file.attribute.FileTime.fromMillis(System.currentTimeMillis()));
+    return dir;
   }
 
   /**

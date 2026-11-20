@@ -104,7 +104,7 @@ public class AttachmentController {
   public ResponseEntity<Resource> file(@PathVariable String id, HttpServletRequest req) {
     Attachment a = attachments.findById(id).orElseThrow(() -> ApiException.notFound("attachment"));
     String token = AuthFilter.token(req);
-    boolean member = auth.verify(token, AuthService.SESSION).isPresent();
+    boolean member = auth.verify(token, AuthService.SESSION).or(() -> auth.verify(token, AuthService.PERSONAL)).isPresent();
     boolean task = !member && auth.verify(token, AuthService.TASK).map(ApiToken::getLabel).flatMap(tasks::findById)
         .filter(t -> a.issueId.equals(t.issueId)).isPresent();
     if (!member && !task) {

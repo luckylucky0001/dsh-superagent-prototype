@@ -42,6 +42,20 @@ public class AuthService {
     return encoder.encode(raw);
   }
 
+  public boolean passwordMatches(Member m, String raw) {
+    return raw != null && m.passwordHash != null && encoder.matches(raw, m.passwordHash);
+  }
+
+  /** Signs a member out everywhere (web sessions and personal access tokens), except the token {@code keep}. */
+  @Transactional
+  public void revokeMemberTokens(String memberId, String keep) {
+    String keepHash = keep == null ? null : hash(keep);
+    tokens.findByMemberId(memberId).stream()
+        .filter(t -> SESSION.equals(t.kind) || PERSONAL.equals(t.kind))
+        .filter(t -> !t.tokenHash.equals(keepHash))
+        .forEach(tokens::delete);
+  }
+
   @Transactional
   public Optional<String> login(String email, String password) {
     return members.findByEmailIgnoreCase(email)

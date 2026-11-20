@@ -15,7 +15,9 @@
 | 密码 | `orca login --server URL --email EMAIL` | 交互输入密码，换取 90 天有效的令牌 |
 | 环境变量 | `ORCA_SERVER=... ORCA_TOKEN=... orca issues` | CI / 脚本；优先于配置文件 |
 
-配置保存在 `~/.orca/cli.json`（权限 600），可用 `ORCA_CLI_CONFIG` 指向别处。`orca whoami` 查看当前身份，`orca logout` 删除本地令牌。
+配置保存在 `~/.orca/cli.json`（目录 700、文件 600，原子写入），可用 `ORCA_CLI_CONFIG` 指向别处。`orca whoami` 查看当前身份，`orca logout` 在服务端吊销令牌并删除本地配置。
+
+令牌以创建者身份执行日常工作（Issue、提问、任务、工作流、收件箱），但**不能**修改密码、签发或吊销令牌、管理成员、接入或移除运行时——这些操作需要在网页上登录。修改密码时须输入当前密码，修改后本人的其他会话与令牌全部失效。请不要把个人令牌放在共享的构建机上。
 
 ## 命令
 

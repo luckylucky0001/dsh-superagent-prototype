@@ -10,6 +10,7 @@ import org.springframework.web.context.request.ServletRequestAttributes;
 /** The signed-in member of the current request, set by {@link AuthFilter}. */
 public final class CurrentUser {
   static final String ATTR = "orca.member";
+  static final String KIND = "orca.tokenKind";
 
   private CurrentUser() {}
 

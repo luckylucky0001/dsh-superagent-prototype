@@ -72,7 +72,7 @@ public class SkillLibrary {
 
   /** {@code ---\nname: x\ndescription: y\n---\nbody}. */
   static Optional<Entry> parse(String text) {
-    String t = text.replace("\r\n", "\n");
+    String t = (text.startsWith("\uFEFF") ? text.substring(1) : text).replace("\r\n", "\n");
     if (!t.startsWith("---\n")) {
       return Optional.empty();
     }

@@ -42,7 +42,8 @@ public class MemberController {
     return members.findAll().stream().map(AuthController.MemberView::of).toList();
   }
 
-  public record MemberInput(String email, String name, String password, String role) {}
+  /** {@code currentPassword} is required when members change their own password. */
+  public record MemberInput(String email, String name, String password, String role, String currentPassword) {}
 
   @PostMapping("/api/members")
   @Transactional
@@ -67,7 +68,8 @@ public class MemberController {
 
   @PatchMapping("/api/members/{id}")
   @Transactional
-  public AuthController.MemberView update(@PathVariable String id, @RequestBody MemberInput in) {
+  public AuthController.MemberView update(@PathVariable String id, @RequestBody MemberInput in,
+      jakarta.servlet.http.HttpServletRequest req) {
     Member me = CurrentUser.get();
     boolean self = me.id.equals(id);
     if (!self) {
@@ -86,7 +88,12 @@ public class MemberController {
     }
     if (in.password() != null) {
       checkPassword(in.password());
+      if (self && !auth.passwordMatches(m, in.currentPassword())) {
+        throw ApiException.bad("the current password is not correct");
+      }
       m.passwordHash = auth.hashPassword(in.password());
+      // every other session and token of this member stops working; you stay signed in here
+      auth.revokeMemberTokens(m.id, self ? AuthFilter.token(req) : null);
     }
     return changed(members.save(m));
   }

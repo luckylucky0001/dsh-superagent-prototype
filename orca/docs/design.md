@@ -85,7 +85,7 @@
 
 - **路由**：按 Agent 绑定的运行时派发，要求运行时在线、对应 CLI 已安装且已登录；不满足时任务留在队列并写明原因（“codex is not logged in on dev-box”）。
 - **并发**：运行时容量、Agent 并发上限、**同一工作目录同一时间只有一个任务**。
-- **工作目录**：同一 Issue 的所有 Agent 共享 `issues/<KEY>`（评审能看到实现的改动）；无 Issue 的运行共享 `runs/<runId>`。项目配置了仓库时，首次克隆并建分支 `orca/<key>`，常见构建缓存写入 `.git/info/exclude`。Agent 被要求自己提交；Codex 沙箱把 `.git` 设为只读，提交以审批请求出现，工作区档位内置放行 `git add/commit/status/diff/log`。任务成功后仍有未提交改动时，daemon 以 `<KEY>: <总结首行>` 自动提交，保证工作留在分支上（推送和 PR 仍由人或明确要求时由 Agent 完成）。
+- **工作目录**：同一 Issue 的所有 Agent 共享 `issues/<KEY>`（评审能看到实现的改动）；无 Issue 的运行共享 `runs/<runId>`，Ask 使用 `adhoc/<agent>-<随机>`；指定项目时，检出放在同级目录 `runs/<runId>-<KEY>` / `adhoc/…-<KEY>`，分支为 `orca/<目录键>`。一次性目录 7 天未使用才清理，每次使用都会刷新目录时间。项目配置了仓库时，首次克隆并建分支 `orca/<key>`，常见构建缓存写入 `.git/info/exclude`。Agent 被要求自己提交；Codex 沙箱把 `.git` 设为只读，提交以审批请求出现，工作区档位内置放行 `git add/commit/status/diff/log`。任务成功后仍有未提交改动时，daemon 以 `<KEY>: <总结首行>` 自动提交，保证工作留在分支上（推送和 PR 仍由人或明确要求时由 Agent 完成）。
 - **会话续接**：按 (Agent, Issue) 找上次成功任务的 provider 会话并续接；续接失败（会话丢失、换了机器/CLI）则开新会话，并把 Issue 上下文（标题、描述、人和 Agent 的评论，不含系统通知）作为前情提要。新会话的 prompt 若没提到该 Issue，也会自动补上 Issue 上下文。
 - **租约**：派发和事件/心跳会续租；租约过期：未开始的任务重新排队，已开始的判 `RUNTIME_LOST`。daemon 重连时上报在跑任务，server 对账。
 - **控制**：取消（中断 → 宽限 → 杀进程树）、插话（支持则 steer，否则排到下一轮）、Agent 提问 → 收件箱 → 回答回送。
@@ -122,8 +122,8 @@ React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板�
 ## 11. 交付与运维
 
 - **运行时接入**：`install-runtime.sh`（服务端 `/downloads/` 下发）检查 Java / git，引导安装并登录 Codex（`codex login --device-auth` 适合 SSH），下载 daemon 与 CLI，注册（带上运行时名称），运行自检，可选 systemd 用户服务。脚本只用 POSIX sh，非交互（`--yes`）时不做任何安装。
-- **自检**：`orca-daemon doctor` 逐项检查 Java ≥ 21、git 与身份、工作目录可写与磁盘、注册信息、服务器可达（`/api/health`）、运行时令牌（实际发起 daemon WebSocket 握手）、每个 CLI 的安装与登录、网络与 full 档位设置、是否已有 daemon 持有锁；每项给出修复命令，有阻断问题时退出码 1。终端不支持 UTF-8 时自动改用 ASCII 标记。
-- **命令行**：`orca` 只调用公开 REST API；认证用个人访问令牌（`orca_p_`，库里只存哈希，可在设置页吊销）或密码换取的 90 天令牌；`--json` 与稳定退出码便于脚本与 CI。
+- **自检**：`orca-daemon doctor` 逐项检查 Java ≥ 21、git 与身份、工作目录可写与磁盘、注册信息、服务器可达（`/api/health`）、运行时令牌（`GET /api/daemon/whoami`，普通 HTTP，不会挤掉正在运行的 daemon 连接）、每个 CLI 的安装与登录（没有任何可用 CLI 视为阻断问题）、网络与 full 档位设置、是否已有 daemon 持有锁；每项给出修复命令，有阻断问题时退出码 1。终端不支持 UTF-8 时自动改用 ASCII 标记。
+- **命令行**：`orca` 只调用公开 REST API；认证用个人访问令牌（`orca_p_`，库里只存哈希，可在设置页吊销）或密码换取的 90 天令牌；令牌不能修改密码、签发令牌、管理成员或运行时（AuthFilter 统一拦截），修改密码须验证当前密码并使其他会话与令牌失效；`logout` 在服务端吊销令牌；`--json` 与稳定退出码便于脚本与 CI。
 - **技能库**：内置技能以带 front matter 的 Markdown 随服务端发布（`classpath:skills/*.md`），空库首次启动时导入；之后可在界面上从内置库补回缺少的技能；已存在的同名技能（可能已被团队修改）不会被覆盖。
 
 ## 12. 后续

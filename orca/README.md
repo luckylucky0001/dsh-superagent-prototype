@@ -114,7 +114,7 @@ curl -fsSL https://orca.example.com/downloads/install-runtime.sh | sh -s -- \
 
 ### 命令行 `orca`
 
-在 **设置 → API tokens** 创建个人访问令牌（`orca_p_` 前缀，可随时吊销），然后：
+在 **设置 → API tokens** 创建个人访问令牌（`orca_p_` 前缀，可随时吊销；令牌只能做日常工作，不能改密码、签发令牌、管理成员或接入运行时，泄露也无法接管账号），然后：
 
 ```bash
 orca login --server https://orca.example.com --token orca_p_...

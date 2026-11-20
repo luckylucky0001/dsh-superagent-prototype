@@ -159,9 +159,10 @@ public class TaskService {
     t.queuedAt = Ids.now();
     t.workspaceKey = workspaceKey(agent, issue, req.origin());
     if (t.projectId != null) {
-      // its own checkout: other no-issue nodes of the run, or other projects, never share it
+      // its own checkout, beside (not inside) the run's scratch folder: other no-issue nodes of the run, or
+      // other projects, never see or share it, and cleanup judges its age on its own
       String key = projects.findById(t.projectId).map(p -> p.keyPrefix).orElse("project");
-      t.workspaceKey = t.workspaceKey + "/" + key.replaceAll("[^A-Za-z0-9._-]", "-");
+      t.workspaceKey = t.workspaceKey + "-" + key.replaceAll("[^A-Za-z0-9._-]", "-");
     }
     if ("continue".equals(req.sessionMode()) && issue != null) {
       for (Task prev : tasks.findByAgentIdAndIssueIdAndStatusOrderByFinishedAtDesc(agent.id, issue.id, TaskStatus.SUCCEEDED)) {
@@ -193,6 +194,10 @@ public class TaskService {
     Task prev = tasks.findById(previousTaskId).orElseThrow(() -> ApiException.notFound("task " + previousTaskId));
     if (!agent.id.equals(prev.agentId) || !"ask".equals(prev.kind)) {
       throw ApiException.bad("only this agent's Ask tasks can be continued");
+    }
+    Object askedBy = prev.originJson == null ? null : JsonCols.map(prev.originJson).get("by");
+    if (askedBy != null && !askedBy.equals(by)) {
+      throw ApiException.bad("only the person who asked can continue this conversation; ask again instead");
     }
     if (!TaskStatus.SUCCEEDED.equals(prev.status) || prev.sessionRef == null) {
       throw ApiException.bad("the previous answer has not finished successfully");

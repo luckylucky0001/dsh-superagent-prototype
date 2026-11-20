@@ -22,7 +22,10 @@ import org.springframework.web.filter.OncePerRequestFilter;
 public class AuthFilter extends OncePerRequestFilter {
 
   public static final String COOKIE = "orca_session";
-  private static final List<String> OPEN = List.of("/api/auth/login", "/api/daemon/register", "/api/daemon/ws",
+  /** Paths whose changes need a web session: personal access tokens may only read them. */
+  static final List<String> ACCOUNT_ADMIN = List.of("/api/members", "/api/auth/tokens", "/api/runtimes");
+
+  private static final List<String> OPEN = List.of("/api/auth/login", "/api/daemon/register", "/api/daemon/ws", "/api/daemon/whoami",
       "/api/hooks/", "/api/health", "/api/mcp");
 
   /** Authenticated inside the controller (session or task token). */
@@ -59,9 +62,9 @@ public class AuthFilter extends OncePerRequestFilter {
       return;
     }
     String presented = token(req);
-    Optional<Member> m = auth.verify(presented, AuthService.SESSION)
-        .or(() -> auth.verify(presented, AuthService.PERSONAL))
-        .flatMap(t -> auth.member(t.memberId));
+    Optional<dev.orca.server.model.ApiToken> tok = auth.verify(presented, AuthService.SESSION)
+        .or(() -> auth.verify(presented, AuthService.PERSONAL));
+    Optional<Member> m = tok.flatMap(t -> auth.member(t.memberId));
     if (m.isEmpty()) {
       res.setStatus(401);
       res.setContentType("application/json");
@@ -69,7 +72,18 @@ public class AuthFilter extends OncePerRequestFilter {
       res.getWriter().write("{\"error\":\"not signed in\"}");
       return;
     }
+    if (AuthService.PERSONAL.equals(tok.get().kind) && !"GET".equals(req.getMethod())
+        && ACCOUNT_ADMIN.stream().anyMatch(path::startsWith)) {
+      // a leaked token must not be able to change passwords, mint more tokens, manage members or add machines
+      res.setStatus(403);
+      res.setContentType("application/json");
+      res.setCharacterEncoding("UTF-8");
+      res.getWriter().write("{\"error\":\"personal access tokens cannot manage members, tokens or runtimes; "
+          + "sign in to the web app for that\"}");
+      return;
+    }
     req.setAttribute(CurrentUser.ATTR, m.get());
+    req.setAttribute(CurrentUser.KIND, tok.get().kind);
     chain.doFilter(req, res);
   }
 
