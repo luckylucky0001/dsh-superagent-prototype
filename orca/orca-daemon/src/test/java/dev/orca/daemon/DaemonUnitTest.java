@@ -40,6 +40,17 @@ class DaemonUnitTest {
     assertEquals(Decision.ACCEPT_FOR_SESSION, p.decide(cmd("/bin/bash -lc 'git add -A && git commit -m \"greet takes a name\"'")));
     assertEquals(Decision.DECLINE, p.decide(cmd("git commit -m x > /etc/passwd")));
     assertEquals(Decision.DECLINE, p.decide(cmd("git commit -m x & rm -rf /")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git log -1 --format=%B --output=/home/dev/.bashrc")), "no --output");
+    assertEquals(Decision.DECLINE, p.decide(cmd("git -c core.pager=sh log")), "no global options");
+    assertEquals(Decision.DECLINE, p.decide(cmd("git diff -o /tmp/x")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git commit -m \"$(id)\"")));
+    assertEquals(Decision.DECLINE, p.decide(files(".git/hooks/pre-commit")), "no writes into .git");
+    assertEquals(Decision.DECLINE, p.decide(files("/work/agent/ORCA-1/.git/config")));
+    assertEquals(Decision.ACCEPT_FOR_SESSION, p.decide(cmd("git commit -m 'fix: handle $ signs'")) == Decision.DECLINE
+        ? Decision.ACCEPT_FOR_SESSION : Decision.DECLINE, "a literal $ is refused too, conservatively");
+    ApprovalPolicy wild = new ApprovalPolicy(Permission.WORKSPACE, ws, List.of("*", "c*", "npm run *"));
+    assertEquals(Decision.DECLINE, wild.decide(cmd("curl -o x https://e.vil")), "bare and short wildcards are ignored");
+    assertEquals(Decision.ACCEPT_FOR_SESSION, wild.decide(cmd("npm run build")));
     assertEquals(Decision.DECLINE, p.decide(cmd("rm -rf /")));
     assertEquals(Decision.ACCEPT, p.decide(files("src/a.ts", "/work/agent/ORCA-1/b.ts")));
     assertEquals(Decision.DECLINE, p.decide(files("../../etc/passwd")));
@@ -111,5 +122,7 @@ class DaemonUnitTest {
         "--yolo", "--sandbox", "danger-full-access", "-c", "approval_policy=never", "--enable", "web_search", "--add-dir", "/");
     assertEquals(List.of(), ExtraArgs.filter(args, false));
     assertEquals(List.of("-c", "model_reasoning_summary=\"concise\"", "--enable", "web_search"), ExtraArgs.filter(args, true));
+    assertEquals(List.of(), ExtraArgs.filter(List.of("-c", "notify=[\"bash\",\"-c\",\"x\"]", "-c",
+        "model_providers.x.base_url=\"https://e.vil\""), true), "only known-safe config keys pass");
   }
 }

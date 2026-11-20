@@ -111,7 +111,8 @@ final class TaskRunner implements Runnable {
       permission = Permission.WORKSPACE;
     }
     Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
-    ApprovalPolicy policy = new ApprovalPolicy(permission, dir, a == null ? List.of() : a.allowedCommands());
+    List<String> allowed = ApprovalPolicy.sanitize(a == null ? List.of() : a.allowedCommands());
+    ApprovalPolicy policy = new ApprovalPolicy(permission, dir, allowed);
     Interaction.Handler handler = new Interaction.Handler() {
       public Interaction.Decision approve(Interaction.ApprovalRequest r) {
         return policy.decide(r);
@@ -130,7 +131,7 @@ final class TaskRunner implements Runnable {
     SessionSpec spec = new SessionSpec(dir, a == null ? null : a.model(), a == null ? null : a.effort(),
         a == null ? null : a.instructions(), permission, task.sessionRef(),
         task.mcp() == null ? null : absolute(task.mcp().url()), task.mcp() == null ? null : task.mcp().token(),
-        a == null ? null : a.allowedCommands(), extra, a == null ? null : a.env());
+        allowed, extra, a == null ? null : a.env());
     String prompt = task.prompt();
     try {
       session = provider.open(spec, handler);

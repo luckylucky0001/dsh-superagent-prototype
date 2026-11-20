@@ -13,8 +13,10 @@ final class ExtraArgs {
   private static final List<String> FORBIDDEN_FLAGS = List.of("--yolo", "-y", "--dangerously-bypass-approvals-and-sandbox",
       "--dangerously-bypass-hook-trust", "--sandbox", "-s", "--ask-for-approval", "-a", "--permission-mode", "--add-dir",
       "--full-auto", "--cd", "-C", "--profile", "-p");
-  private static final List<String> FORBIDDEN_CONFIG = List.of("sandbox", "approval", "default_permissions", "projects",
-      "permission", "shell_environment_policy", "mcp_servers", "trust");
+  /** Config keys an agent may set; everything else (sandbox, approvals, notify, providers, MCP, …) is dropped. */
+  private static final List<String> ALLOWED_CONFIG = List.of("model_reasoning_summary", "model_verbosity",
+      "hide_agent_reasoning", "show_raw_agent_reasoning", "model_supports_reasoning_summaries", "project_doc_max_bytes",
+      "tools.web_search", "web_search", "file_opener");
 
   private ExtraArgs() {}
 
@@ -36,7 +38,7 @@ final class ExtraArgs {
         String kv = a.contains("=") && flag.equals("--config") ? a.substring(a.indexOf('=') + 1)
             : i + 1 < args.size() ? args.get(++i) : "";
         String key = kv.contains("=") ? kv.substring(0, kv.indexOf('=')).toLowerCase(Locale.ROOT) : kv;
-        if (FORBIDDEN_CONFIG.stream().anyMatch(key::contains)) {
+        if (!ALLOWED_CONFIG.contains(key.trim())) {
           continue;
         }
         out.add("-c");

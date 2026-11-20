@@ -386,8 +386,10 @@ final class CodexSession implements AgentSession {
             actions.add(Json.str(a, "command"));
           }
         }
-        String command = actions.size() == 1 ? actions.get(0)
-            : dev.orca.agent.core.Executables.unwrapShell(Json.str(p, "command"));
+        // the policy judges the command that will actually run, not Codex's display summary of it
+        String rawCommand = Json.str(p, "command");
+        String command = rawCommand != null ? dev.orca.agent.core.Executables.unwrapShell(rawCommand)
+            : actions.isEmpty() ? null : String.join(" && ", actions);
         ApprovalRequest r = new ApprovalRequest(nextRequestId(), network ? ApprovalKind.NETWORK : ApprovalKind.COMMAND,
             network ? "network access to " + Json.str(p, "networkApprovalContext.host") : command, command,
             Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);
