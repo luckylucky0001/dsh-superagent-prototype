@@ -115,7 +115,7 @@ curl -fsSL https://orca.example.com/downloads/install-runtime.sh | sh -s -- \
 
 ### 命令行 `orca`
 
-在 **设置 → API tokens** 创建个人访问令牌（`orca_p_` 前缀，可随时吊销；令牌只能做日常工作，不能改密码、签发令牌、管理成员或接入运行时，泄露也无法接管账号），然后：
+在 **设置 → API tokens** 创建个人访问令牌（`orca_p_` 前缀，可随时吊销；令牌只能做日常工作，不能改密码、签发令牌、管理成员、接入运行时或修改项目仓库，泄露也无法接管账号），然后：
 
 ```bash
 orca login --server https://orca.example.com --token orca_p_...
@@ -141,6 +141,7 @@ orca inbox && orca approve inb_... --comment "ok"
 - **MCP 回写**：Agent 运行中可通过 Orca 的 MCP 工具读 Issue、发进展、改状态（每个任务一个短期 token）。
 - **Git**：项目配置仓库后，每个 Issue 一个分支 `orca/<key>`，同一 Issue 的 Agent 共享工作目录；遗留改动自动提交。
 - **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。内置 9 个经过整理的技能（git 提交规范、测试纪律、代码评审清单、安全基线、Java/Spring、Python、TypeScript/React、仓储 WMS 约定、汽车物流领域知识），首次启动自动导入，之后可在「技能 → 从内置库添加」补回缺少的技能（已存在的同名技能不会被覆盖）。
+- **审计日志**：登录（含失败与锁定）、令牌、成员与角色、Agent 权限变更（档位、命令白名单、联网、审批升级）、运行时接入与移除、审批决定（含被批准的命令）、工作流与项目变更，记录操作人、时间与来源 IP；设置 → 审计日志 查看，可导出 CSV。
 - **命令行与令牌**：`orca` CLI 覆盖 Issue、Agent、提问、任务、工作流、收件箱；个人访问令牌可在设置页创建与吊销。
 - **成员与用量**：成员/角色管理，按 Agent、按天的运行与 token 统计。
 

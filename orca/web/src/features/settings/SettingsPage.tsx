@@ -2,7 +2,7 @@ import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { Alert, Button, Card, Flex, Form, Input, InputNumber, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
-import { BranchesOutlined, DeleteOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
+import { BranchesOutlined, DeleteOutlined, EditOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useMembers, useProjects } from '@/api/queries';
 import type { Member, MemberInput, MemberRole, Project, ProjectInput } from '@/api/types';
@@ -14,6 +14,7 @@ import { QueryState } from '@/components/QueryState';
 import { fmtDateTime } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
 import { SkillsTab } from './SkillsTab';
+import { AuditTab } from './AuditTab';
 
 const ROLE_COLORS: Record<string, string> = { owner: 'gold', admin: 'blue', member: 'default' };
 const MIN_PASSWORD = 8;
@@ -295,15 +296,22 @@ function Members() {
 
 // ---------------------------------------------------------------- projects
 
-function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void }) {
+function ProjectModal({ open, onClose, project }: { open: boolean; onClose: () => void; project?: Project | null }) {
   const t = useT();
   const notify = useNotify();
   const qc = useQueryClient();
   const [form] = Form.useForm<ProjectInput>();
   const key = Form.useWatch('key', form);
+  const editing = !!project;
   const create = useMutation({
-    mutationFn: (v: ProjectInput) =>
-      api.createProject({
+    mutationFn: (v: ProjectInput) => editing
+      ? api.updateProject(project!.id, {
+        name: v.name.trim(),
+        description: v.description?.trim() ?? '',
+        repoUrl: v.repoUrl?.trim() ?? '',
+        defaultBranch: v.defaultBranch?.trim() ?? '',
+      })
+      : api.createProject({
         key: v.key.trim().toUpperCase(),
         name: v.name.trim(),
         description: v.description?.trim() || undefined,
@@ -312,21 +320,24 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
       }),
     onSuccess: (p) => {
       void qc.invalidateQueries({ queryKey: qk.projects });
-      notify.success(t('settings.projectCreated', { key: p.key }));
+      notify.success(editing ? t('settings.saved') : t('settings.projectCreated', { key: p.key }));
       onClose();
     },
     onError: notify.error,
   });
   return (
-    <Modal open={open} onCancel={onClose} title={t('settings.newProject')} okText={t('common.create')}
+    <Modal open={open} onCancel={onClose} title={editing ? t('settings.editProject', { key: project!.key }) : t('settings.newProject')}
+      okText={editing ? t('common.save') : t('common.create')}
       onOk={() => form.submit()} confirmLoading={create.isPending} destroyOnHidden width={600}>
-      <Form name="project" form={form} layout="vertical" preserve={false} onFinish={(v) => create.mutate(v)}>
+      <Form name="project" form={form} layout="vertical" preserve={false} onFinish={(v) => create.mutate(v)}
+        initialValues={project ? { key: project.key, name: project.name, description: project.description ?? '',
+          repoUrl: project.repoUrl ?? '', defaultBranch: project.defaultBranch ?? '' } : undefined}>
         <Flex gap={12} align="start">
           <Form.Item name="key" label={t('settings.projectKey')} style={{ width: 150 }}
             normalize={(v: string) => v?.toUpperCase()}
             extra={t('settings.projectKeyHelp', { example: `${key || 'APP'}-1` })}
             rules={[{ required: true, message: t('form.required') }, { pattern: /^[A-Za-z][A-Za-z0-9]{1,9}$/, message: t('settings.projectKeyInvalid') }]}>
-            <Input placeholder="APP" maxLength={10} className="orca-mono" />
+            <Input placeholder="APP" maxLength={10} className="orca-mono" disabled={editing} />
           </Form.Item>
           <Form.Item name="name" label={t('common.name')} style={{ flex: 1 }} rules={[{ required: true, whitespace: true, message: t('form.required') }]}>
             <Input placeholder={t('settings.projectNamePlaceholder')} />
@@ -335,7 +346,8 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
         <Form.Item name="description" label={t('common.description')}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} />
         </Form.Item>
-        <Alert type="info" showIcon icon={<BranchesOutlined />} style={{ marginBottom: 16 }} message={t('settings.repoExplain')} />
+        <Alert type="info" showIcon icon={<BranchesOutlined />} style={{ marginBottom: 16 }}
+          message={editing ? t('settings.repoChangeExplain') : t('settings.repoExplain')} />
         <Flex gap={12} align="start">
           <Form.Item name="repoUrl" label={t('settings.repoUrl')} style={{ flex: 1 }}>
             <Input placeholder="git@github.com:acme/app.git" className="orca-mono" />
@@ -353,6 +365,9 @@ function Projects() {
   const t = useT();
   const projects = useProjects();
   const [creating, setCreating] = useState(false);
+  const [editingProject, setEditingProject] = useState<Project | null>(null);
+  const me = useMe();
+  const admin = me.data?.role === 'owner' || me.data?.role === 'admin';
   return (
     <QueryState isLoading={projects.isLoading} error={projects.error} onRetry={() => void projects.refetch()}>
       <Card size="small" styles={{ body: { padding: 0 } }} title={t('settings.projectsCount', { n: projects.data?.length ?? 0 })}
@@ -390,10 +405,19 @@ function Projects() {
                 ),
             },
             { title: t('common.created'), dataIndex: 'createdAt', width: 170, render: (v: number) => fmtDateTime(v) },
+            ...(admin ? [{
+              key: 'edit', width: 56,
+              render: (_: unknown, p: Project) => (
+                <Tooltip title={t('common.edit')}>
+                  <Button size="small" type="text" icon={<EditOutlined />} onClick={() => setEditingProject(p)} aria-label={t('common.edit')} />
+                </Tooltip>
+              ),
+            }] : []),
           ]}
         />
       </Card>
-      <NewProjectModal open={creating} onClose={() => setCreating(false)} />
+      <ProjectModal open={creating} onClose={() => setCreating(false)} />
+      <ProjectModal open={!!editingProject} project={editingProject} onClose={() => setEditingProject(null)} />
     </QueryState>
   );
 }
@@ -402,6 +426,8 @@ export function SettingsPage() {
   const t = useT();
   const [params, setParams] = useSearchParams();
   const tab = params.get('tab') ?? 'account';
+  const me = useMe();
+  const admin = me.data?.role === 'owner' || me.data?.role === 'admin';
   return (
     <div style={{ maxWidth: 1100 }}>
       <PageHeader title={t('nav.settings')} />
@@ -413,6 +439,7 @@ export function SettingsPage() {
           { key: 'members', label: t('settings.members'), children: <Members /> },
           { key: 'projects', label: t('settings.projects'), children: <Projects /> },
           { key: 'skills', label: t('skills.title'), children: <SkillsTab /> },
+          ...(admin ? [{ key: 'audit', label: t('audit.title'), children: <AuditTab /> }] : []),
         ]}
       />
     </div>

@@ -123,11 +123,13 @@ React + TypeScript + Ant Design + React Flow + TanStack Query。页面：看板�
 
 - **运行时接入**：`install-runtime.sh`（服务端 `/downloads/` 下发）检查 Java / git，引导安装并登录 Codex（`codex login --device-auth` 适合 SSH），下载 daemon 与 CLI，注册（带上运行时名称），运行自检，可选 systemd 用户服务。脚本只用 POSIX sh，非交互（`--yes`）时不做任何安装。
 - **自检**：`orca-daemon doctor` 逐项检查 Java ≥ 21、git 与身份、工作目录可写与磁盘、注册信息、服务器可达（`/api/health`）、运行时令牌（`GET /api/daemon/whoami`，普通 HTTP，不会挤掉正在运行的 daemon 连接）、每个 CLI 的安装与登录（没有任何可用 CLI 视为阻断问题）、网络与 full 档位设置、是否已有 daemon 持有锁；每项给出修复命令，有阻断问题时退出码 1。终端不支持 UTF-8 时自动改用 ASCII 标记。
-- **命令行**：`orca` 只调用公开 REST API；认证用个人访问令牌（`orca_p_`，库里只存哈希，可在设置页吊销）或密码换取的 90 天令牌；令牌不能修改密码、签发令牌、管理成员或运行时（AuthFilter 统一拦截），修改密码须验证当前密码并使其他会话与令牌失效；`logout` 在服务端吊销令牌；`--json` 与稳定退出码便于脚本与 CI。
+- **命令行**：`orca` 只调用公开 REST API；认证用个人访问令牌（`orca_p_`，库里只存哈希，可在设置页吊销）或密码换取的 90 天令牌；令牌不能修改密码、签发令牌、管理成员、运行时或项目（AuthFilter 统一拦截），修改密码须验证当前密码并使其他会话与令牌失效；`logout` 在服务端吊销令牌；`--json` 与稳定退出码便于脚本与 CI。
 - **技能库**：内置技能以带 front matter 的 Markdown 随服务端发布（`classpath:skills/*.md`），空库首次启动时导入；之后可在界面上从内置库补回缺少的技能；已存在的同名技能（可能已被团队修改）不会被覆盖。
+
+- **审计**：`AuditService` 记录安全相关操作（登录、令牌、成员、Agent 权限、运行时、审批、工作流、项目），只追加；不写入令牌、密码、提示词与指令正文；管理员可查看与导出 CSV（CSV 单元格对 `= + - @` 开头做防公式注入处理）。
 
 ## 12. 后续
 
 - GitHub/GitLab/Gitee 的合并请求 API 集成（目前 `repo.push` 推送分支并回传托管平台打印的创建链接）、有轮数上限的循环子流程。
-- 多实例（行锁、跨实例推送）、OIDC/SSO、更细的 RBAC、审计。
+- 多实例（行锁、跨实例推送）、OIDC/SSO、更细的 RBAC。
 - TRAE CLI 登录后的实机联调（见 providers.md 待验证清单）；评估以 app-server 统一两种 CLI。

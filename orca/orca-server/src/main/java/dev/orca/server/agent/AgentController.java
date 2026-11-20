@@ -32,6 +32,25 @@ public class AgentController {
   private final TaskService tasks;
   private final Realtime realtime;
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private dev.orca.server.audit.AuditService audit;
+
+  /** The settings that decide what an agent may do: these are audited when they change. */
+  private static java.util.Map<String, Object> powers(Agent a) {
+    java.util.Map<String, Object> m = new java.util.LinkedHashMap<>();
+    m.put("provider", a.provider);
+    m.put("runtime", a.runtimeId);
+    m.put("model", a.model);
+    m.put("permission", a.permission);
+    m.put("allowedCommands", a.allowedCommandsJson);
+    m.put("extraArgs", a.extraArgsJson);
+    m.put("skills", a.skillsJson);
+    m.put("escalateApprovals", a.escalateApprovals);
+    m.put("networkAccess", a.networkAccess);
+    m.put("instructions", a.instructions == null ? 0 : a.instructions.hashCode());
+    return m;
+  }
+
   public AgentController(AgentRepo agents, TaskService tasks, Realtime realtime) {
     this.agents = agents;
     this.tasks = tasks;
@@ -67,6 +86,10 @@ public class AgentController {
       throw ApiException.bad("name is required");
     }
     agents.save(a);
+    java.util.Map<String, Object> created = powers(a);
+    created.remove("instructions");
+    created.put("name", a.name);
+    audit.record("agent.create", "agent", a.id, created);
     realtime.publish("agent.updated", Realtime.ids("id", a.id));
     return AgentView.of(a);
   }
@@ -75,7 +98,21 @@ public class AgentController {
   @Transactional
   public AgentView update(@PathVariable String id, @RequestBody AgentInput in) {
     Agent a = find(id);
+    java.util.Map<String, Object> before = powers(a);
     apply(a, in);
+    java.util.Map<String, Object> after = powers(a);
+    java.util.Map<String, Object> changes = new java.util.LinkedHashMap<>();
+    for (String k : after.keySet()) {
+      if (!java.util.Objects.equals(before.get(k), after.get(k))) {
+        // instructions are not copied into the log, only the fact that they changed
+        changes.put(k, "instructions".equals(k) ? "changed" : java.util.Map.of("from", String.valueOf(before.get(k)),
+            "to", String.valueOf(after.get(k))));
+      }
+    }
+    if (!changes.isEmpty()) {
+      changes.put("name", a.name);
+      audit.record("agent.update", "agent", a.id, changes);
+    }
     agents.save(a);
     realtime.publish("agent.updated", Realtime.ids("id", a.id));
     return AgentView.of(a);
@@ -86,6 +123,7 @@ public class AgentController {
   public AgentView archive(@PathVariable String id) {
     Agent a = find(id);
     a.archived = true;
+    audit.record("agent.archive", "agent", a.id, java.util.Map.of("name", a.name));
     a.name = a.name + "-archived-" + Ids.random(4);
     a.updatedAt = Ids.now();
     agents.save(a);

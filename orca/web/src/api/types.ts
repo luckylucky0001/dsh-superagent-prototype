@@ -19,6 +19,18 @@ export interface MemberInput {
   currentPassword?: string;
 }
 
+export interface AuditEvent {
+  id: string;
+  at: number;
+  actorId: string | null;
+  actorName: string | null;
+  action: string;
+  targetType: string | null;
+  targetId: string | null;
+  detail: Record<string, unknown>;
+  ip: string | null;
+}
+
 export interface ProjectInput {
   key: string;
   name: string;

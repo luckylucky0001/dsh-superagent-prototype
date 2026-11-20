@@ -30,6 +30,9 @@ public class InboxService {
   private final Realtime realtime;
   private final InboxNotifier notifier;
 
+  @org.springframework.beans.factory.annotation.Autowired(required = false)
+  private dev.orca.server.audit.AuditService audit;
+
   public InboxService(InboxRepo items, Realtime realtime, InboxNotifier notifier) {
     this.items = items;
     this.realtime = realtime;
@@ -106,7 +109,37 @@ public class InboxService {
     i.answerJson = JsonCols.write(answer);
     i.resolvedAt = Ids.now();
     i.resolvedBy = memberId;
+    audit(i);
     return save(i);
+  }
+
+  /** Approvals are audited with what was approved; answers to questions and forms only by title. */
+  private void audit(InboxItem i) {
+    if (audit == null) {
+      return;
+    }
+    Map<String, Object> d = new java.util.LinkedHashMap<>();
+    d.put("kind", i.kind);
+    d.put("decision", i.status);
+    d.put("title", i.title == null ? "" : i.title.length() > 200 ? i.title.substring(0, 200) : i.title);
+    if (i.taskId != null) {
+      d.put("task", i.taskId);
+    }
+    if (i.runId != null) {
+      d.put("run", i.runId);
+    }
+    Object approval = JsonCols.map(i.formJson).get("approval");
+    if (approval instanceof Map<?, ?> a) {
+      Object cmd = a.get("command");
+      if (cmd != null) {
+        String c = String.valueOf(cmd);
+        d.put("command", c.length() > 300 ? c.substring(0, 300) + "..." : c);
+      }
+      if (a.get("kind") != null) {
+        d.put("approvalKind", String.valueOf(a.get("kind")));
+      }
+    }
+    audit.record(APPROVAL.equals(i.kind) || approval != null ? "approval.decide" : "inbox.answer", "inbox", i.id, d);
   }
 
   @Transactional

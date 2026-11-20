@@ -51,30 +51,41 @@ public class WorkflowController {
 
   public record WorkflowInput(String name, String description, Boolean enabled, Object definition) {}
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private dev.orca.server.audit.AuditService audit;
+
   @PostMapping("/workflows")
   public WorkflowView create(@RequestBody WorkflowInput in) {
-    return WorkflowView.of(workflows.save(null, in.name(), in.description(), in.enabled(), in.definition(), false,
-        CurrentUser.id()));
+    Workflow w = workflows.save(null, in.name(), in.description(), in.enabled(), in.definition(), false, CurrentUser.id());
+    audit.record("workflow.create", "workflow", w.id, Map.of("name", w.name, "enabled", w.enabled));
+    return WorkflowView.of(w);
   }
 
   @PutMapping("/workflows/{id}")
   public WorkflowView update(@PathVariable String id, @RequestBody WorkflowInput in) {
     Workflow w = workflows.get(id);
-    return WorkflowView.of(workflows.save(id, in.name() == null ? w.name : in.name(),
+    Workflow saved = workflows.save(id, in.name() == null ? w.name : in.name(),
         in.description() == null ? w.description : in.description(), in.enabled(),
-        in.definition() == null ? JsonCols.any(w.definitionJson) : in.definition(), w.builtIn, CurrentUser.id()));
+        in.definition() == null ? JsonCols.any(w.definitionJson) : in.definition(), w.builtIn, CurrentUser.id());
+    audit.record("workflow.update", "workflow", id, Map.of("name", saved.name, "enabled", saved.enabled,
+        "definitionChanged", in.definition() != null));
+    return WorkflowView.of(saved);
   }
 
   public record EnableInput(boolean enabled) {}
 
   @PostMapping("/workflows/{id}/enabled")
   public WorkflowView enable(@PathVariable String id, @RequestBody EnableInput in) {
-    return WorkflowView.of(workflows.setEnabled(id, in.enabled()));
+    Workflow w = workflows.setEnabled(id, in.enabled());
+    audit.record(in.enabled() ? "workflow.enable" : "workflow.disable", "workflow", id, Map.of("name", w.name));
+    return WorkflowView.of(w);
   }
 
   @DeleteMapping("/workflows/{id}")
   public Map<String, Object> delete(@PathVariable String id) {
+    String name = workflows.get(id).name;
     workflows.delete(id);
+    audit.record("workflow.delete", "workflow", id, Map.of("name", name));
     return Map.of("ok", true);
   }
 
@@ -107,6 +118,7 @@ public class WorkflowController {
   @PostMapping("/workflows/{id}/runs")
   public RunView run(@PathVariable String id, @RequestBody(required = false) RunInput in) {
     WorkflowRun r = triggers.manual(id, in == null ? null : in.nodeId(), in == null ? null : in.input(), CurrentUser.id());
+    audit.record("workflow.run", "run", r.id, Map.of("workflow", id));
     return view(r, true);
   }
 
@@ -122,6 +134,7 @@ public class WorkflowController {
 
   @PostMapping("/runs/{id}/cancel")
   public RunView cancel(@PathVariable String id) {
+    audit.record("run.cancel", "run", id, Map.of());
     return view(workflows.cancel(id, "cancelled by a person"), true);
   }
 

@@ -24,9 +24,12 @@ public class TokenController {
   private final AuthService auth;
   private final ApiTokenRepo tokens;
 
-  public TokenController(AuthService auth, ApiTokenRepo tokens) {
+  private final dev.orca.server.audit.AuditService audit;
+
+  public TokenController(AuthService auth, ApiTokenRepo tokens, dev.orca.server.audit.AuditService audit) {
     this.auth = auth;
     this.tokens = tokens;
+    this.audit = audit;
   }
 
   public record TokenInput(String label, Integer days) {}
@@ -58,6 +61,7 @@ public class TokenController {
     }
     String plain = auth.issue(AuthService.PERSONAL, me.id, null, label, Duration.ofDays(days));
     ApiToken t = auth.verify(plain, AuthService.PERSONAL).orElseThrow();
+    audit.record("token.create", "token", t.id, Map.of("label", label, "days", days));
     return Map.of("token", plain, "info", TokenView.of(t));
   }
 
@@ -67,6 +71,7 @@ public class TokenController {
     ApiToken t = tokens.findById(id).filter(x -> AuthService.PERSONAL.equals(x.kind))
         .filter(x -> CurrentUser.id().equals(x.memberId)).orElseThrow(() -> ApiException.notFound("token"));
     tokens.delete(t);
+    audit.record("token.revoke", "token", t.id, Map.of("label", t.label));
     return Map.of("ok", true);
   }
 }

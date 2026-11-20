@@ -41,7 +41,38 @@ public class IssueController {
 
   @PostMapping("/projects")
   public ProjectView createProject(@RequestBody ProjectInput in) {
-    return ProjectView.of(issues.createProject(in.key(), in.name(), in.description(), in.repoUrl(), in.defaultBranch()));
+    var p = issues.createProject(in.key(), in.name(), in.description(), in.repoUrl(), in.defaultBranch());
+    audit.record("project.create", "project", p.id, auditProject(p));
+    return ProjectView.of(p);
+  }
+
+  @org.springframework.beans.factory.annotation.Autowired
+  private dev.orca.server.audit.AuditService audit;
+
+  /** Owners and admins only: the repository decides what code agents read and where they push. */
+  @org.springframework.web.bind.annotation.PatchMapping("/projects/{id}")
+  public ProjectView updateProject(@org.springframework.web.bind.annotation.PathVariable String id,
+      @RequestBody ProjectInput in) {
+    String role = dev.orca.server.auth.CurrentUser.get().role;
+    if (!"owner".equals(role) && !"admin".equals(role)) {
+      throw new dev.orca.server.support.ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+          "only owners and admins can change a project's settings");
+    }
+    var before = auditProject(issues.projects().stream().filter(p -> p.id.equals(id)).findFirst()
+        .orElseThrow(() -> dev.orca.server.support.ApiException.notFound("project")));
+    var p = issues.updateProject(id, in.name(), in.description(), in.repoUrl(), in.defaultBranch());
+    Map<String, Object> d = new java.util.LinkedHashMap<>(auditProject(p));
+    d.put("before", before);
+    audit.record("project.update", "project", p.id, d);
+    return ProjectView.of(p);
+  }
+
+  private static Map<String, Object> auditProject(dev.orca.server.model.Project p) {
+    Map<String, Object> m = new java.util.LinkedHashMap<>();
+    m.put("key", p.keyPrefix);
+    m.put("repoUrl", p.repoUrl == null ? "" : p.repoUrl);
+    m.put("defaultBranch", p.defaultBranch == null ? "" : p.defaultBranch);
+    return m;
   }
 
   @GetMapping("/issues")

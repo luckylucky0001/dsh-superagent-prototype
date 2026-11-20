@@ -26,7 +26,11 @@ public class MemberController {
   private final AuthService auth;
   private final dev.orca.server.realtime.Realtime realtime;
 
-  public MemberController(MemberRepo members, AuthService auth, dev.orca.server.realtime.Realtime realtime) {
+  private final dev.orca.server.audit.AuditService audit;
+
+  public MemberController(MemberRepo members, AuthService auth, dev.orca.server.realtime.Realtime realtime,
+      dev.orca.server.audit.AuditService audit) {
+    this.audit = audit;
     this.members = members;
     this.auth = auth;
     this.realtime = realtime;
@@ -63,6 +67,7 @@ public class MemberController {
     m.role = in.role() != null && ROLES.contains(in.role()) && !"owner".equals(in.role()) ? in.role() : "member";
     m.passwordHash = auth.hashPassword(in.password());
     m.createdAt = Ids.now();
+    audit.record("member.create", "member", m.id, Map.of("email", m.email, "role", m.role));
     return changed(members.save(m));
   }
 
@@ -84,6 +89,7 @@ public class MemberController {
       if (!ROLES.contains(in.role()) || "owner".equals(m.role) || "owner".equals(in.role())) {
         throw ApiException.bad("the owner's role cannot be changed, and there is only one owner");
       }
+      audit.record("member.role", "member", m.id, Map.of("email", m.email, "from", m.role, "to", in.role()));
       m.role = in.role();
     }
     if (in.password() != null) {
@@ -94,6 +100,7 @@ public class MemberController {
       m.passwordHash = auth.hashPassword(in.password());
       // every other session and token of this member stops working; you stay signed in here
       auth.revokeMemberTokens(m.id, self ? AuthFilter.token(req) : null);
+      audit.record(self ? "member.password_changed" : "member.password_reset", "member", m.id, Map.of("email", m.email));
     }
     return changed(members.save(m));
   }
@@ -107,6 +114,7 @@ public class MemberController {
       throw ApiException.bad("the owner and yourself cannot be removed");
     }
     auth.revokeMemberTokens(m.id, null);
+    audit.record("member.remove", "member", m.id, Map.of("email", m.email, "role", m.role));
     members.delete(m);
     realtime.publish("member.updated", dev.orca.server.realtime.Realtime.ids("id", id, "deleted", true));
     return Map.of("ok", true);

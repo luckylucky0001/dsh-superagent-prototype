@@ -41,8 +41,12 @@ public class RuntimeController {
     return runtimes.all().stream().map(r -> RuntimeView.of(r, tasks.active(r.id))).toList();
   }
 
+  @org.springframework.beans.factory.annotation.Autowired
+  private dev.orca.server.audit.AuditService audit;
+
   @PostMapping("/api/runtimes/registration-codes")
   public Map<String, Object> code() {
+    audit.record("runtime.registration_code", "runtime", null, Map.of());
     String code = auth.issueRegistrationCode(CurrentUser.id(), "runtime registration");
     String server = props.publicUrl();
     Map<String, Object> out = new java.util.LinkedHashMap<>();
@@ -89,6 +93,7 @@ public class RuntimeController {
   @DeleteMapping("/api/runtimes/{id}")
   public Map<String, Object> delete(@PathVariable String id) {
     gateway.disconnect(id);
+    audit.record("runtime.remove", "runtime", id, Map.of("name", runtimes.find(id).map(r -> r.name).orElse("?")));
     runtimes.delete(id);
     return Map.of("ok", true);
   }
@@ -100,6 +105,8 @@ public class RuntimeController {
   public Map<String, Object> register(@RequestBody RegisterRequest req) {
     String[] token = new String[1];
     Wire.Welcome w = runtimes.register(req.code(), req.name(), token);
+    audit.record(null, "daemon", "runtime.register", "runtime", w.runtimeId(),
+        Map.of("name", req.name() == null ? "" : req.name()));
     return Map.of("token", token[0], "runtimeId", w.runtimeId());
   }
 }

@@ -207,6 +207,30 @@ public class IssueService {
     return all.get(0);
   }
 
+  /**
+   * Changes a project's name, description, repository or default branch; the key stays (issue keys use
+   * it). A null argument keeps the current value, a blank repository URL removes the repository.
+   */
+  @Transactional
+  public Project updateProject(String id, String name, String description, String repoUrl, String branch) {
+    Project p = projects.findById(id).orElseThrow(() -> ApiException.notFound("project"));
+    if (name != null && !name.isBlank()) {
+      p.name = name.trim();
+    }
+    if (description != null) {
+      p.description = description;
+    }
+    if (repoUrl != null) {
+      p.repoUrl = repoUrl.isBlank() ? null : repoUrl.trim();
+    }
+    if (branch != null) {
+      p.defaultBranch = branch.isBlank() ? null : branch.trim();
+    }
+    projects.save(p);
+    realtime.publish("project.updated", Realtime.ids("id", p.id));
+    return p;
+  }
+
   @Transactional
   public Project createProject(String key, String name, String description, String repoUrl, String branch) {
     String prefix = key == null ? "" : key.trim().toUpperCase(Locale.ROOT);

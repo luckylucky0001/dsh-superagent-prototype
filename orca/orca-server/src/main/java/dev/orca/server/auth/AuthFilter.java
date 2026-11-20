@@ -23,7 +23,7 @@ public class AuthFilter extends OncePerRequestFilter {
 
   public static final String COOKIE = "orca_session";
   /** Paths whose changes need a web session: personal access tokens may only read them. */
-  static final List<String> ACCOUNT_ADMIN = List.of("/api/members", "/api/auth/tokens", "/api/runtimes");
+  static final List<String> ACCOUNT_ADMIN = List.of("/api/members", "/api/auth/tokens", "/api/runtimes", "/api/projects");
 
   private static final List<String> OPEN = List.of("/api/auth/login", "/api/daemon/register", "/api/daemon/ws", "/api/daemon/whoami",
       "/api/hooks/", "/api/health", "/api/mcp");
@@ -78,7 +78,7 @@ public class AuthFilter extends OncePerRequestFilter {
       res.setStatus(403);
       res.setContentType("application/json");
       res.setCharacterEncoding("UTF-8");
-      res.getWriter().write("{\"error\":\"personal access tokens cannot manage members, tokens or runtimes; "
+      res.getWriter().write("{\"error\":\"personal access tokens cannot manage members, tokens, runtimes or projects; "
           + "sign in to the web app for that\"}");
       return;
     }

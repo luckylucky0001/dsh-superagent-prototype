@@ -441,6 +441,7 @@ class EndToEndTest {
     assertEquals(403, raw(bare, "PATCH", "/api/members/" + me, Map.of("password", "stolen-pass-1"), pat).status());
     assertEquals(403, raw(bare, "POST", "/api/auth/tokens", Map.of("label", "more", "days", 365), pat).status());
     assertEquals(403, raw(bare, "POST", "/api/runtimes/registration-codes", null, pat).status());
+    assertEquals(403, raw(bare, "POST", "/api/projects", Map.of("key", "PATX", "name", "x"), pat).status());
 
     // the web session needs the current password, and changing it signs out every other session and token
     assertEquals(400, raw(web, "PATCH", "/api/members/" + me, Map.of("password", "second-pass-2"), null).status());
@@ -450,6 +451,48 @@ class EndToEndTest {
         Map.of("password", "second-pass-2", "currentPassword", "first-pass-1"), null).status());
     assertEquals(401, raw(bare, "GET", "/api/issues", null, pat).status(), "the token was revoked");
     assertEquals(200, raw(web, "GET", "/api/auth/me", null, null).status(), "this session stays signed in");
+  }
+
+  @Test
+  @SuppressWarnings("unchecked")
+  void securityRelevantActionsAreAudited() throws Exception {
+    // a project's repository can be changed by admins, and that change is recorded with its old value
+    String pid = Json.str(call("POST", "/api/projects", Map.of("key", "AUD", "name", "Audited")), "id");
+    call("PATCH", "/api/projects/" + pid, Map.of("repoUrl", "git@example.com:acme/wms.git", "defaultBranch", "main"));
+    Map<String, Object> agent = (Map<String, Object>) call("GET", "/api/agents/" + agentId, null);
+    boolean wasNetwork = Boolean.TRUE.equals(agent.get("networkAccess"));
+    call("PATCH", "/api/agents/" + agentId, Map.of("networkAccess", !wasNetwork));
+    call("PATCH", "/api/agents/" + agentId, Map.of("networkAccess", wasNetwork));
+    String tokenId = Json.str(Json.obj(call("POST", "/api/auth/tokens", Map.of("label", "=cmd|' /C calc'!A0", "days", 1)), "info"), "id");
+    call("DELETE", "/api/auth/tokens/" + tokenId, null);
+
+    List<Map<String, Object>> log = (List<Map<String, Object>>) call("GET", "/api/audit?limit=200", null);
+    java.util.function.Predicate<String> has = action -> log.stream().anyMatch(e -> action.equals(e.get("action")));
+    for (String action : List.of("auth.login", "project.create", "project.update", "agent.update", "token.create",
+        "token.revoke", "runtime.register")) {
+      assertTrue(has.test(action), action + " is in the audit log");
+    }
+    Map<String, Object> update = log.stream().filter(e -> "project.update".equals(e.get("action"))).findFirst().orElseThrow();
+    assertEquals("git@example.com:acme/wms.git", Json.str(update.get("detail"), "repoUrl"));
+    assertEquals("", Json.str(Json.obj(update.get("detail"), "before"), "repoUrl"));
+    Map<String, Object> agentChange = log.stream().filter(e -> "agent.update".equals(e.get("action"))).findFirst().orElseThrow();
+    assertTrue(((Map<String, Object>) agentChange.get("detail")).containsKey("networkAccess"), agentChange.toString());
+    assertEquals("Admin", agentChange.get("actorName"));
+    assertTrue(log.stream().noneMatch(e -> String.valueOf(e.get("detail")).contains("orca_p_")), "no token values");
+
+    HttpClient bare = HttpClient.newHttpClient();
+    String csv = raw(http, "GET", "/api/audit.csv", null, null).body();
+    assertTrue(csv.contains("time_utc,actor,action"), csv.substring(0, Math.min(200, csv.length())));
+    assertEquals("\"'=1+1\"", dev.orca.server.audit.AuditController.cell("=1+1"), "formulas are neutralised");
+    assertEquals("\"a \"\"b\"\"\"", dev.orca.server.audit.AuditController.cell("a \"b\""));
+
+    // members cannot read the log or change projects
+    call("POST", "/api/members", Map.of("email", "plain@test.local", "name", "Plain", "password", "plain-pass-1"));
+    HttpClient member = HttpClient.newBuilder().cookieHandler(new CookieManager()).build();
+    raw(member, "POST", "/api/auth/login", Map.of("email", "plain@test.local", "password", "plain-pass-1"), null);
+    assertEquals(403, raw(member, "GET", "/api/audit", null, null).status());
+    assertEquals(403, raw(member, "PATCH", "/api/projects/" + pid, Map.of("repoUrl", "evil"), null).status());
+    assertEquals(401, raw(bare, "GET", "/api/audit", null, null).status());
   }
 
   @Test

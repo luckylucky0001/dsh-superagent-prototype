@@ -20,9 +20,11 @@ import org.springframework.web.bind.annotation.RestController;
 public class AuthController {
 
   private final AuthService auth;
+  private final dev.orca.server.audit.AuditService audit;
 
-  public AuthController(AuthService auth) {
+  public AuthController(AuthService auth, dev.orca.server.audit.AuditService audit) {
     this.auth = auth;
+    this.audit = audit;
   }
 
   public record LoginRequest(String email, String password) {}
@@ -48,11 +50,13 @@ public class AuthController {
     java.util.Deque<Long> recent = failures.computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
     recent.removeIf(t -> t < now - WINDOW_MS);
     if (recent.size() >= MAX_FAILURES) {
+      audit.record(null, String.valueOf(req.email()), "auth.login_blocked", "member", null, Map.of());
       throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too many failed attempts; try again in a few minutes");
     }
     String token = auth.login(String.valueOf(req.email()), String.valueOf(req.password())).orElse(null);
     if (token == null) {
       recent.add(now);
+      audit.record(null, String.valueOf(req.email()), "auth.login_failed", "member", null, Map.of());
       throw new ApiException(HttpStatus.UNAUTHORIZED, "wrong e-mail or password");
     }
     failures.remove(key);
@@ -60,6 +64,7 @@ public class AuthController {
         .sameSite("Lax").secure(http.isSecure()).maxAge(Duration.ofDays(14)).build();
     res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());
     Member m = auth.verify(token, AuthService.SESSION).flatMap(t -> auth.member(t.memberId)).orElseThrow();
+    audit.record(m.id, m.name, "auth.login", "member", m.id, Map.of());
     return Map.of("member", MemberView.of(m), "token", token);
   }
 
@@ -67,6 +72,9 @@ public class AuthController {
   public Map<String, Object> logout(HttpServletRequest req, HttpServletResponse res) {
     String t = AuthFilter.token(req);
     if (t != null) {
+      auth.verify(t, AuthService.SESSION).or(() -> auth.verify(t, AuthService.PERSONAL))
+          .ifPresent(tok -> auth.member(tok.memberId).ifPresent(m -> audit.record(m.id, m.name, "auth.logout", "member",
+              m.id, Map.of("via", tok.kind))));
       auth.revoke(t);
     }
     res.addHeader(HttpHeaders.SET_COOKIE, ResponseCookie.from(AuthFilter.COOKIE, "").path("/").maxAge(0).build().toString());
