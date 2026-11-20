@@ -9,6 +9,7 @@ import type { Agent, Issue, IssueStatus, Member } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, MemberAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { PageHeader } from '@/components/PageHeader';
+import { SetupChecklist } from './SetupChecklist';
 import { QueryState } from '@/components/QueryState';
 import { PriorityIcon } from '@/components/StatusTag';
 import { fromNow } from '@/components/format';
@@ -188,6 +189,7 @@ export function IssuesBoard() {
           </>
         }
       />
+      <SetupChecklist onNewIssue={() => setCreating('todo')} />
       <QueryState isLoading={issues.isLoading} error={issues.error} onRetry={() => void issues.refetch()}>
         <div className="orca-board">
           {columns.map((status) => {
