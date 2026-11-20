@@ -303,6 +303,8 @@ export interface FieldSpec {
   defaultValue: unknown;
   options: { value: string; label: string }[];
   help: string | null;
+  /** Shown only while another field has one of these values. */
+  visibleWhen: { field: string; values: string[] } | null;
 }
 
 export interface OutputSpec {

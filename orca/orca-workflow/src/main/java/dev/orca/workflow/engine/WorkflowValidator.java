@@ -57,6 +57,9 @@ public final class WorkflowValidator {
       NodeDescriptor d = c.descriptor();
       descriptors.put(n.id(), d);
       for (FieldSpec f : d.fields()) {
+        if (!f.visible(n.config(), d.fields())) {
+          continue;
+        }
         Object v = n.config().get(f.name());
         if (f.required() && (v == null || (v instanceof String s && s.isBlank())) && f.defaultValue() == null) {
           issues.add(ValidationIssue.node(n.id(), "'" + f.label() + "' is required"));

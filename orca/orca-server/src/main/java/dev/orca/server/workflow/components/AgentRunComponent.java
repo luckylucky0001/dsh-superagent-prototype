@@ -47,14 +47,17 @@ public class AgentRunComponent implements NodeComponent {
             f("prompt", "Prompt", FieldKind.TEMPLATE)
                 .withHelp("The task. In review mode it is used by the custom target and by CLIs without a built-in reviewer."),
             select("reviewTarget", "Review what", false, "baseBranch", "baseBranch", "uncommittedChanges", "custom")
-                .withHelp("baseBranch: the issue branch against the project's default branch."),
+                .withHelp("baseBranch: the issue branch against the project's default branch.")
+                .visibleWhen("mode", "review"),
             f("baseBranch", "Base branch", FieldKind.STRING)
-                .withHelp("Defaults to the project's default branch (main)."),
+                .withHelp("Defaults to the project's default branch (main).")
+                .visibleWhen("reviewTarget", "baseBranch"),
             f("issue", "Issue", FieldKind.STRING).withDefault("{{trigger.issue.id}}")
                 .withHelp("Ties the run to an issue: same workspace, and the session can continue."),
             select("session", "Session", false, "continue", "continue", "new")
-                .withHelp("'continue' resumes the agent's previous session on the same issue."),
-            f("outputSchema", "Output schema (JSON Schema)", FieldKind.JSON),
+                .withHelp("'continue' resumes the agent's previous session on the same issue.")
+                .visibleWhen("mode", "work"),
+            f("outputSchema", "Output schema (JSON Schema)", FieldKind.JSON).visibleWhen("mode", "work"),
             f("timeoutMinutes", "Timeout (minutes)", FieldKind.NUMBER)),
         List.of("out"),
         List.of(out("text", "string", "the agent's final answer"),

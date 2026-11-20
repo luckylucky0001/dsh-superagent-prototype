@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { Alert, Button, Collapse, Divider, Flex, Form, Input, InputNumber, Popconfirm, Select, Tag, Typography } from 'antd';
 import { DeleteOutlined } from '@ant-design/icons';
-import type { NodeDef } from '@/api/types';
+import type { FieldSpec, NodeDef } from '@/api/types';
 import { useT } from '@/app/i18n';
 import { FieldInput, TemplateInput, VariableList } from './FieldInput';
 import { CATEGORY_COLORS, NODE_ID_PATTERN, type FlowEdge, type FlowNode, type VariableGroup } from './graph';
@@ -61,7 +61,7 @@ export function NodeInspector({ node, groups, idEditable, takenIds, onChange, on
             onPressEnter={() => !idError && idDraft !== def.id && onRename(idDraft)} />
         </Form.Item>
         <Divider orientation="left" orientationMargin={0} plain style={{ margin: '28px 0 12px', fontSize: 12 }}>{t('wf.configuration')}</Divider>
-        {(descriptor?.fields ?? []).map((f) => (
+        {(descriptor?.fields ?? []).filter((f) => fieldVisible(f, def.config, descriptor?.fields ?? [])).map((f) => (
           <Form.Item key={f.name} label={f.label} required={f.required} extra={f.help}
             validateStatus={f.required && (def.config[f.name] === undefined || def.config[f.name] === '') ? 'warning' : undefined}>
             <FieldInput field={f} value={def.config[f.name]} onChange={(v) => setConfig(f.name, v)} groups={groups} config={def.config}
@@ -127,4 +127,15 @@ export function EdgeInspector({ edge, groups, onChange, onDelete }: {
       <Button danger block icon={<DeleteOutlined />} onClick={onDelete}>{t('wf.deleteEdge')}</Button>
     </div>
   );
+}
+
+/** Mirrors FieldSpec.visible on the server: the controlling field's value, or its default when unset. */
+function fieldVisible(f: FieldSpec, config: Record<string, unknown>, all: FieldSpec[], depth = 0): boolean {
+  if (!f.visibleWhen) return true;
+  // a field that depends on a hidden field is hidden too
+  const parent = all.find((x) => x.name === f.visibleWhen!.field);
+  if (depth > 8 || (parent && !fieldVisible(parent, config, all, depth + 1))) return false;
+  let v = config[f.visibleWhen.field];
+  if (v === undefined || v === null || v === '') v = all.find((x) => x.name === f.visibleWhen!.field)?.defaultValue;
+  return v !== undefined && v !== null && f.visibleWhen.values.includes(String(v));
 }
