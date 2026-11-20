@@ -150,7 +150,11 @@ public class Bootstrap implements ApplicationRunner {
                 "prompt", "Implement the issue in the current directory, run the tests, and summarise the change."), 0, 120),
             node("review", "agent.run", "Cross-review", Map.of("agent", "{{ trigger.input.reviewer }}",
                 "issue", "{{ trigger.input.issueId }}", "session", "new", "outputSchema", verdict,
-                "prompt", "Review the uncommitted changes in the current directory (git diff). The author says:\n\n"
+                "prompt", "You are reviewing a teammate's work in the current directory. Use shell commands to inspect it: "
+                    + "ls, cat, and git status/git diff when it is a git repository. Reading files is always allowed. Run the "
+                    + "tests if you can; if the sandbox prevents it, review the code by reading it. Verdict 'pass' only if the "
+                    + "change does what the issue asks; if you cannot find the change, the verdict is 'changes_requested'."
+                    + "\n\nThe author's summary:\n\n"
                     + "{{ nodes.implement.output.text }}"), 0, 240),
             node("check", "logic.condition", "Passed?", Map.of("when", "nodes.review.output.structured.verdict == 'pass'"), 0, 360),
             node("approve", "human.approval", "Approve the change", Map.of("issue", "{{ trigger.input.issueId }}",

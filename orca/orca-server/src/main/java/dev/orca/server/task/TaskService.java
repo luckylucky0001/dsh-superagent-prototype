@@ -97,7 +97,8 @@ public class TaskService {
     if (agent.archived) {
       throw ApiException.bad("agent " + agent.name + " is archived");
     }
-    Issue issue = req.issueId() == null ? null : issues.findById(req.issueId()).orElse(null);
+    Issue issue = req.issueId() == null || req.issueId().isBlank() ? null
+        : issues.findById(req.issueId()).or(() -> issues.findByIssueKeyIgnoreCase(req.issueId())).orElse(null);
     Task t = new Task();
     t.id = Ids.next("tsk");
     t.agentId = agent.id;
@@ -121,19 +122,27 @@ public class TaskService {
     }
     if (issue != null) {
       t.recap = recap(issue);
+      // a fresh session must know what it works on, whatever the workflow's prompt says
+      if (t.resumeRef == null && (t.prompt == null || !t.prompt.contains(issue.issueKey))) {
+        t.prompt = t.recap + "\n---\n\n" + (t.prompt == null ? "" : t.prompt);
+      }
     }
     tasks.save(t);
     changed(t);
     return t;
   }
 
-  private static String workspaceKey(Agent agent, Issue issue, Map<String, Object> origin) {
-    String a = agent.name.replaceAll("[^A-Za-z0-9._-]", "-");
+  /**
+   * One directory per issue, shared by every agent that works on it (one at a time), so a reviewer
+   * sees the implementer's changes. Work without an issue shares a directory per workflow run.
+   */
+  static String workspaceKey(Agent agent, Issue issue, Map<String, Object> origin) {
     if (issue != null) {
-      return a + "/" + issue.issueKey.replaceAll("[^A-Za-z0-9._-]", "-");
+      return "issues/" + issue.issueKey.replaceAll("[^A-Za-z0-9._-]", "-");
     }
     Object run = origin == null ? null : origin.get("runId");
-    return a + "/" + (run == null ? "adhoc-" + Ids.random(6) : String.valueOf(run));
+    return run == null ? "adhoc/" + agent.name.replaceAll("[^A-Za-z0-9._-]", "-") + "-" + Ids.random(6)
+        : "runs/" + run;
   }
 
   /** Context for a new session when the previous one cannot be resumed. */
@@ -143,7 +152,9 @@ public class TaskService {
     if (issue.description != null && !issue.description.isBlank()) {
       sb.append("\nDescription:\n").append(trim(issue.description, 4000)).append('\n');
     }
-    List<Comment> all = comments.findByIssueIdOrderByCreatedAtAsc(issue.id);
+    // workflow notices (system comments) are left out: stale automated conclusions mislead a new session
+    List<Comment> all = comments.findByIssueIdOrderByCreatedAtAsc(issue.id).stream()
+        .filter(c -> !"system".equals(c.authorType)).toList();
     if (!all.isEmpty()) {
       sb.append("\nRecent discussion (oldest first):\n");
       for (Comment c : all.subList(Math.max(0, all.size() - 12), all.size())) {
@@ -232,13 +243,12 @@ public class TaskService {
     if (tasks.countByAgentIdAndStatusIn(agent.id, TaskStatus.ACTIVE) >= Math.max(1, agent.maxConcurrency)) {
       return agent.name + " is busy with other work";
     }
-    String pair = agent.id + "/" + t.workspaceKey;
-    if (busyPairs.contains(pair) || (t.issueId != null
-        && tasks.countByAgentIdAndIssueIdAndStatusIn(agent.id, t.issueId, TaskStatus.ACTIVE) > 0)) {
-      busyPairs.add(pair);
-      return "waiting for the previous run on this issue";
+    if (busyPairs.contains(t.workspaceKey)
+        || tasks.countByWorkspaceKeyAndStatusIn(t.workspaceKey, TaskStatus.ACTIVE) > 0) {
+      busyPairs.add(t.workspaceKey);
+      return "waiting for another agent to finish in this workspace";
     }
-    busyPairs.add(pair);
+    busyPairs.add(t.workspaceKey);
     return null;
   }
 

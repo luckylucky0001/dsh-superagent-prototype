@@ -118,6 +118,8 @@ public class WorkflowService {
       w.id = id == null ? Ids.next("wf") : id;
       w.createdAt = now;
       w.builtIn = builtIn;
+      // a re-created id continues its version history instead of colliding with it
+      w.currentVersion = versions.findByWorkflowIdOrderByVersionDesc(w.id).stream().mapToInt(v -> v.version).max().orElse(0);
     }
     w.name = name == null || name.isBlank() ? "Untitled workflow" : name;
     w.description = description;
@@ -180,6 +182,11 @@ public class WorkflowService {
     return versions.findByWorkflowIdAndVersion(run.workflowId, run.version)
         .map(v -> parse(v.definitionJson))
         .orElseGet(() -> parse(get(run.workflowId).definitionJson));
+  }
+
+  /** Display name, also for runs of deleted workflows. */
+  public String name(String workflowId) {
+    return workflows.findById(workflowId).map(w -> w.name).orElse("(deleted workflow)");
   }
 
   public List<WorkflowVersion> versions(String workflowId) {

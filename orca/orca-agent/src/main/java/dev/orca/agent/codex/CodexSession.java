@@ -127,8 +127,10 @@ final class CodexSession implements AgentSession {
     }
     switch (spec.permission()) {
       case READ_ONLY -> {
+        // "on-request" keeps the model aware that it may run read-only commands; the daemon's policy
+        // declines every escalation for this tier. With "never" small models tend to assume no tools.
         params.put("sandbox", "read-only");
-        params.put("approvalPolicy", "never");
+        params.put("approvalPolicy", "on-request");
       }
       case WORKSPACE -> {
         params.put("sandbox", "workspace-write");

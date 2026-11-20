@@ -136,7 +136,6 @@ public class WorkflowController {
   }
 
   private RunView view(WorkflowRun r, boolean full) {
-    Workflow w = workflows.get(r.workflowId);
-    return RunView.of(r, w.name, full ? JsonCols.any(Json.write(workflows.definition(r))) : null, full);
+    return RunView.of(r, workflows.name(r.workflowId), full ? JsonCols.any(Json.write(workflows.definition(r))) : null, full);
   }
 }

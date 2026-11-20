@@ -23,4 +23,6 @@ public interface TaskRepo extends JpaRepository<Task, String> {
   long countByAgentIdAndStatusIn(String agentId, Collection<String> statuses);
 
   long countByAgentIdAndIssueIdAndStatusIn(String agentId, String issueId, Collection<String> statuses);
+
+  long countByWorkspaceKeyAndStatusIn(String workspaceKey, Collection<String> statuses);
 }

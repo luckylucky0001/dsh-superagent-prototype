@@ -84,7 +84,7 @@ public class IssueController {
   @GetMapping("/issues/{id}/runs")
   public List<Views.RunView> runs(@PathVariable String id) {
     return workflows.runsForIssue(issues.get(id).id).stream()
-        .map(r -> Views.RunView.of(r, workflows.get(r.workflowId).name, null, false)).toList();
+        .map(r -> Views.RunView.of(r, workflows.name(r.workflowId), null, false)).toList();
   }
 
   @GetMapping("/health")
