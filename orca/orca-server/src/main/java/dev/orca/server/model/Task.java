@@ -1,0 +1,36 @@
+package dev.orca.server.model;
+
+import jakarta.persistence.Entity;
+import jakarta.persistence.Id;
+import jakarta.persistence.Table;
+
+@Entity
+@Table(name = "task")
+public class Task {
+  @Id public String id;
+  public String agentId;
+  public String runtimeId;
+  public String issueId;
+  public String provider;
+  public String kind;
+  public String originJson;
+  public String prompt;
+  public String recap;
+  public String outputSchemaJson;
+  public String status;
+  public String statusDetail;
+  public String sessionRef;
+  public String resumeRef;
+  public String workspaceKey;
+  public String model;
+  public String finalText;
+  public String structuredJson;
+  public String errorCode;
+  public String error;
+  public String usageJson;
+  public long lastSeq;
+  public Long leaseUntil;
+  public long queuedAt;
+  public Long startedAt;
+  public Long finishedAt;
+}

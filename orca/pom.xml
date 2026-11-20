@@ -16,7 +16,7 @@
     <module>orca-protocol</module>
     <module>orca-agent</module>
     <module>orca-daemon</module>
-    <!--server-->
+    <module>orca-server</module>
   </modules>
 
   <properties>

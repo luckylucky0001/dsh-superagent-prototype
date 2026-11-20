@@ -13,6 +13,7 @@ public final class Json {
 
   public static final JsonMapper MAPPER = JsonMapper.builder()
       .disable(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES)
+      .disable(DeserializationFeature.FAIL_ON_NULL_FOR_PRIMITIVES)
       .changeDefaultPropertyInclusion(i -> i.withValueInclusion(JsonInclude.Include.NON_NULL))
       .build();
 
