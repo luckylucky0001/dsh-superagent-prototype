@@ -237,6 +237,7 @@ public final class Main {
     Map<String, Object> body = new LinkedHashMap<>();
     body.put("prompt", prompt);
     body.put("followUp", a.opt("follow-up", null));
+    body.put("project", a.opt("project", null));
     Object t = call("POST", "/api/agents/" + enc(agentId(agent)) + "/ask", body, true);
     String id = Json.str(t, "id");
     if (a.flag("no-wait")) {
@@ -362,7 +363,7 @@ public final class Main {
           out.println();
         }
       }
-      case "tool.completed" -> err.println("  $ " + Json.str(d, "title")
+      case "tool.completed" -> err.println("  $ " + oneLine(Json.str(d, "title"))
           + (d.get("exitCode") != null ? "  (exit " + d.get("exitCode") + ")" : "  [" + Json.str(d, "status") + "]"));
       case "approval.resolved" -> err.println("  approval: " + Json.str(d, "decision") + " by " + Json.str(d, "by"));
       case "input.requested" -> err.println("  waiting for an answer in the inbox: " + Json.str(d, "title"));
@@ -472,14 +473,14 @@ public final class Main {
     }
     int[] width = new int[columns.size()];
     for (int i = 0; i < columns.size(); i++) {
-      width[i] = columns.get(i).length();
+      width[i] = header(columns.get(i)).length();
       for (List<String> line : cells) {
         width[i] = Math.max(width[i], line.get(i).length());
       }
     }
     StringBuilder head = new StringBuilder();
     for (int i = 0; i < columns.size(); i++) {
-      head.append(pad(columns.get(i).toUpperCase(), width[i])).append(i + 1 < columns.size() ? "  " : "");
+      head.append(pad(header(columns.get(i)), width[i])).append(i + 1 < columns.size() ? "  " : "");
     }
     out.println(head.toString().stripTrailing());
     for (List<String> line : cells) {
@@ -490,6 +491,22 @@ public final class Main {
       out.println(b.toString().stripTrailing());
     }
     return 0;
+  }
+
+  /** A command as one line: a multi-line script shows its first line and how many more there are. */
+  static String oneLine(String command) {
+    if (command == null) {
+      return "";
+    }
+    String[] lines = command.strip().split("\\R");
+    String first = lines[0].length() > 160 ? lines[0].substring(0, 157) + "..." : lines[0];
+    return lines.length == 1 ? first : first + "  (+" + (lines.length - 1) + " lines)";
+  }
+
+  /** Column titles: {@code daemonVersion} prints as VERSION, {@code workflowName} as WORKFLOW, {@code startedAt} as STARTED. */
+  static String header(String field) {
+    String f = field.replaceAll("(Name|Id|At)$", "").replaceFirst("^daemon(?=[A-Z])", "");
+    return (f.isEmpty() ? field : f).replaceAll("([a-z])([A-Z])", "$1 $2").toUpperCase();
   }
 
   private static String pad(String s, int w) {
@@ -618,7 +635,7 @@ public final class Main {
           orca issue status KEY STATUS
 
           orca agents | runtimes
-          orca ask AGENT "prompt" [--follow-up TASK] [--no-wait]
+          orca ask AGENT "prompt" [--project KEY] [--follow-up TASK] [--no-wait]
           orca task show|follow|cancel ID
           orca task steer ID "text"
 

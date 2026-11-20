@@ -402,6 +402,26 @@ class EndToEndTest {
   }
 
   @Test
+  void askingAboutAProjectWorksInACheckoutOfItsRepository() throws Exception {
+    Path repo = Files.createTempDirectory("orca-e2e-ask-repo");
+    Files.writeString(repo.resolve("README.md"), "stock service\n");
+    for (List<String> cmd : List.of(List.of("git", "init", "-q", "-b", "main"), List.of("git", "add", "."),
+        List.of("git", "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-q", "-m", "init"))) {
+      assertEquals(0, new ProcessBuilder(cmd).directory(repo.toFile()).inheritIO().start().waitFor());
+    }
+    call("POST", "/api/projects", Map.of("key", "ASK", "name", "Asked", "repoUrl", repo.toString()));
+    String first = Json.str(call("POST", "/api/agents/" + agentId + "/ask", Map.of("prompt", "what is this?", "project", "ask")), "id");
+    await("answer", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + first, null), "status"))));
+    String cwd = Json.str(Json.obj(sessionEvent(first), "data"), "cwd");
+    assertTrue(Files.isRegularFile(Path.of(cwd, "README.md")), "the agent starts in a checkout: " + cwd);
+    assertTrue(cwd.endsWith("/ASK"), cwd);
+    String second = Json.str(call("POST", "/api/agents/" + agentId + "/ask",
+        Map.of("prompt", "and the tests?", "followUp", first)), "id");
+    await("follow-up", quietly(() -> "succeeded".equals(Json.str(call("GET", "/api/tasks/" + second, null), "status"))));
+    assertEquals(cwd, Json.str(Json.obj(sessionEvent(second), "data"), "cwd"), "a follow-up keeps the checkout");
+  }
+
+  @Test
   @SuppressWarnings("unchecked")
   void aRuntimeIsListedUnderItsNameFromRegistration() throws Exception {
     String code = Json.str(call("POST", "/api/runtimes/registration-codes", null), "code");

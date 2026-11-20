@@ -207,6 +207,7 @@ public class TaskService {
           + "continue; ask again instead");
     }
     t.workspaceKey = prev.workspaceKey;
+    t.projectId = prev.projectId;
     t.resumeRef = prev.sessionRef;
     tasks.save(t);
     return t;

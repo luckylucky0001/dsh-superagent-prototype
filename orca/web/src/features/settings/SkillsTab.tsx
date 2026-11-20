@@ -147,7 +147,7 @@ function SkillLibraryModal({ open, onClose }: { open: boolean; onClose: () => vo
       <QueryState isLoading={library.isLoading} error={library.error} onRetry={() => void library.refetch()}>
         <List dataSource={library.data ?? []} renderItem={(e) => (
           <List.Item actions={[e.installed
-            ? <Tag key="i" bordered={false} color="green">{t('skills.installed')}</Tag>
+            ? <Tag key="i" bordered={false} color="green" style={{ marginInlineEnd: 0 }}>{t('skills.installed')}</Tag>
             : <Button key="a" size="small" loading={install.isPending && install.variables === e.name} onClick={() => install.mutate(e.name)}>{t('skills.add')}</Button>]}>
             <List.Item.Meta title={<span className="orca-mono">{e.name}</span>} description={e.description} />
           </List.Item>

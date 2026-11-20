@@ -27,7 +27,7 @@
 | `orca issue comment KEY "text"` | 评论；写 `@Agent` 让 Agent 在同一会话中继续 |
 | `orca issue assign KEY AGENT` / `orca issue status KEY STATUS` | 指派 / 改状态 |
 | `orca agents` / `orca runtimes` | Agent 与运行时列表 |
-| `orca ask AGENT "prompt" [--follow-up TASK] [--no-wait]` | 直接提问；默认实时输出 Agent 的消息与命令，结束后返回；`--follow-up` 在上一个任务的会话里追问 |
+| `orca ask AGENT "prompt" [--project KEY] [--follow-up TASK] [--no-wait]` | 直接提问；默认实时输出 Agent 的消息与命令，结束后返回；`--project` 让 Agent 在该项目仓库的全新检出中回答（否则是空的临时目录）；`--follow-up` 在上一个任务的会话与目录里追问 |
 | `orca task show ID` / `follow ID` / `cancel ID` / `steer ID "text"` | 查看、跟随、取消任务，或在运行中插话 |
 | `orca workflows` / `orca runs [--limit N]` | 工作流与运行记录 |
 | `orca run WORKFLOW [--input key=value]... [--wait]` | 按名称或 id 手动运行工作流；`--wait` 等到结束，成功退出码 0 |
@@ -46,7 +46,7 @@ orca issue create --project WMS --title "Reject putaway into blocked bins" --ass
 orca issue comment WMS-5 "@Codex also cover bins that are blocked for cycle counting"
 
 # 直接提问并实时查看输出；再在同一会话里追问
-orca ask Codex "Where is FIFO enforced for line-side picks?"
+orca ask Codex --project WMS "Where is FIFO enforced for line-side picks?"
 orca ask Codex "Add a test for that" --follow-up task_...
 
 # CI：每晚跑健康检查，失败时让流水线变红

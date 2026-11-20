@@ -1,10 +1,10 @@
 import { useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
-import { Breadcrumb, Button, Card, Col, Descriptions, Flex, Input, Modal, Popconfirm, Row, Space, Tag, Typography } from 'antd';
+import { Breadcrumb, Button, Card, Col, Descriptions, Flex, Input, Modal, Popconfirm, Row, Select, Space, Tag, Typography } from 'antd';
 import { DeleteOutlined, EditOutlined, MessageOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
-import { qk, useRuntimeMap } from '@/api/queries';
+import { qk, useProjects, useRuntimeMap } from '@/api/queries';
 import { useT } from '@/app/i18n';
 import { AgentAvatar, ProviderTag } from '@/components/AgentAvatar';
 import { QueryState } from '@/components/QueryState';
@@ -27,8 +27,11 @@ export function AgentDetail() {
   const [editing, setEditing] = useState(false);
   const [asking, setAsking] = useState(false);
   const [prompt, setPrompt] = useState('');
+  const [project, setProject] = useState<string | undefined>();
+  const projects = useProjects();
+  const repoProjects = (projects.data ?? []).filter((p) => p.repoUrl);
   const ask = useMutation({
-    mutationFn: () => api.askAgent(id, prompt),
+    mutationFn: () => api.askAgent(id, prompt, undefined, project),
     onSuccess: (task) => {
       setAsking(false);
       setPrompt('');
@@ -78,6 +81,11 @@ export function AgentDetail() {
             okText={t('agents.askSend')} okButtonProps={{ disabled: !prompt.trim() }} confirmLoading={ask.isPending}
             onOk={() => ask.mutate()} destroyOnHidden>
             <Typography.Paragraph type="secondary">{t('agents.askHelp')}</Typography.Paragraph>
+            {repoProjects.length > 0 && (
+              <Select allowClear value={project} onChange={setProject} style={{ width: '100%', marginBottom: 12 }}
+                placeholder={t('agents.askProject')}
+                options={repoProjects.map((p) => ({ value: p.id, label: `${p.key} · ${p.name}` }))} />
+            )}
             <Input.TextArea value={prompt} onChange={(e) => setPrompt(e.target.value)} autoSize={{ minRows: 4, maxRows: 14 }}
               autoFocus placeholder={t('agents.askPlaceholder')} />
           </Modal>

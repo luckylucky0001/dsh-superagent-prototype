@@ -118,7 +118,7 @@ curl -fsSL https://orca.example.com/downloads/install-runtime.sh | sh -s -- \
 orca login --server https://orca.example.com --token orca_p_...
 orca issues --project WMS
 orca issue create --project WMS --title "Reject putaway into blocked bins" --assign Codex
-orca ask Codex "Where is FIFO enforced for line-side picks?"
+orca ask Codex --project WMS "Where is FIFO enforced for line-side picks?"
 orca run "Nightly WMS health check" --wait        # 按名称或 id 运行一个已启用的工作流
 orca inbox && orca approve inb_... --comment "ok"
 ```
@@ -128,7 +128,7 @@ orca inbox && orca approve inb_... --comment "ok"
 ## 功能一览
 
 - **看板与 Issue**：多项目、Issue key（如 `APP-12`）、评论（支持 `@Agent`）、指派给 Agent 或成员。
-- **直接提问**：在 Agent 页面发起不关联 Issue 的一次性任务（临时目录），实时查看、插话或取消；完成后可在同一会话中**追问**。
+- **直接提问**：在 Agent 页面或 `orca ask` 发起不关联 Issue 的一次性任务（可选项目：在其仓库的全新检出中回答；否则为临时目录），实时查看、插话或取消；完成后可在同一会话中**追问**。
 - **截图与附件**：评论框可粘贴/拖入/上传图片，Agent 在下一个任务以图片输入收到（daemon 用任务 token 下载）。
 - **执行记录**：实时转录（消息、思考摘要、命令与输出、文件 diff、计划、用量），运行中可**取消**或**插话**（Codex 原生 steer；不支持时排到下一轮）。
 - **工作流**：画布编排、组件面板、自动表单、变量助手、版本历史；内置「指派即执行」「评论续聊」，模板「实现 → 交叉评审 → 审批」「实现 ⇄ 评审循环 → 审批」「审查 Issue 分支」（Codex 内置评审器 `review/start`）「夜间健康检查」（定时在项目仓库的全新检出中体检，发现问题自动开 Issue）「推送 Issue 分支」（`repo.push`：由工作过的机器用本机 git 凭证推送 `orca/<key>`，返回合并请求链接）。

@@ -25,4 +25,21 @@ class ArgsTest {
     assertTrue(a.flag("wait"));
     assertEquals(List.of("run", "Nightly check"), a.positional);
   }
+
+  @org.junit.jupiter.api.Test
+  void columnTitlesAreReadable() {
+    org.junit.jupiter.api.Assertions.assertEquals("VERSION", Main.header("daemonVersion"));
+    org.junit.jupiter.api.Assertions.assertEquals("WORKFLOW", Main.header("workflowName"));
+    org.junit.jupiter.api.Assertions.assertEquals("STARTED", Main.header("startedAt"));
+    org.junit.jupiter.api.Assertions.assertEquals("ISSUE", Main.header("issueId"));
+    org.junit.jupiter.api.Assertions.assertEquals("ID", Main.header("id"));
+    org.junit.jupiter.api.Assertions.assertEquals("NAME", Main.header("name"));
+  }
+
+  @org.junit.jupiter.api.Test
+  void longCommandsShowAsOneLine() {
+    org.junit.jupiter.api.Assertions.assertEquals("npm test", Main.oneLine("npm test\n"));
+    org.junit.jupiter.api.Assertions.assertEquals("python3 - <<'PY'  (+2 lines)", Main.oneLine("python3 - <<'PY'\nprint(1)\nPY"));
+    org.junit.jupiter.api.Assertions.assertEquals(160, Main.oneLine("x".repeat(400)).length());
+  }
 }

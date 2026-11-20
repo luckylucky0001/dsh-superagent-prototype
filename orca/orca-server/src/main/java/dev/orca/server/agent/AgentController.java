@@ -93,8 +93,12 @@ public class AgentController {
     return AgentView.of(a);
   }
 
-  /** {@code followUp}: a finished Ask task of this agent whose session the question continues. */
-  public record AskInput(String prompt, String followUp) {}
+  /**
+   * {@code followUp}: a finished Ask task of this agent whose session the question continues (it keeps that
+   * task's folder). {@code project}: a project id or key; the agent then works in a fresh checkout of the
+   * project's repository instead of an empty scratch folder.
+   */
+  public record AskInput(String prompt, String followUp, String project) {}
 
   /** A one-off task for the agent, without an issue; the transcript is at /tasks/{id}. */
   @PostMapping("/{id}/ask")
@@ -107,7 +111,7 @@ public class AgentController {
       return Views.TaskView.of(tasks.followUp(a, in.followUp(), in.prompt(), dev.orca.server.auth.CurrentUser.id()));
     }
     return Views.TaskView.of(tasks.enqueue(new dev.orca.server.task.TaskRequest(a.id, null, in.prompt(), "ask", null, "new",
-        java.util.Map.of("source", "ask", "by", dev.orca.server.auth.CurrentUser.id()), null)));
+        java.util.Map.of("source", "ask", "by", dev.orca.server.auth.CurrentUser.id()), null, null, in.project())));
   }
 
   @GetMapping("/{id}/tasks")

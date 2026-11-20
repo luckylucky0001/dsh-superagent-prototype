@@ -506,7 +506,8 @@ export const en = {
   'agents.ask': "Ask",
   'agents.askTitle': "Ask {name}",
   'agents.askSend': "Start",
-  'agents.askHelp': "A one-off task without an issue, in its own scratch directory. You can follow it live, steer it or cancel it.",
+  'agents.askHelp': "A one-off task without an issue. Pick a project to give the agent a fresh checkout of its repository; otherwise it starts in an empty scratch folder. You can follow it live, steer it or cancel it.",
+  'agents.askProject': "Project repository (optional)",
   'agents.askPlaceholder': "e.g. Summarise how authentication works in this service",
 } as const;
 
@@ -1007,6 +1008,7 @@ export const zh: Record<MessageKey, string> = {
   'agents.ask': "直接提问",
   'agents.askTitle': "向 {name} 提问",
   'agents.askSend': "开始",
-  'agents.askHelp': "不关联 Issue 的一次性任务，在独立的临时目录中运行。可以实时查看、插话或取消。",
+  'agents.askHelp': "不关联 Issue 的一次性任务。选择项目时，Agent 在该项目仓库的全新检出中工作；否则从空的临时目录开始。可以实时查看、插话或取消。",
+  'agents.askProject': "项目仓库（可选）",
   'agents.askPlaceholder': "例如：总结一下这个服务的鉴权是怎么实现的",
 };

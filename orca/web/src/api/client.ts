@@ -171,7 +171,8 @@ export const api = {
   // agents
   agents: () => request<Agent[]>('GET', '/agents'),
   agent: (id: string) => request<Agent>('GET', `/agents/${enc(id)}`),
-  askAgent: (id: string, prompt: string, followUp?: string) => request<Task>('POST', `/agents/${enc(id)}/ask`, { prompt, followUp }),
+  askAgent: (id: string, prompt: string, followUp?: string, project?: string) =>
+    request<Task>('POST', `/agents/${enc(id)}/ask`, { prompt, followUp, project }),
   createAgent: (input: AgentInput) => request<Agent>('POST', '/agents', input),
   updateAgent: (id: string, input: AgentInput) => request<Agent>('PATCH', `/agents/${enc(id)}`, input),
   archiveAgent: (id: string) => request<Agent>('DELETE', `/agents/${enc(id)}`),
