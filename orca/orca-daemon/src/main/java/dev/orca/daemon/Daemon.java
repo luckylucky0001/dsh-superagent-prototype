@@ -125,6 +125,9 @@ public final class Daemon {
         TaskRunner r = running.get(a.taskId());
         if (r != null) {
           r.ack(a.seq());
+          if (a.completed() && r.finished()) {
+            r.completionAcknowledged();
+          }
         }
       }
       case Wire.PROBE -> Thread.ofVirtual().start(() -> link.send(Wire.frame(Wire.PROBE_RESULT,
@@ -139,16 +142,22 @@ public final class Daemon {
       return;
     }
     AgentProvider p = providers.get(t.provider());
-    if (p == null || running.size() >= config.capacity()) {
+    if (p == null || busy() >= config.capacity()) {
       String why = p == null ? "provider " + t.provider() + " is not available on this runtime" : "runtime is at capacity";
       link.send(Wire.frame(Wire.TASK_COMPLETED, new Wire.TaskCompleted(t.taskId(), "failed", null, null, null,
           dev.orca.protocol.ErrorCodes.PROVIDER_UNAVAILABLE, why, Map.of(), 0)));
+      // nothing to keep: if this frame is lost, the server's lease puts the task back in the queue
       return;
     }
     TaskRunner r = new TaskRunner(t, p, workspaces, link, config.isolated(), config.allowExtraArgs(), config.server(),
         () -> running.remove(t.taskId()));
     running.put(t.taskId(), r);
     Thread.ofVirtual().name("task-" + t.taskId()).start(r);
+  }
+
+  /** Runners still working; finished ones only wait for the server's acknowledgement. */
+  private int busy() {
+    return (int) running.values().stream().filter(r -> !r.finished()).count();
   }
 
   private void heartbeatLoop() {
@@ -160,7 +169,7 @@ public final class Daemon {
       }
       if (link.connected()) {
         link.send(Wire.frame(Wire.HEARTBEAT, new Wire.Heartbeat(new ArrayList<>(running.keySet()),
-            Math.max(0, config.capacity() - running.size()))));
+            Math.max(0, config.capacity() - busy()))));
       }
     }
   }

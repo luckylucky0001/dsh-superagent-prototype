@@ -150,6 +150,17 @@ public final class WorkflowEngine {
     listener.runChanged(s);
     Deque<String> ready = new ArrayDeque<>();
     ready.add(nodeId);
+    // branches the failure cancelled, or that were ready when it happened, resume as well
+    for (NodeDef n : def.nodes()) {
+      NodeState other = s.node(n.id());
+      if (!n.id().equals(nodeId) && (other.status == NodeStatus.CANCELLED || other.status == NodeStatus.READY)) {
+        other.status = NodeStatus.READY;
+        other.waitKey = null;
+        other.finishedAt = 0;
+        listener.nodeChanged(s, n.id(), other);
+        ready.add(n.id());
+      }
+    }
     drain(s, def, ready);
     return s;
   }

@@ -30,12 +30,29 @@ public class FrameRouter {
   }
 
   void route(String runtimeId, Wire.Frame f) {
+    // a frame racing with dispatch or lease expiry on the same task is simply applied again
+    for (int attempt = 1; ; attempt++) {
+      try {
+        apply(runtimeId, f);
+        return;
+      } catch (org.springframework.dao.OptimisticLockingFailureException e) {
+        if (attempt >= 3) {
+          throw e;
+        }
+      }
+    }
+  }
+
+  private void apply(String runtimeId, Wire.Frame f) {
     switch (f.type()) {
       case Wire.HELLO -> {
         Wire.Hello h = Json.convert(f.data(), Wire.Hello.class);
         runtimes.hello(runtimeId, h);
         List<String> lost = tasks.reconcile(runtimeId, h.running());
         gateway.send(runtimeId, Wire.frame(Wire.WELCOME, new Wire.Welcome(runtimeId, props.heartbeatSeconds(), lost)));
+        for (String orphan : tasks.orphans(runtimeId, h.running())) {
+          gateway.send(runtimeId, Wire.frame(Wire.TASK_CANCEL, new Wire.TaskCancel(orphan, "the task already ended")));
+        }
       }
       case Wire.HEARTBEAT -> {
         runtimes.seen(runtimeId);

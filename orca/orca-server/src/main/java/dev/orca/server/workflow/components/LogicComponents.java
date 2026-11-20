@@ -21,15 +21,22 @@ import org.springframework.context.annotation.Configuration;
 @Configuration
 public class LogicComponents {
 
-  /** Evaluates a raw expression, or takes the value a {{ }} template already produced. */
+  /**
+   * Evaluates the field as written. A {{ }} template's output is used as a value and never parsed
+   * again, so text from issues or comments cannot inject expression syntax.
+   */
   static Object evaluate(NodeContext ctx, String field) {
-    Object v = ctx.config().get(field);
-    if (v instanceof String s) {
+    Object raw = ctx.node().config().get(field);
+    if (raw instanceof String s && !dev.orca.workflow.expr.Template.hasPlaceholders(s)) {
       String t = s.trim();
       if (t.equals("true") || t.equals("false")) {
         return Boolean.parseBoolean(t);
       }
       return Expression.eval(t, ctx.variables());
+    }
+    Object v = ctx.config().get(field);
+    if (v instanceof String s && (s.trim().equals("true") || s.trim().equals("false"))) {
+      return Boolean.parseBoolean(s.trim());
     }
     return v;
   }

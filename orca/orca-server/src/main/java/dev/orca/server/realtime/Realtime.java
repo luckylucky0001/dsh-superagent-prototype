@@ -56,9 +56,21 @@ public class Realtime {
     return m;
   }
 
+  /** One virtual thread per client, so a stalled browser never blocks the thread that published. */
   private void broadcast(String type, Object data) {
+    String json = Json.write(data);
     for (SseEmitter e : emitters) {
-      send(e, type, data);
+      Thread.ofVirtual().start(() -> sendRaw(e, type, json));
+    }
+  }
+
+  private void sendRaw(SseEmitter e, String type, String json) {
+    try {
+      synchronized (e) {
+        e.send(SseEmitter.event().id(Long.toString(ids.incrementAndGet())).name(type).data(json));
+      }
+    } catch (IOException | IllegalStateException ex) {
+      emitters.remove(e);
     }
   }
 

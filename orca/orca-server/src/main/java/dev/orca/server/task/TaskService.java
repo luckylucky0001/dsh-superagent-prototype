@@ -360,6 +360,12 @@ public class TaskService {
     if (t == null || !runtimeId.equals(t.runtimeId) || m.events() == null || m.events().isEmpty()) {
       return;
     }
+    if (TaskStatus.TERMINAL.contains(t.status)) {
+      // e.g. lost and finished while partitioned: acknowledge so the daemon stops resending, change nothing
+      long max = m.events().stream().mapToLong(AgentEvent::seq).max().orElse(0);
+      afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(t.id, max, false))));
+      return;
+    }
     List<Map<String, Object>> fresh = new ArrayList<>();
     long max = t.lastSeq;
     for (AgentEvent e : m.events()) {
@@ -381,7 +387,7 @@ public class TaskService {
     t.leaseUntil = Ids.now() + props.leaseSeconds() * 1000L;
     tasks.save(t);
     long ack = max;
-    afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(t.id, ack))));
+    afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(t.id, ack, false))));
     if (!fresh.isEmpty()) {
       realtime.publish("task.events", Map.of("taskId", t.id, "issueId", String.valueOf(t.issueId), "events", fresh));
     }
@@ -415,9 +421,9 @@ public class TaskService {
     if (t == null) {
       return;
     }
-    afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(m.taskId(), m.lastSeq()))));
-    if (TaskStatus.TERMINAL.contains(t.status)) {
-      return;
+    afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(m.taskId(), m.lastSeq(), true))));
+    if (TaskStatus.TERMINAL.contains(t.status) || !runtimeId.equals(t.runtimeId)) {
+      return; // already ended here, or reported by a runtime that does not hold this task
     }
     String status = switch (String.valueOf(m.status())) {
       case "succeeded" -> TaskStatus.SUCCEEDED;
@@ -466,6 +472,17 @@ public class TaskService {
     }
   }
 
+  /** Tasks a reconnecting daemon still runs although they ended here; it is told to stop them. */
+  @Transactional(readOnly = true)
+  public List<String> orphans(String runtimeId, List<Wire.RunningTask> running) {
+    List<String> out = new ArrayList<>();
+    for (Wire.RunningTask r : running == null ? List.<Wire.RunningTask>of() : running) {
+      tasks.findById(r.taskId()).filter(t -> TaskStatus.TERMINAL.contains(t.status) || !runtimeId.equals(t.runtimeId))
+          .ifPresent(t -> out.add(t.id));
+    }
+    return out;
+  }
+
   /** After a reconnect: tasks the server thinks run there but the daemon does not know are lost. */
   @Transactional
   public List<String> reconcile(String runtimeId, List<Wire.RunningTask> running) {
@@ -489,7 +506,9 @@ public class TaskService {
     long now = Ids.now();
     for (Task t : tasks.findByStatusIn(TaskStatus.ACTIVE)) {
       if (t.leaseUntil != null && t.leaseUntil < now) {
-        if (TaskStatus.DISPATCHED.equals(t.status) && t.startedAt == null) {
+        if ("cancelling".equals(t.statusDetail)) {
+          finish(t, TaskStatus.CANCELLED, ErrorCodes.CANCELLED, "cancelled", null);
+        } else if (TaskStatus.DISPATCHED.equals(t.status) && t.startedAt == null) {
           // never started: put it back in the queue for another attempt
           t.status = TaskStatus.QUEUED;
           t.runtimeId = null;

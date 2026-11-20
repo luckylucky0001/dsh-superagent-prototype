@@ -124,6 +124,8 @@ public final class JsonRpcConnection implements AutoCloseable {
     try {
       return f.get(timeout.toMillis(), TimeUnit.MILLISECONDS);
     } catch (TimeoutException e) {
+      f.cancel(false);
+      pending.values().remove(f);
       throw new AgentException(ErrorCodes.TIMEOUT, name + ": " + method + " timed out after " + timeout);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
@@ -169,6 +171,8 @@ public final class JsonRpcConnection implements AutoCloseable {
 
   @Override
   public void close() {
+    // snapshot first: once the CLI exits its children (running commands, MCP servers) are re-parented
+    java.util.List<ProcessHandle> children = process.descendants().toList();
     try {
       stdin.close();
     } catch (IOException ignored) {
@@ -187,6 +191,7 @@ public final class JsonRpcConnection implements AutoCloseable {
       Thread.currentThread().interrupt();
       process.destroyForcibly();
     }
+    children.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroy);
     handlers.shutdownNow();
     failPending(new IOException(name + " closed"));
   }

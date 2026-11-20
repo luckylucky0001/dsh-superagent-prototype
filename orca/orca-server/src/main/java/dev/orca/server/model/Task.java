@@ -3,6 +3,7 @@ package dev.orca.server.model;
 import jakarta.persistence.Entity;
 import jakarta.persistence.Id;
 import jakarta.persistence.Table;
+import jakarta.persistence.Version;
 
 @Entity
 @Table(name = "task")
@@ -33,4 +34,5 @@ public class Task {
   public long queuedAt;
   public Long startedAt;
   public Long finishedAt;
+  @Version public long version;
 }

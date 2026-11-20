@@ -99,7 +99,8 @@ public final class Wire {
 
   public record TaskInput(String taskId, String requestId, Map<String, Object> answer) {}
 
-  public record Ack(String taskId, long seq) {}
+  /** {@code completed}: the server stored the task's completion, so the daemon may forget the task. */
+  public record Ack(String taskId, long seq, boolean completed) {}
 
   public record Error(String message) {}
 }

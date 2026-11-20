@@ -87,12 +87,27 @@ final class TaskRunner implements Runnable {
       }
       inputs.values().forEach(f -> f.complete(Interaction.InputReply.decline()));
     }
-    finished = true;
     flusher.interrupt();
-    flush();
+    // number every remaining event now, connected or not, so the completion's lastSeq covers them and a
+    // reconnect replays them before the completion
+    List<AgentEvent> rest;
+    synchronized (this) {
+      rest = buffer.drain();
+    }
     completion = Wire.frame(Wire.TASK_COMPLETED, withSeq(result));
-    link.send(completion);
+    finished = true;
+    if (link.connected()) {
+      if (!rest.isEmpty()) {
+        link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), rest)));
+      }
+      link.send(completion);
+    }
     log.info("task {} {}", task.taskId(), result.status());
+    // the runner stays registered until the server acknowledges the completion (see Daemon)
+  }
+
+  /** Called when the server confirmed it stored the completion. */
+  void completionAcknowledged() {
     onDone.run();
   }
 
@@ -327,7 +342,8 @@ final class TaskRunner implements Runnable {
   }
 
   /** After a reconnect: resend what the server has not acknowledged, and the completion if done. */
-  void replay() {
+  synchronized void replay() {
+    buffer.drain(); // pending events from the disconnected period join the unacknowledged ones, in order
     List<AgentEvent> again = buffer.unacked();
     if (!again.isEmpty()) {
       link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), again)));

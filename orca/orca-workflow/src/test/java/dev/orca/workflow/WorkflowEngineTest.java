@@ -199,4 +199,21 @@ class WorkflowEngineTest {
     assertTrue(messages.stream().anyMatch(m -> m.contains("at least one trigger")), messages.toString());
     assertTrue(messages.stream().anyMatch(m -> m.contains("cycle")), messages.toString());
   }
+
+  @Test
+  void retryResumesBranchesTheFailureCancelled() {
+    failures.set(1);
+    var def = new WorkflowDefinition(
+        List.of(node("start", "t.manual", Map.of()), node("agent", "t.async", Map.of()), node("f", "t.flaky", Map.of()),
+            node("join", "t.echo", Map.of())),
+        List.of(new EdgeDef("e1", "start", "agent"), new EdgeDef("e2", "start", "f"),
+            new EdgeDef("e3", "agent", "join"), new EdgeDef("e4", "f", "join")));
+    RunState s = engine.start("r", "w", def, "start", Map.of());
+    assertEquals(RunStatus.FAILED, s.status);
+    engine.retry(s, def, "f");
+    assertEquals(RunStatus.WAITING, s.status, "the cancelled agent branch runs again");
+    engine.signal(s, def, "agent", s.node("agent").waitKey, Map.of("text", "ok"));
+    assertEquals(RunStatus.SUCCEEDED, s.status);
+    assertEquals(NodeStatus.SUCCEEDED, s.node("join").status);
+  }
 }

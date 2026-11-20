@@ -42,6 +42,9 @@ public class AuthController {
   public Map<String, Object> login(@RequestBody LoginRequest req, HttpServletRequest http, HttpServletResponse res) {
     String key = String.valueOf(req.email()).toLowerCase() + "|" + http.getRemoteAddr();
     long now = System.currentTimeMillis();
+    if (failures.size() > 10_000) {
+      failures.entrySet().removeIf(en -> en.getValue().stream().allMatch(t -> t < now - WINDOW_MS));
+    }
     java.util.Deque<Long> recent = failures.computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
     recent.removeIf(t -> t < now - WINDOW_MS);
     if (recent.size() >= MAX_FAILURES) {

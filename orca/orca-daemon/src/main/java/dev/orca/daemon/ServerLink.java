@@ -25,6 +25,8 @@ final class ServerLink implements Link {
   private final Runnable onOpen;
   private final HttpClient http = HttpClient.newBuilder().connectTimeout(Duration.ofSeconds(15)).build();
   private volatile WebSocket socket;
+  /** True once HELLO and the replay of unacknowledged events went out; new events wait until then. */
+  private volatile boolean ready;
   private volatile boolean stopped;
   private final Object sendLock = new Object();
 
@@ -50,6 +52,7 @@ final class ServerLink implements Link {
         log.info("connected to {}", uri);
         backoff = 1000;
         onOpen.run();
+        ready = true;
         closed.get();
       } catch (InterruptedException e) {
         Thread.currentThread().interrupt();
@@ -57,6 +60,7 @@ final class ServerLink implements Link {
       } catch (Exception e) {
         log.warn("connection to {} failed: {}", uri, rootMessage(e));
       }
+      ready = false;
       socket = null;
       if (stopped) {
         return;
@@ -82,7 +86,7 @@ final class ServerLink implements Link {
   @Override
   public boolean connected() {
     WebSocket ws = socket;
-    return ws != null && !ws.isOutputClosed();
+    return ready && ws != null && !ws.isOutputClosed();
   }
 
   @Override
@@ -98,6 +102,7 @@ final class ServerLink implements Link {
         return true;
       } catch (Exception e) {
         log.debug("send failed: {}", rootMessage(e));
+        ready = false;
         ws.abort();
         return false;
       }
