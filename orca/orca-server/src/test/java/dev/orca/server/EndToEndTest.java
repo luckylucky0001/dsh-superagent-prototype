@@ -78,7 +78,7 @@ class EndToEndTest {
     String token = Json.str(call("POST", "/api/daemon/register", Map.of("code", code)), "token");
     Path work = Files.createTempDirectory("orca-e2e");
     DaemonConfig cfg = new DaemonConfig("http://localhost:" + port, token, "test-box", 2, work.toString(),
-        FakeCodexAppServer.command(), List.of("/nonexistent/traecli"), Map.of("FAKE_SCENARIO", "echo"), false, null);
+        FakeCodexAppServer.command(), List.of("/nonexistent/traecli"), Map.of("FAKE_SCENARIO", "echo"), false, null, false);
     Daemon daemon = new Daemon(cfg, Daemon.defaultProviders(cfg, null));
     Thread.ofPlatform().daemon().name("test-daemon").start(daemon::run);
     await("runtime online", quietly(() -> {

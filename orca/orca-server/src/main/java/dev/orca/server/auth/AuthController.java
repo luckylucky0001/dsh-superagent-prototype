@@ -33,10 +33,26 @@ public class AuthController {
     }
   }
 
+  private static final int MAX_FAILURES = 10;
+  private static final long WINDOW_MS = 15 * 60_000L;
+  private final java.util.concurrent.ConcurrentHashMap<String, java.util.Deque<Long>> failures =
+      new java.util.concurrent.ConcurrentHashMap<>();
+
   @PostMapping("/login")
   public Map<String, Object> login(@RequestBody LoginRequest req, HttpServletRequest http, HttpServletResponse res) {
-    String token = auth.login(String.valueOf(req.email()), String.valueOf(req.password()))
-        .orElseThrow(() -> new ApiException(HttpStatus.UNAUTHORIZED, "wrong e-mail or password"));
+    String key = String.valueOf(req.email()).toLowerCase() + "|" + http.getRemoteAddr();
+    long now = System.currentTimeMillis();
+    java.util.Deque<Long> recent = failures.computeIfAbsent(key, k -> new java.util.concurrent.ConcurrentLinkedDeque<>());
+    recent.removeIf(t -> t < now - WINDOW_MS);
+    if (recent.size() >= MAX_FAILURES) {
+      throw new ApiException(HttpStatus.TOO_MANY_REQUESTS, "too many failed attempts; try again in a few minutes");
+    }
+    String token = auth.login(String.valueOf(req.email()), String.valueOf(req.password())).orElse(null);
+    if (token == null) {
+      recent.add(now);
+      throw new ApiException(HttpStatus.UNAUTHORIZED, "wrong e-mail or password");
+    }
+    failures.remove(key);
     ResponseCookie cookie = ResponseCookie.from(AuthFilter.COOKIE, token).httpOnly(true).path("/")
         .sameSite("Lax").secure(http.isSecure()).maxAge(Duration.ofDays(14)).build();
     res.addHeader(HttpHeaders.SET_COOKIE, cookie.toString());

@@ -98,4 +98,12 @@ class DaemonUnitTest {
     Process p = new ProcessBuilder(cmd).directory(dir.toFile()).inheritIO().start();
     assertEquals(0, p.waitFor());
   }
+
+  @Test
+  void extraArgumentsCannotWeakenTheSandbox() {
+    List<String> args = List.of("-c", "model_reasoning_summary=\"concise\"", "-c", "sandbox_mode=\"danger-full-access\"",
+        "--yolo", "--sandbox", "danger-full-access", "-c", "approval_policy=never", "--enable", "web_search", "--add-dir", "/");
+    assertEquals(List.of(), ExtraArgs.filter(args, false));
+    assertEquals(List.of("-c", "model_reasoning_summary=\"concise\"", "--enable", "web_search"), ExtraArgs.filter(args, true));
+  }
 }

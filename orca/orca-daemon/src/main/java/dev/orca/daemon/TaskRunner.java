@@ -37,6 +37,7 @@ final class TaskRunner implements Runnable {
   private final Workspaces workspaces;
   private final Link link;
   private final boolean isolated;
+  private final boolean allowExtraArgs;
   private final Runnable onDone;
   private final EventBuffer buffer = new EventBuffer();
   private final Map<String, CompletableFuture<Interaction.InputReply>> inputs = new ConcurrentHashMap<>();
@@ -46,7 +47,9 @@ final class TaskRunner implements Runnable {
   private volatile boolean finished;
   private volatile Wire.Frame completion;
 
-  TaskRunner(Wire.TaskAssign task, AgentProvider provider, Workspaces workspaces, Link link, boolean isolated, Runnable onDone) {
+  TaskRunner(Wire.TaskAssign task, AgentProvider provider, Workspaces workspaces, Link link, boolean isolated,
+      boolean allowExtraArgs, Runnable onDone) {
+    this.allowExtraArgs = allowExtraArgs;
     this.task = task;
     this.provider = provider;
     this.workspaces = workspaces;
@@ -116,10 +119,16 @@ final class TaskRunner implements Runnable {
         return awaitInput(r);
       }
     };
+    List<String> extra = ExtraArgs.filter(a == null ? List.of() : a.extraArgs(), allowExtraArgs);
+    if (a != null && a.extraArgs() != null && extra.size() != a.extraArgs().size()) {
+      buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message", allowExtraArgs
+          ? "sandbox and approval arguments in the agent's extra arguments were ignored"
+          : "the agent's extra CLI arguments were ignored; start the daemon with --allow-extra-args to use them"));
+    }
     SessionSpec spec = new SessionSpec(dir, a == null ? null : a.model(), a == null ? null : a.effort(),
         a == null ? null : a.instructions(), permission, task.sessionRef(),
         task.mcp() == null ? null : task.mcp().url(), task.mcp() == null ? null : task.mcp().token(),
-        a == null ? null : a.allowedCommands(), a == null ? null : a.extraArgs(), a == null ? null : a.env());
+        a == null ? null : a.allowedCommands(), extra, a == null ? null : a.env());
     String prompt = task.prompt();
     try {
       session = provider.open(spec, handler);

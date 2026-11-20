@@ -35,6 +35,9 @@ public final class Main {
     if (flags.containsKey("isolated")) {
       cfg = cfg.withIsolated(true);
     }
+    if (flags.containsKey("allow-extra-args")) {
+      cfg = cfg.withAllowExtraArgs(true);
+    }
     switch (cmd) {
       case "register" -> {
         String code = require(flags, "code");
@@ -106,7 +109,7 @@ public final class Main {
     System.out.println("""
         orca-daemon register --server URL --code CODE
         orca-daemon start [--server URL --token TOKEN] [--name NAME] [--capacity N] [--work-root DIR]
-                          [--codex "codex"] [--trae "traecli"] [--isolated] [--save]
+                          [--codex "codex"] [--trae "traecli"] [--isolated] [--allow-extra-args] [--save]
         orca-daemon probe
         orca-daemon version""");
   }

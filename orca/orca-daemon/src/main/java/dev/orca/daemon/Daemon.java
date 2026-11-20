@@ -144,7 +144,8 @@ public final class Daemon {
           dev.orca.protocol.ErrorCodes.PROVIDER_UNAVAILABLE, why, Map.of(), 0)));
       return;
     }
-    TaskRunner r = new TaskRunner(t, p, workspaces, link, config.isolated(), () -> running.remove(t.taskId()));
+    TaskRunner r = new TaskRunner(t, p, workspaces, link, config.isolated(), config.allowExtraArgs(),
+        () -> running.remove(t.taskId()));
     running.put(t.taskId(), r);
     Thread.ofVirtual().name("task-" + t.taskId()).start(r);
   }
