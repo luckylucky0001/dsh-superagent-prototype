@@ -66,6 +66,9 @@ function handle(qc: QueryClient, type: string, data: Payload) {
     case 'project.updated':
       inv(qk.projects);
       break;
+    case 'member.updated':
+      inv(['members']);
+      break;
     default:
       break;
   }
@@ -83,6 +86,7 @@ const EVENT_TYPES = [
   'agent.updated',
   'workflow.updated',
   'project.updated',
+  'member.updated',
 ];
 
 /**

@@ -58,6 +58,26 @@ function FileChangeRow({ path, kind, diff }: { path: string; kind?: string; diff
   );
 }
 
+/** MCP results arrive as {content:[{type:'text', text}]}; show the text, else the raw output. */
+function mcpText(output: string): string {
+  try {
+    const v = JSON.parse(output) as { content?: { type?: string; text?: string }[] };
+    const texts = (v.content ?? []).filter((c) => c.type === 'text' && typeof c.text === 'string').map((c) => c.text as string);
+    if (texts.length) {
+      return texts.map((x) => {
+        try {
+          return prettyJson(JSON.parse(x));
+        } catch {
+          return x;
+        }
+      }).join('\n');
+    }
+  } catch {
+    /* not JSON */
+  }
+  return output;
+}
+
 /** One tool call: command, file change, MCP call or web search. */
 export function ToolCard({ item }: { item: ToolItem }) {
   const t = useT();
@@ -109,7 +129,7 @@ export function ToolCard({ item }: { item: ToolItem }) {
           {item.changes.map((c, i) => (
             <FileChangeRow key={`${c.path}-${i}`} {...c} />
           ))}
-          {item.output && <CodeBlock maxHeight={320}>{item.output}</CodeBlock>}
+          {item.output && <CodeBlock maxHeight={320}>{item.toolKind === 'mcp' ? mcpText(item.output) : item.output}</CodeBlock>}
         </div>
       )}
     </div>

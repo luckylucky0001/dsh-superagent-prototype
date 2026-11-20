@@ -24,10 +24,17 @@ public class MemberController {
 
   private final MemberRepo members;
   private final AuthService auth;
+  private final dev.orca.server.realtime.Realtime realtime;
 
-  public MemberController(MemberRepo members, AuthService auth) {
+  public MemberController(MemberRepo members, AuthService auth, dev.orca.server.realtime.Realtime realtime) {
     this.members = members;
     this.auth = auth;
+    this.realtime = realtime;
+  }
+
+  private AuthController.MemberView changed(Member m) {
+    realtime.publish("member.updated", dev.orca.server.realtime.Realtime.ids("id", m.id));
+    return AuthController.MemberView.of(m);
   }
 
   @GetMapping("/api/members")
@@ -55,7 +62,7 @@ public class MemberController {
     m.role = in.role() != null && ROLES.contains(in.role()) && !"owner".equals(in.role()) ? in.role() : "member";
     m.passwordHash = auth.hashPassword(in.password());
     m.createdAt = Ids.now();
-    return AuthController.MemberView.of(members.save(m));
+    return changed(members.save(m));
   }
 
   @PatchMapping("/api/members/{id}")
@@ -81,7 +88,7 @@ public class MemberController {
       checkPassword(in.password());
       m.passwordHash = auth.hashPassword(in.password());
     }
-    return AuthController.MemberView.of(members.save(m));
+    return changed(members.save(m));
   }
 
   @DeleteMapping("/api/members/{id}")
@@ -93,6 +100,7 @@ public class MemberController {
       throw ApiException.bad("the owner and yourself cannot be removed");
     }
     members.delete(m);
+    realtime.publish("member.updated", dev.orca.server.realtime.Realtime.ids("id", id, "deleted", true));
     return Map.of("ok", true);
   }
 

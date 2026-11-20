@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
-import { Alert, Button, Card, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
+import { Alert, Button, Card, Flex, Form, Input, Modal, Popconfirm, Select, Space, Table, Tabs, Tag, Tooltip, Typography } from 'antd';
 import { BranchesOutlined, DeleteOutlined, KeyOutlined, PlusOutlined } from '@ant-design/icons';
 import { api } from '@/api/client';
 import { qk, useMembers, useProjects } from '@/api/queries';
@@ -264,7 +264,7 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
     <Modal open={open} onCancel={onClose} title={t('settings.newProject')} okText={t('common.create')}
       onOk={() => form.submit()} confirmLoading={create.isPending} destroyOnHidden width={600}>
       <Form form={form} layout="vertical" preserve={false} onFinish={(v) => create.mutate(v)}>
-        <Space size={12} align="start" style={{ display: 'flex' }}>
+        <Flex gap={12} align="start">
           <Form.Item name="key" label={t('settings.projectKey')} style={{ width: 150 }}
             normalize={(v: string) => v?.toUpperCase()}
             extra={t('settings.projectKeyHelp', { example: `${key || 'APP'}-1` })}
@@ -274,19 +274,19 @@ function NewProjectModal({ open, onClose }: { open: boolean; onClose: () => void
           <Form.Item name="name" label={t('common.name')} style={{ flex: 1 }} rules={[{ required: true, whitespace: true, message: t('form.required') }]}>
             <Input placeholder={t('settings.projectNamePlaceholder')} />
           </Form.Item>
-        </Space>
+        </Flex>
         <Form.Item name="description" label={t('common.description')}>
           <Input.TextArea autoSize={{ minRows: 2, maxRows: 5 }} />
         </Form.Item>
         <Alert type="info" showIcon icon={<BranchesOutlined />} style={{ marginBottom: 16 }} message={t('settings.repoExplain')} />
-        <Space size={12} align="start" style={{ display: 'flex' }}>
+        <Flex gap={12} align="start">
           <Form.Item name="repoUrl" label={t('settings.repoUrl')} style={{ flex: 1 }}>
             <Input placeholder="git@github.com:acme/app.git" className="orca-mono" />
           </Form.Item>
           <Form.Item name="defaultBranch" label={t('settings.defaultBranch')} style={{ width: 160 }}>
             <Input placeholder="main" className="orca-mono" />
           </Form.Item>
-        </Space>
+        </Flex>
       </Form>
     </Modal>
   );
@@ -309,6 +309,7 @@ function Projects() {
             {
               title: t('common.name'),
               key: 'name',
+              width: 260,
               render: (_, p) => (
                 <div>
                   <Typography.Text strong>{p.name}</Typography.Text>
@@ -321,8 +322,8 @@ function Projects() {
               key: 'repo',
               render: (_, p) =>
                 p.repoUrl ? (
-                  <Space direction="vertical" size={0}>
-                    <Typography.Text className="orca-mono" style={{ fontSize: 12 }} ellipsis={{ tooltip: p.repoUrl }}>{p.repoUrl}</Typography.Text>
+                  <Space direction="vertical" size={0} style={{ maxWidth: 520 }}>
+                    <Typography.Text className="orca-mono" style={{ fontSize: 12, maxWidth: 520 }} ellipsis={{ tooltip: p.repoUrl }}>{p.repoUrl}</Typography.Text>
                     <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                       <BranchesOutlined /> {p.defaultBranch ?? 'main'} → orca/{p.key.toLowerCase()}-N
                     </Typography.Text>

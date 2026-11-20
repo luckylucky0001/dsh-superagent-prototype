@@ -431,7 +431,7 @@ final class TraeSession implements AgentSession {
           d = Decision.DECLINE;
         }
         sink.accept(AgentEvent.of(AgentEvent.APPROVAL_RESOLVED, "requestId", r.requestId(), "decision",
-            d.name().toLowerCase()));
+            d.name().toLowerCase(), "by", "policy"));
         yield permissionOutcome(Json.list(p, "options"), d);
       }
       case "elicitation/create" -> {

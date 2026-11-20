@@ -34,7 +34,8 @@ ORCA_WEB_DIR=file:/absolute/path/to/orca/web/dist/ java -jar orca-server.jar
 ```
 
 (note the trailing slash). The server serves the files and forwards client-side routes such as
-`/issues/ORCA-1` to `index.html` (`SpaController`), so deep links work.
+`/issues/ORCA-1` to `index.html` (`SpaController`), so deep links work. Every top-level route the
+router knows (`app/router.tsx`) must be listed there too.
 
 ## Layout
 
@@ -52,6 +53,8 @@ src/
     runtimes/   machines, provider health, registration commands
     workflows/  list, editor (palette, canvas, inspector, variable helper), manual-run modal
     runs/       run list and read-only run canvas coloured by node status
+    usage/      totals, runs/tokens per day (CSS bars), per-agent table (GET /api/stats)
+    settings/   my account, members (owner/admin manage), projects (repo URL → branch orca/<issue-key>)
 ```
 
 ### Realtime

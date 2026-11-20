@@ -463,7 +463,7 @@ final class CodexSession implements AgentSession {
       d = Decision.DECLINE;
     }
     sink.accept(AgentEvent.of(AgentEvent.APPROVAL_RESOLVED, "requestId", r.requestId(),
-        "decision", d.name().toLowerCase()));
+        "decision", d.name().toLowerCase(), "by", "policy"));
     return d;
   }
 

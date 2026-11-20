@@ -28,7 +28,7 @@ interface Column {
 function niceMax(v: number): number {
   if (v <= 0) return 1;
   const p = 10 ** Math.floor(Math.log10(v));
-  for (const m of [1, 2, 2.5, 5, 10]) if (m * p >= v) return m * p;
+  for (const m of [1, 2, 3, 4, 5, 6, 8, 10]) if (m * p >= v) return m * p;
   return 10 * p;
 }
 
@@ -40,7 +40,8 @@ function Bars({ columns, format, height = 180, legend }: {
   columns: Column[]; format: (n: number) => string; height?: number; legend?: Segment[];
 }) {
   const max = niceMax(Math.max(0, ...columns.map((c) => c.segments.reduce((s, x) => s + x.value, 0))));
-  const ticks = [max, max / 2, 0];
+  // the midline only when it lands on a whole number (counts) or the scale is large
+  const ticks = Number.isInteger(max / 2) || max > 100 ? [max, max / 2, 0] : [max, 0];
   const every = columns.length > 20 ? 5 : columns.length > 10 ? 2 : 1;
   return (
     <div>
@@ -160,18 +161,18 @@ export function UsagePage() {
         {d && (
           <>
             <Row gutter={16} style={{ marginBottom: 16 }}>
-              <Col xs={12} md={6}><Card size="small"><Statistic title={t('usage.agentRuns')} value={totals.runs} /></Card></Col>
+              <Col xs={12} md={6}><Card size="small" style={{ height: '100%' }}><Statistic title={t('usage.agentRuns')} value={totals.runs} /></Card></Col>
               <Col xs={12} md={6}>
-                <Card size="small">
+                <Card size="small" style={{ height: '100%' }}>
                   <Statistic title={t('usage.successRate')} value={success ?? '—'} suffix={success !== null ? '%' : undefined} />
                   <Typography.Text type="secondary" style={{ fontSize: 12 }}>
                     {t('usage.succeededFailed', { s: totals.succeeded, f: totals.failed })}
                   </Typography.Text>
                 </Card>
               </Col>
-              <Col xs={12} md={6}><Card size="small"><Statistic title={t('transcript.tokens')} value={fmtTokens(totals.tokens)} /></Card></Col>
+              <Col xs={12} md={6}><Card size="small" style={{ height: '100%' }}><Statistic title={t('transcript.tokens')} value={fmtTokens(totals.tokens)} /></Card></Col>
               <Col xs={12} md={6}>
-                <Card size="small">
+                <Card size="small" style={{ height: '100%' }}>
                   <Statistic title={t('usage.busyTime')} value={fmtDuration(d.agents.reduce((s, a) => s + a.busyMs, 0))} />
                 </Card>
               </Col>
