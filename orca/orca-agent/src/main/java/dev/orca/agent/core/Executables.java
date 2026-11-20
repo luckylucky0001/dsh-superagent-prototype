@@ -69,6 +69,18 @@ public final class Executables {
     }
   }
 
+  private static final java.util.regex.Pattern SHELL_WRAPPER =
+      java.util.regex.Pattern.compile("^(?:/usr)?(?:/bin/)?(?:ba|z)?sh\\s+-l?c\\s+(['\"])(.*)\\1\\s*$", java.util.regex.Pattern.DOTALL);
+
+  /** {@code /bin/bash -lc 'npm test'} becomes {@code npm test}; anything else is returned trimmed. */
+  public static String unwrapShell(String command) {
+    if (command == null) {
+      return null;
+    }
+    java.util.regex.Matcher m = SHELL_WRAPPER.matcher(command.trim());
+    return m.matches() ? m.group(2).trim() : command.trim();
+  }
+
   /** Strips ANSI colour codes from CLI output. */
   public static String plain(String s) {
     return s == null ? "" : s.replaceAll("\u001B\\[[0-9;]*[A-Za-z]", "").trim();

@@ -143,4 +143,29 @@ class CodexLiveTest {
       assertTrue(r.finalText().contains("STEERED"), r.finalText());
     }
   }
+
+  @Test
+  void escalationsReachTheApprovalHandler() throws Exception {
+    Path dir = Files.createTempDirectory("orca-live-approve");
+    List<Interaction.ApprovalRequest> seen = new CopyOnWriteArrayList<>();
+    Interaction.Handler declineAll = new Interaction.Handler() {
+      public Interaction.Decision approve(Interaction.ApprovalRequest r) {
+        seen.add(r);
+        return Interaction.Decision.DECLINE;
+      }
+
+      public Interaction.InputReply input(Interaction.InputRequest r) {
+        return Interaction.InputReply.decline();
+      }
+    };
+    try (AgentSession s = provider().open(new SessionSpec(dir, MODEL, "low", null, Permission.WORKSPACE, null, null, null,
+        null, null, null), declineAll)) {
+      TurnResult r = s.runTurn(TurnSpec.text("Create the file " + System.getProperty("user.home") + "/orca-outside-" + System.nanoTime()
+          + ".txt (outside the workspace) containing hi. If it is blocked, request approval to run the command "
+          + "outside the sandbox. Then reply DONE or BLOCKED."), e -> {});
+      System.out.println("approvals: " + seen.stream().map(a -> a.kind() + ":" + a.command()).toList() + " -> " + r.finalText());
+      assertEquals(TurnResult.Status.COMPLETED, r.status());
+      assertFalse(seen.isEmpty(), "expected an escalation request");
+    }
+  }
 }

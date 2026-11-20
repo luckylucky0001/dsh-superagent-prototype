@@ -366,7 +366,14 @@ final class CodexSession implements AgentSession {
     return switch (method) {
       case "item/commandExecution/requestApproval" -> {
         boolean network = !Json.obj(p, "networkApprovalContext").isEmpty();
-        String command = Json.str(p, "command");
+        List<String> actions = new ArrayList<>();
+        for (Object a : Json.list(p, "commandActions")) {
+          if (Json.str(a, "command") != null) {
+            actions.add(Json.str(a, "command"));
+          }
+        }
+        String command = actions.size() == 1 ? actions.get(0)
+            : dev.orca.agent.core.Executables.unwrapShell(Json.str(p, "command"));
         ApprovalRequest r = new ApprovalRequest(nextRequestId(), network ? ApprovalKind.NETWORK : ApprovalKind.COMMAND,
             network ? "network access to " + Json.str(p, "networkApprovalContext.host") : command, command,
             Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);

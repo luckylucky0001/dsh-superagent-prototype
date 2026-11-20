@@ -31,7 +31,7 @@
 | 交付结果 | `agentMessage.phase == "final_answer"` | ✅ 实测 |
 | 中断 | `turn/interrupt` → `turn/completed.status = interrupted` | ✅ 实测 |
 | 插话 | `turn/steer {threadId, expectedTurnId, input}` | ✅ 实测（运行中改指令，最终回复按新指令） |
-| 审批 | `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | 🟡 按 schema 实现；`workspace-write` 下普通命令不触发审批 |
+| 审批 | `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | ✅ 实测：写工作区外（如 `$HOME`）触发命令审批，策略拒绝后 Agent 报告受阻；注意 workspace-write 默认允许写 `/tmp` |
 | 向人提问 | `item/tool/requestUserInput`、`mcpServer/elicitation/request` | 🟡 按 schema 实现 |
 | 错误分类 | `turn.error.codexErrorInfo`：unauthorized / usageLimitExceeded / contextWindowExceeded / sandboxError / httpConnectionFailed… | 🟡 按文档实现 |
 

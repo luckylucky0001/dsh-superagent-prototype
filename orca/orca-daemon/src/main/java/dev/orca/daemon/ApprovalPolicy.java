@@ -42,7 +42,7 @@ public final class ApprovalPolicy {
   }
 
   boolean commandAllowed(String command) {
-    String c = command.trim();
+    String c = dev.orca.agent.core.Executables.unwrapShell(command);
     for (String allowed : allowedCommands) {
       String a = allowed.trim();
       if (a.isEmpty()) {
