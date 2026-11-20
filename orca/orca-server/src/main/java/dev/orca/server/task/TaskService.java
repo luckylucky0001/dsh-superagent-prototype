@@ -59,6 +59,9 @@ public class TaskService {
       - Refer to files by paths relative to the working directory; do not use absolute paths or file:// links.
       - If the orca tools are available, you may read the issue with orca_get_issue and, for long tasks, post a brief
         progress note with orca_post_comment. Do not post your final reply with it; it is posted for you.
+      - If the directory is a git repository, commit your work on the current branch with a clear message
+        (git add + git commit). If the sandbox blocks the commit, request approval to run it; it is allowed.
+        Do not push or open pull requests unless the task asks for it.
       - Never print secrets such as tokens or passwords.""";
 
   private final TaskRepo tasks;

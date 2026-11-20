@@ -41,15 +41,40 @@ public final class ApprovalPolicy {
     return Decision.DECLINE;
   }
 
+  /** Commits stay inside the workspace; Codex keeps {@code .git} read-only, so they arrive as escalations. */
+  static final List<String> BUILT_IN = List.of("git add", "git commit", "git status", "git diff", "git log");
+
+  /**
+   * A command is allowed when every {@code &&}-separated part starts with an allowed prefix and nothing
+   * else can smuggle in another command (no ;, |, backticks, $(, redirections or newlines).
+   */
   boolean commandAllowed(String command) {
     String c = dev.orca.agent.core.Executables.unwrapShell(command);
-    for (String allowed : allowedCommands) {
+    if (c == null || c.isEmpty() || c.contains(";") || c.contains("|") || c.contains("`") || c.contains("$(")
+        || c.contains(">") || c.contains("<") || c.contains("\n") || c.contains("&&&")) {
+      return false;
+    }
+    for (String part : c.split("&&")) {
+      if (!partAllowed(part.trim())) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  private boolean partAllowed(String c) {
+    if (c.isEmpty() || c.contains("&")) {
+      return false;
+    }
+    List<String> all = new java.util.ArrayList<>(BUILT_IN);
+    all.addAll(allowedCommands);
+    for (String allowed : all) {
       String a = allowed.trim();
       if (a.isEmpty()) {
         continue;
       }
       if (a.endsWith("*") ? c.startsWith(a.substring(0, a.length() - 1)) : c.equals(a) || c.startsWith(a + " ")) {
-        return !c.contains("&&") && !c.contains(";") && !c.contains("|") && !c.contains("`") && !c.contains("$(");
+        return true;
       }
     }
     return false;
