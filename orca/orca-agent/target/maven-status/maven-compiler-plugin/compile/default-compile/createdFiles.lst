@@ -14,11 +14,14 @@ dev/orca/agent/core/TurnResult$Status.class
 dev/orca/agent/core/AgentProvider.class
 dev/orca/agent/core/TurnSpec.class
 dev/orca/agent/core/JsonRpcConnection.class
+dev/orca/agent/trae/TraeSession.class
 dev/orca/agent/core/AgentSession.class
 dev/orca/agent/codex/CodexConfig.class
 dev/orca/agent/core/Executables$Output.class
 dev/orca/agent/core/Interaction.class
 dev/orca/agent/core/JsonRpcConnection$RequestHandler.class
+dev/orca/agent/trae/TraeProvider.class
+dev/orca/agent/trae/TraeConfig.class
 dev/orca/agent/core/Interaction$ApprovalKind.class
 dev/orca/agent/core/Permission.class
 dev/orca/agent/core/JsonRpcConnection$RpcError.class
@@ -27,3 +30,4 @@ dev/orca/agent/core/AgentException.class
 dev/orca/agent/core/SessionSpec.class
 dev/orca/agent/core/Interaction$Decision.class
 dev/orca/agent/core/Capability.class
+dev/orca/agent/trae/TraeSession$1.class

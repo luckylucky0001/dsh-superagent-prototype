@@ -1,0 +1,10 @@
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/ApprovalPolicy.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/Daemon.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/DaemonConfig.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/EventBuffer.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/Link.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/Main.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/Providers.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/ServerLink.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/TaskRunner.java
+/home/user/dsh-superagent-prototype/orca/orca-daemon/src/main/java/dev/orca/daemon/Workspaces.java

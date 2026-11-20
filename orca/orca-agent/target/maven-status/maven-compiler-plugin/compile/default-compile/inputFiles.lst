@@ -16,3 +16,6 @@
 /home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/core/Truncate.java
 /home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/core/TurnResult.java
 /home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/core/TurnSpec.java
+/home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/trae/TraeConfig.java
+/home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/trae/TraeProvider.java
+/home/user/dsh-superagent-prototype/orca/orca-agent/src/main/java/dev/orca/agent/trae/TraeSession.java
