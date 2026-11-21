@@ -251,4 +251,19 @@ class ApprovalPolicyTest {
     assertFalse(p.commandAllowed("git push --no-ver"));
     assertFalse(p.commandAllowed("git push --repo=/tmp/other"));
   }
+
+  @Test
+  void stderrMergedIntoStdoutIsTheOnlyRedirectAllowed() {
+    // what TRAE sent in the WMS-5 demo: a multi-line message, and 2>&1 appended
+    String trae = "cd . && git add wms/counting.py && git commit -m \"WMS-5: fix DST-aware write-off sorting\n\n"
+        + "- Replace the sort key\" 2>&1";
+    assertEquals(Decision.ACCEPT, p.decide(cmd(trae)));
+    assertEquals(Decision.ACCEPT, p.decide(cmd("git status --short 2>&1 && npm test 2>&1")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status 2>/tmp/x")), "writes a file");
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status 2>&1>/tmp/x")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status 2>&12")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status x2>&1")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status >&2")));
+    assertEquals(Decision.DECLINE, p.decide(cmd("git status 2>&1 | sh")));
+  }
 }

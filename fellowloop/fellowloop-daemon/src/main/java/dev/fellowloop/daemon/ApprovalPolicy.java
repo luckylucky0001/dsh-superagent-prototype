@@ -187,7 +187,8 @@ public final class ApprovalPolicy {
 
   /**
    * Splits on {@code &&} outside quotes; null when an unquoted {@code ; | & < >} or newline appears, or a
-   * quote is left open.
+   * quote is left open. A standalone {@code 2>&1} (TRAE appends it to most commands) only merges stderr into
+   * stdout and writes no file: it is dropped before the words are checked. Every other redirect is refused.
    */
   static List<String> splitUnquoted(String c) {
     List<String> parts = new ArrayList<>();
@@ -203,6 +204,9 @@ public final class ApprovalPolicy {
       } else if (ch == '\'' || ch == '"') {
         quote = ch;
         cur.append(ch);
+      } else if (c.startsWith("2>&1", i) && (i == 0 || Character.isWhitespace(c.charAt(i - 1)))
+          && (i + 4 == c.length() || Character.isWhitespace(c.charAt(i + 4)))) {
+        i += 3;
       } else if (ch == '&' && i + 1 < c.length() && c.charAt(i + 1) == '&') {
         if (i + 2 < c.length() && c.charAt(i + 2) == '&') {
           return null;
