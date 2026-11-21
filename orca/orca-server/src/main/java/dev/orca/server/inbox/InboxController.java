@@ -66,14 +66,7 @@ public class InboxController {
         return InboxView.of(done);
       }
       case InboxService.QUESTION -> {
-        boolean declined = Boolean.TRUE.equals(body.get("declined"));
-        @SuppressWarnings("unchecked")
-        Map<String, Object> answers = body.get("answers") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
-        Map<String, Object> answer = new LinkedHashMap<>(answers);
-        if (declined) {
-          answer.put("_declined", true);
-        }
-        if (!tasks.answer(item.taskId, item.requestId, answer)) {
+        if (!tasks.answer(item.taskId, item.requestId, TaskService.answerFrom(body))) {
           throw ApiException.bad("the agent's runtime is not connected; try again when it is online");
         }
         return InboxView.of(inbox.resolve(id, InboxService.ANSWERED, body, member));

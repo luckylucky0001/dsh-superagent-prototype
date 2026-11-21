@@ -216,4 +216,10 @@ public class InboxService {
     realtime.publish("inbox.updated", Realtime.ids("id", i.id, "status", i.status, "kind", i.kind));
     return saved;
   }
+
+  /** Questions of a task a person already answered (their answer may not have reached the runtime). */
+  public java.util.List<InboxItem> answeredQuestions(String taskId) {
+    return items.findByTaskIdAndStatus(taskId, ANSWERED).stream().filter(i -> QUESTION.equals(i.kind)).toList();
+  }
+
 }

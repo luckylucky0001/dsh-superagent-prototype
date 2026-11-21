@@ -53,6 +53,7 @@ public class FrameRouter {
         for (String orphan : tasks.orphans(runtimeId, h.running())) {
           gateway.send(runtimeId, Wire.frame(Wire.TASK_CANCEL, new Wire.TaskCancel(orphan, "the task already ended")));
         }
+        tasks.resendAnswers(runtimeId);
       }
       case Wire.HEARTBEAT -> {
         runtimes.seen(runtimeId);

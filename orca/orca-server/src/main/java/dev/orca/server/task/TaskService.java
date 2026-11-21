@@ -704,6 +704,35 @@ public class TaskService {
     }
   }
 
+  /** The TASK_INPUT payload for an inbox answer body {@code {answers: {...}, declined: bool}}. */
+  @SuppressWarnings("unchecked")
+  public static Map<String, Object> answerFrom(Map<String, Object> body) {
+    Map<String, Object> answers = body != null && body.get("answers") instanceof Map<?, ?> m ? (Map<String, Object>) m : Map.of();
+    Map<String, Object> answer = new java.util.LinkedHashMap<>(answers);
+    if (body != null && Boolean.TRUE.equals(body.get("declined"))) {
+      answer.put("_declined", true);
+    }
+    return answer;
+  }
+
+  /**
+   * After a reconnect: answers people gave to questions of tasks still waiting there are sent again, in
+   * case the first send was lost with the connection. The daemon ignores answers it already has.
+   */
+  @Transactional(readOnly = true)
+  public void resendAnswers(String runtimeId) {
+    for (Task t : tasks.findByStatusIn(List.of(TaskStatus.WAITING_INPUT))) {
+      if (!runtimeId.equals(t.runtimeId)) {
+        continue;
+      }
+      for (var item : inbox.answeredQuestions(t.id)) {
+        @SuppressWarnings("unchecked")
+        Map<String, Object> body = item.answerJson == null ? Map.of() : JsonCols.read(item.answerJson, Map.class);
+        gateway.send(runtimeId, Wire.frame(Wire.TASK_INPUT, new Wire.TaskInput(t.id, item.requestId, answerFrom(body))));
+      }
+    }
+  }
+
   public boolean answer(String taskId, String requestId, Map<String, Object> answer) {
     Task t = tasks.findById(taskId).orElse(null);
     return t != null && gateway.send(t.runtimeId, Wire.frame(Wire.TASK_INPUT, new Wire.TaskInput(taskId, requestId, answer)));

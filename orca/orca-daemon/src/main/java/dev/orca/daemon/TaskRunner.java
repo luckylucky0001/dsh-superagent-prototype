@@ -116,7 +116,7 @@ final class TaskRunner implements Runnable {
       finished = true;
       if (link.connected()) {
         if (!rest.isEmpty()) {
-          link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), rest)));
+          sendEvents(rest);
         }
         link.send(completion);
       }
@@ -654,6 +654,16 @@ final class TaskRunner implements Runnable {
     buffer.ack(seq);
   }
 
+  /** Events per frame: a replay after a long outage would otherwise exceed the server's frame limit. */
+  static final int EVENTS_PER_FRAME = 200;
+
+  private void sendEvents(List<AgentEvent> events) {
+    for (int i = 0; i < events.size(); i += EVENTS_PER_FRAME) {
+      link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(),
+          events.subList(i, Math.min(events.size(), i + EVENTS_PER_FRAME)))));
+    }
+  }
+
   private void sendStarted(Wire.Frame f) {
     startedFrame = f;
     link.send(f);
@@ -674,7 +684,7 @@ final class TaskRunner implements Runnable {
     buffer.drain(); // pending events from the disconnected period join the unacknowledged ones, in order
     List<AgentEvent> again = buffer.unacked();
     if (!again.isEmpty()) {
-      link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), again)));
+      sendEvents(again);
     }
     if (finished && completion != null) {
       link.send(completion);
@@ -704,7 +714,7 @@ final class TaskRunner implements Runnable {
     }
     List<AgentEvent> batch = buffer.drain();
     if (!batch.isEmpty()) {
-      link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), batch)));
+      sendEvents(batch);
     }
   }
 }
