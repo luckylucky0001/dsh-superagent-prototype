@@ -747,6 +747,9 @@ public class TaskService {
 
   public boolean answer(String taskId, String requestId, Map<String, Object> answer) {
     Task t = tasks.findById(taskId).orElse(null);
+    if (t != null && TaskStatus.TERMINAL.contains(t.status)) {
+      throw ApiException.bad("the task already ended; the agent can no longer use the answer");
+    }
     return t != null && gateway.send(t.runtimeId, Wire.frame(Wire.TASK_INPUT, new Wire.TaskInput(taskId, requestId, answer)));
   }
 
