@@ -92,8 +92,12 @@ class CodexLiveTest {
       assertTrue(s.resumed());
       assertEquals(ref, s.sessionRef());
       TurnResult r3 = s.runTurn(TurnSpec.text("What is the name of the file you created earlier? Reply with the file name only."), events::add);
-      System.out.println("turn3: " + r3.finalText());
+      System.out.println("turn3: " + r3.finalText() + " usage=" + r3.usage());
       assertTrue(r3.finalText().contains("hello.txt"));
+      // codex replays the thread's totals on resume: this task counts only its own turn
+      long task = ((Number) r3.usage().get("taskTokens")).longValue();
+      long total = ((Number) r3.usage().get("totalTokens")).longValue();
+      assertTrue(task > 0 && task < total, "taskTokens " + task + " must exclude the earlier turns (total " + total + ")");
     }
   }
 
