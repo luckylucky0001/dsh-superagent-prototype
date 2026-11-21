@@ -700,4 +700,45 @@ class EndToEndTest {
     taskRepo.save(done);
   }
 
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.repo.AgentRepo agentRepo;
+
+  @Test
+  void anAskCanBeContinuedAfterItFailedButNotWhileItRuns() {
+    long now = System.currentTimeMillis();
+    var agent = new dev.orca.server.model.Agent();
+    agent.id = dev.orca.server.support.Ids.next("agt");
+    agent.name = "FollowUp" + RUN;
+    agent.provider = "codex";
+    agent.permission = "workspace";
+    agent.maxConcurrency = 1;
+    agent.timeoutMinutes = 5;
+    agent.createdAt = now;
+    agent.updatedAt = now;
+    agent.archived = false; // no runtime: the dispatcher leaves its tasks queued
+    agentRepo.save(agent);
+    Object dispatcher = org.springframework.test.util.AopTestUtils.getTargetObject(taskService);
+    synchronized (dispatcher) {
+      var crashed = rawTask("failed", null, now - 60_000, null);
+      crashed.agentId = agent.id;
+      crashed.sessionRef = "thr_crashed";
+      taskRepo.save(crashed);
+      var followUp = taskService.followUp(agent, crashed.id, "carry on", null);
+      assertEquals("thr_crashed", followUp.resumeRef, "the crashed task's session is continued");
+      var running = rawTask("running", "rt_x", now, now + 60_000);
+      running.agentId = agent.id;
+      running.sessionRef = "thr_running";
+      taskRepo.save(running);
+      var refused = org.junit.jupiter.api.Assertions.assertThrows(RuntimeException.class,
+          () -> taskService.followUp(agent, running.id, "more", null));
+      assertTrue(refused.getMessage().contains("still running"), refused.getMessage());
+      for (String id : List.of(crashed.id, followUp.id, running.id)) {
+        var t = taskRepo.findById(id).orElseThrow();
+        t.status = "cancelled";
+        taskRepo.save(t);
+      }
+    }
+  }
+
 }
