@@ -166,12 +166,14 @@ public class WorkflowController {
     WorkflowRun r;
     try {
       r = triggers.webhook(workflowId, nodeId, secret != null ? secret : header, body, q, delivery);
-    } catch (org.springframework.dao.DataIntegrityViolationException race) {
-      // the same delivery arrived twice at once; the other request started the run
-      r = key == null ? null : workflows.byDelivery(key).orElse(null);
-      if (r == null) {
+    } catch (org.springframework.dao.DataAccessException race) {
+      // the same delivery arrived twice at once: a unique violation, or (H2) a lock timeout on the first
+      // request's uncommitted row; the first request starts the run, this one never does
+      if (key == null) {
         throw race;
       }
+      r = workflows.byDelivery(key).orElseThrow(() -> new dev.orca.server.support.ApiException(org.springframework.http.HttpStatus.CONFLICT,
+          "this delivery is already being processed; retry later to get its run"));
     }
     return Map.of("runId", r.id, "status", r.status);
   }

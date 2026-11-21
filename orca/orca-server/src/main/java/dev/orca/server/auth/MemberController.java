@@ -118,6 +118,9 @@ public class MemberController {
     if ("owner".equals(m.role) || m.id.equals(CurrentUser.id())) {
       throw ApiException.bad("the owner and yourself cannot be removed");
     }
+    if ("admin".equals(m.role) && !"owner".equals(CurrentUser.get().role)) {
+      throw new ApiException(HttpStatus.FORBIDDEN, "only the owner can remove an admin");
+    }
     auth.revokeMemberTokens(m.id, null);
     audit.record("member.remove", "member", m.id, Map.of("email", m.email, "role", m.role));
     members.delete(m);

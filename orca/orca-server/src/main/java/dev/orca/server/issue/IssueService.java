@@ -61,9 +61,11 @@ public class IssueService {
         : projects.findById(in.projectId())
             .or(() -> projects.findByKeyPrefix(in.projectId().trim().toUpperCase(java.util.Locale.ROOT)))
             .orElseThrow(() -> ApiException.notFound("project"));
+    Issue i = new Issue();
+    // every check runs before anything changes: with noRollbackFor, a 400 must leave nothing half-applied
+    setAssignee(i, in.assigneeType(), in.assigneeId());
     p.nextNumber++;
     projects.save(p);
-    Issue i = new Issue();
     i.id = Ids.next("iss");
     i.projectId = p.id;
     i.number = p.nextNumber;
@@ -75,7 +77,6 @@ public class IssueService {
     i.labelsJson = JsonCols.write(in.labels() == null ? List.of() : in.labels());
     i.createdBy = actorId;
     i.createdAt = i.updatedAt = Ids.now();
-    setAssignee(i, in.assigneeType(), in.assigneeId());
     issues.save(i);
     changed(i);
     publisher.publishEvent(new IssueEvent(IssueEvent.CREATED, i, null, actorType, actorId, null, null));
@@ -93,6 +94,14 @@ public class IssueService {
   @Transactional(noRollbackFor = ApiException.class)
   public Issue update(String id, IssuePatch patch, String actorType, String actorId) {
     Issue i = get(id);
+    // every check runs before anything changes: with noRollbackFor, a 400 must leave nothing half-applied
+    if (patch.status() != null && !STATUSES.contains(patch.status())) {
+      throw ApiException.bad("unknown status " + patch.status());
+    }
+    Issue assignee = new Issue();
+    if (!Boolean.TRUE.equals(patch.clearAssignee()) && patch.assigneeId() != null) {
+      setAssignee(assignee, patch.assigneeType(), patch.assigneeId());
+    }
     String oldStatus = i.status;
     String oldAssignee = i.assigneeType + ":" + i.assigneeId;
     if (patch.title() != null && !patch.title().isBlank()) {
@@ -102,9 +111,6 @@ public class IssueService {
       i.description = patch.description();
     }
     if (patch.status() != null) {
-      if (!STATUSES.contains(patch.status())) {
-        throw ApiException.bad("unknown status " + patch.status());
-      }
       i.status = patch.status();
     }
     if (patch.priority() != null && PRIORITIES.contains(patch.priority())) {
@@ -116,8 +122,9 @@ public class IssueService {
     if (Boolean.TRUE.equals(patch.clearAssignee())) {
       i.assigneeType = null;
       i.assigneeId = null;
-    } else if (patch.assigneeId() != null) {
-      setAssignee(i, patch.assigneeType(), patch.assigneeId());
+    } else if (assignee.assigneeId != null) {
+      i.assigneeType = assignee.assigneeType;
+      i.assigneeId = assignee.assigneeId;
     }
     i.updatedAt = Ids.now();
     issues.save(i);
@@ -135,10 +142,10 @@ public class IssueService {
   // rollback-only: the engine records the failed node, and its run must still be saved
   @Transactional(noRollbackFor = ApiException.class)
   public Comment comment(String issueId, String body, String authorType, String authorId, String taskId) {
-    Issue i = get(issueId);
     if (body == null || body.isBlank()) {
       throw ApiException.bad("comment body is empty");
     }
+    Issue i = get(issueId);
     Comment c = new Comment();
     c.id = Ids.next("cmt");
     c.issueId = i.id;

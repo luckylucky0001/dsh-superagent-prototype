@@ -58,7 +58,7 @@
 - Webhook 按投递 id（`Idempotency-Key`、`X-GitHub-Delivery`、`X-Gitlab-Event-UUID`）去重：发送方重试不会重复启动运行（并发重发由唯一索引兜底）。
 - 只能重试导致运行失败的节点（设为“出错继续”的节点不能重试）。
 - 评审循环的结论宽松解析（`PASS`、`Passed`、`approved` 都算通过；`issues` 可以是字符串或缺省）。
-- 创建/更新 Issue 时工作流触发失败不再回滚 Issue 本身。
+- 创建/更新 Issue 时工作流触发失败不再回滚 Issue 本身；所有校验在修改之前完成，被拒的请求不会留下一半的改动。
 
 ### 其他
 

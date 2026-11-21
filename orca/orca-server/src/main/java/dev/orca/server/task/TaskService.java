@@ -289,6 +289,11 @@ public class TaskService {
       }
       String detail = route(t, agent, busyPairs);
       if (detail != null) {
+        // keep the re-queue marker: reconcile only takes back tasks that carry it (a task the runtime may still be
+        // running), and the runtime is often still offline, so this message replaces it within a second
+        if (t.statusDetail != null && t.statusDetail.startsWith("re-queued") && !detail.startsWith("re-queued")) {
+          detail = "re-queued; " + detail;
+        }
         if (!detail.equals(t.statusDetail)) {
           t.statusDetail = detail;
           tasks.save(t);

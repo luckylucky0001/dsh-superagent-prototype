@@ -60,18 +60,23 @@ public class AgentController {
       return;
     }
     java.util.Map<String, Object> after = powers(a);
-    for (String k : java.util.List.of("permission", "allowedCommands", "extraArgs", "networkAccess")) {
-      Object was = before == null ? null : before.get(k);
-      Object now = after.get(k);
-      boolean widened = before == null
-          ? "permission".equals(k) ? "full".equals(now) : "networkAccess".equals(k) ? Boolean.TRUE.equals(now)
-              : now != null && !now.equals("[]")
-          : !java.util.Objects.equals(was, now);
-      if (widened) {
-        throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
-            "only owners and admins can change an agent's permission tier, allowed commands, extra arguments or network access");
-      }
+    // a new agent is compared with the defaults; narrowing (a lower tier, fewer commands, network off) is allowed
+    java.util.List<String> tiers = java.util.List.of("read_only", "workspace", "full");
+    String wasTier = before == null ? "workspace" : String.valueOf(before.get("permission"));
+    boolean widened = tiers.indexOf(String.valueOf(after.get("permission"))) > tiers.indexOf(wasTier);
+    for (String k : java.util.List.of("allowedCommands", "extraArgs")) {
+      java.util.Set<String> was = new java.util.HashSet<>(before == null ? java.util.List.of() : listOf(before.get(k)));
+      widened |= !was.containsAll(listOf(after.get(k)));
     }
+    widened |= Boolean.TRUE.equals(after.get("networkAccess")) && (before == null || !Boolean.TRUE.equals(before.get("networkAccess")));
+    if (widened) {
+      throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+          "only owners and admins can widen an agent's permission tier, allowed commands, extra arguments or network access");
+    }
+  }
+
+  private static java.util.List<String> listOf(Object json) {
+    return json == null ? java.util.List.of() : JsonCols.strings(String.valueOf(json));
   }
 
   private static String sha256(String s) {

@@ -92,7 +92,7 @@ public class Realtime {
         e.send(SseEmitter.event().id(Long.toString(ids.incrementAndGet())).name(type).data(json));
       }
     } catch (IOException | IllegalStateException ex) {
-      emitters.remove(e);
+      drop(e);
     }
   }
 
@@ -100,7 +100,7 @@ public class Realtime {
     try {
       e.send(SseEmitter.event().id(Long.toString(ids.incrementAndGet())).name(type).data(Json.write(data)));
     } catch (IOException | IllegalStateException ex) {
-      emitters.remove(e);
+      drop(e);
     }
   }
 
@@ -123,7 +123,7 @@ public class Realtime {
       try {
         e.send(SseEmitter.event().comment("ping"));
       } catch (IOException | IllegalStateException ex) {
-        emitters.remove(e);
+        drop(e);
       }
     }
   }

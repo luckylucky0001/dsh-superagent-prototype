@@ -458,7 +458,13 @@ class EndToEndTest {
     // a member's web session: agents within limits, but no widening and no machines
     assertEquals(403, raw(web, "POST", "/api/agents", Map.of("name", "wide" + RUN, "permission", "full"), null).status());
     assertEquals(403, raw(web, "POST", "/api/agents", Map.of("name", "cmds" + RUN, "allowedCommands", List.of("python3")), null).status());
-    assertEquals(200, raw(web, "POST", "/api/agents", Map.of("name", "narrow" + RUN, "archived", true), null).status());
+    String narrow = Json.str(Json.MAPPER.readValue(raw(web, "POST", "/api/agents", Map.of("name", "narrow" + RUN, "archived", true),
+        null).body(), Object.class), "id");
+    // the web drawer sends every field: unchanged (null vs []) or narrowed settings are not a widening
+    assertEquals(200, raw(web, "PATCH", "/api/agents/" + narrow, Map.of("description", "edited by a member",
+        "allowedCommands", List.of(), "extraArgs", List.of(), "networkAccess", false, "permission", "read_only"), null).status());
+    assertEquals(403, raw(web, "PATCH", "/api/agents/" + narrow, Map.of("permission", "workspace", "allowedCommands", List.of()),
+        null).status(), "back up from read_only is a widening");
     assertEquals(403, raw(web, "POST", "/api/runtimes/registration-codes", null, null).status());
 
     // the web session needs the current password, and changing it signs out every other session and token
@@ -684,7 +690,8 @@ class EndToEndTest {
     synchronized (dispatcher) {
       var running = rawTask("running", "rt_reconnect", now - 120_000, now - 5_000);
       var requeued = rawTask("queued", null, now - 120_000, null);
-      requeued.statusDetail = "re-queued: the runtime did not start it";
+      // what the dispatcher shows while the runtime is still offline: the re-queue marker is kept
+      requeued.statusDetail = "re-queued; waiting for runtime rt_reconnect to come online";
       taskRepo.save(requeued);
       var stranger = rawTask("queued", null, null, null);
       // another runtime cannot claim a queued task by naming its id, nor one its agent is not bound to
@@ -856,5 +863,13 @@ class EndToEndTest {
     assertTrue(!first.equals(deliver.apply("d-2")), "a new delivery starts a new run");
     assertTrue(!deliver.apply(null).equals(deliver.apply(null)), "without a delivery id every POST is a run");
     assertEquals(4, ((List<?>) call("GET", "/api/runs?workflowId=" + wf, null)).size());
+  }
+
+  @Test
+  void aRejectedIssueEditChangesNothing() throws Exception {
+    String id = Json.str(call("POST", "/api/issues", Map.of("title", "Keep me")), "id");
+    assertEquals(400, raw(http, "PATCH", "/api/issues/" + id, Map.of("title", "Changed", "status", "bogus"), null).status());
+    assertEquals(404, raw(http, "PATCH", "/api/issues/" + id, Map.of("title", "Changed", "assigneeId", "no-such-agent"), null).status());
+    assertEquals("Keep me", Json.str(call("GET", "/api/issues/" + id, null), "title"), "a 400 leaves nothing half-applied");
   }
 }

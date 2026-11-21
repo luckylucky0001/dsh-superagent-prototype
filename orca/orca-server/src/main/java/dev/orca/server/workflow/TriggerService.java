@@ -232,6 +232,11 @@ public class TriggerService {
         }
         String spec = str(n.config().get("cron"), "").trim() + "|" + zone.getId();
         ScheduleState st = schedules.findById(id).orElse(null);
+        if (st != null && st.spec == null) {
+          // saved before schedules recorded their spec (upgrade): keep its next time, do not skip a due fire
+          st.spec = spec;
+          schedules.save(st);
+        }
         // new, edited (cron or time zone), or stale: a schedule whose time passed long ago, because the workflow
         // was disabled or the server was down, starts from now instead of firing a run nobody expects
         if (st == null || !spec.equals(st.spec) || st.nextFireAt < now - STALE_MS) {
