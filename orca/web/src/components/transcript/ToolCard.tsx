@@ -35,6 +35,8 @@ function StatusIcon({ status }: { status: string }) {
       return <CloseCircleFilled style={{ color: '#ff4d4f' }} />;
     case 'declined':
       return <StopOutlined style={{ color: '#faad14' }} />;
+    case 'interrupted':
+      return <StopOutlined style={{ color: '#8c8c8c' }} />;
     default:
       return <CheckCircleFilled style={{ color: '#52c41a' }} />;
   }

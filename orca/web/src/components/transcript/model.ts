@@ -225,6 +225,10 @@ export function buildTranscript(events: TaskEvent[]): Transcript {
         put({ kind: 'notice', key: `ntc-${e.seq}`, ts: e.ts, level: str(d.level) ?? 'info', message: str(d.message) ?? '', code: str(d.code) });
         break;
       case 'turn.completed':
+        // a tool still running when its turn ended was stopped with it (cancel, timeout): no spinner forever
+        for (const it of items) {
+          if (it.kind === 'tool' && it.status === 'running') it.status = 'interrupted';
+        }
         if (turnDiff && turnDiff.diff.trim()) put(turnDiff);
         turnDiff = null;
         put({ kind: 'turn', key: `turn-${e.seq}`, ts: e.ts, status: str(d.status) ?? 'completed', errorCode: str(d.errorCode), error: str(d.error) });
