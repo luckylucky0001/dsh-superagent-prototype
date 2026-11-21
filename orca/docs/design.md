@@ -105,7 +105,7 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 - 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（沙箱内联网须 Agent 请求且 daemon 以 `--allow-network` 启动；Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令，且每次只批准这一条命令（不会“本会话内一直允许”）。被批准的命令在沙箱外执行，所以规则全部是白名单：
   - 命令的工作目录（解析符号链接后的真实路径）必须在工作区内；`cd` 只允许作为第一段、且只能回到工作区根目录（TRAE 的写法 `cd <工作区> && git add -A && git commit -m "…"`）；
   - 引号外不允许 `;`、`|`、`&`、重定向、换行、通配符与子 shell，任何位置不允许 `$`、反引号、反斜杠；`&&` 的每一段都必须被允许；
-  - 内置的 `git add / commit / status / diff / log` 只接受逐个列出的选项（git 接受长选项的缩写，黑名单无法完整），路径参数必须在工作区内（工作区外的两个路径会让 `git diff` 变成 `--no-index`）；管理员加入白名单的 `git push` 只能把 `orca/*` 分支推到 `origin`（必须写明分支；不允许 `--force`、`--delete`、`--mirror` 或其他远端地址，防止覆盖主干或把仓库推到别处）；其他白名单 git 命令不能写远端地址（URL、`host:path`、本地路径、`ext::`），并禁止 `--receive-pack`、`--upload-pack`、`--exec`、`--no-verify` 等及其缩写；
+  - 内置的 `git add / commit / status / diff / log / show / rev-parse` 与只列出分支的 `git branch` 只接受逐个列出的选项（git 接受长选项的缩写，黑名单无法完整），路径参数必须在工作区内（工作区外的两个路径会让 `git diff` 变成 `--no-index`）；管理员加入白名单的 `git push` 只能把 `orca/*` 分支推到 `origin`（必须写明分支；不允许 `--force`、`--delete`、`--mirror` 或其他远端地址，防止覆盖主干或把仓库推到别处）；其他白名单 git 命令不能写远端地址（URL、`host:path`、本地路径、`ext::`），并禁止 `--receive-pack`、`--upload-pack`、`--exec`、`--no-verify` 等及其缩写；
   - 白名单条目是命令前缀，后面可以跟任意参数。对 `./gradlew`、`npm` 这类会加载脚本的工具，额外参数可以指定任意构建脚本（如 `./gradlew -I 文件`），所以白名单应写到具体任务（`./gradlew test`），并只给可信的 Agent；
   - 工作区内出现嵌套仓库（任何大小写、带或不带结尾点和空格的 `.git` 目录或文件——Windows 会把 `.git.` 当作 `.git` 打开）时不批准任何 git 命令：嵌套仓库的配置由 Agent 写入，git 在其中执行或递归子模块时会读取它（例如 `core.fsmonitor` 可以指定任意程序）；
   - daemon 自己在工作区执行的 git（自动提交、推送、拉取）一律带 `core.fsmonitor=false`、`core.hooksPath=/dev/null`、`diff.external=` 等设置，并使用 `--no-verify` 与 `--ignore-submodules=all`。

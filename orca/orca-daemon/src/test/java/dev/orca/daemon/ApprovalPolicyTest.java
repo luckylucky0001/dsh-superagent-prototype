@@ -214,6 +214,12 @@ class ApprovalPolicyTest {
     assertTrue(p.commandAllowed("git log -S putaway --oneline"));
     assertTrue(p.commandAllowed("git diff --color-words"));
     assertTrue(p.commandAllowed("git diff -G suggest_bin"));
+    // what Codex chained after a commit in a live run
+    assertTrue(p.commandAllowed("git add -- README.md && git commit -m 'Add a note' && git rev-parse HEAD && git status --short"));
+    assertTrue(p.commandAllowed("git show --stat HEAD && git branch --show-current && git rev-parse --abbrev-ref HEAD"));
+    assertFalse(p.commandAllowed("git branch evil"), "creating a branch");
+    assertFalse(p.commandAllowed("git branch -D main"));
+    assertFalse(p.commandAllowed("git show --output=/tmp/x HEAD"));
     assertFalse(p.commandAllowed("git add -f node_modules/evil"), "force-adding an ignored folder");
     assertFalse(p.commandAllowed("git add --force node_modules/evil"));
     ApprovalPolicy any = new ApprovalPolicy(Permission.WORKSPACE, ws, List.of("git *"));

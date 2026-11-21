@@ -68,7 +68,8 @@ public final class ApprovalPolicy {
   }
 
   /** Commits stay inside the workspace; the sandboxes keep {@code .git} read-only, so they arrive as escalations. */
-  static final List<String> BUILT_IN = List.of("git add", "git commit", "git status", "git diff", "git log");
+  static final List<String> BUILT_IN = List.of("git add", "git commit", "git status", "git diff", "git log", "git show",
+      "git rev-parse", "git branch");
 
   /**
    * Options of a built-in git subcommand that are approved: exact words, prefixes (a word starting with
@@ -106,6 +107,14 @@ public final class ApprovalPolicy {
               "--unified=", "--diff-filter=", "--abbrev="), "ps", "UnSG", "nSG",
           Set.of("--max-count", "--grep", "--author", "--committer", "--since", "--until", "--after", "--before",
               "--format", "--pretty", "--skip", "--date", "--diff-filter")),
+      "show", new GitOptions(Set.of("--oneline", "--stat", "--shortstat", "--numstat", "--name-only", "--name-status",
+          "--no-patch", "--patch", "--summary", "--no-color", "--abbrev-commit", "--no-ext-diff", "--no-textconv"),
+          List.of("--format=", "--pretty=", "--unified=", "--abbrev="), "ps", "U", "", Set.of("--format", "--pretty")),
+      "rev-parse", new GitOptions(Set.of("--short", "--abbrev-ref", "--show-toplevel", "--verify", "--quiet",
+          "--is-inside-work-tree", "--show-prefix", "--symbolic-full-name"), List.of("--short="), "q", "", ""),
+      // listing only: a name would create a branch, -d/-D/-m would delete or rename one
+      "branch", new GitOptions(Set.of("--show-current", "--list", "--all", "--remotes", "--verbose", "--no-color",
+          "--contains", "--merged", "--no-merged"), List.of(), "arv", "", ""),
       // no --force: it would stage ignored folders (node_modules, …) that the nested-repository check skips
       "add", new GitOptions(Set.of("--all", "--update", "--verbose", "--dry-run", "--intent-to-add",
           "--ignore-errors", "--renormalize"), List.of(), "AuvnN", "", ""),
@@ -226,6 +235,9 @@ public final class ApprovalPolicy {
       }
       GitOptions options = GIT_OPTIONS.get(words.get(1));
       if (options != null) {
+        if (words.get(1).equals("branch") && words.stream().skip(2).anyMatch(w -> !w.startsWith("-"))) {
+          return false;
+        }
         return gitArgsAllowed(words.subList(2, words.size()), options, cwd);
       }
       if (words.get(1).equals("push")) {
