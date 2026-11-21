@@ -40,4 +40,11 @@ public class ErrorHandler {
   ResponseEntity<Map<String, Object>> state(IllegalStateException e) {
     return ResponseEntity.status(HttpStatus.CONFLICT).body(Map.of("error", String.valueOf(e.getMessage())));
   }
+
+  /** A concurrent change won (e.g. someone else answered the inbox item first). */
+  @ExceptionHandler(org.springframework.dao.OptimisticLockingFailureException.class)
+  ResponseEntity<Map<String, Object>> conflict(org.springframework.dao.OptimisticLockingFailureException e) {
+    return ResponseEntity.status(HttpStatus.CONFLICT)
+        .body(Map.of("error", "someone else changed this at the same time; reload and try again"));
+  }
 }

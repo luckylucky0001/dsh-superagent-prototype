@@ -23,4 +23,6 @@ public class InboxItem {
   public long createdAt;
   public Long resolvedAt;
   public String resolvedBy;
+  /** {@code null} until first saved, so a new item is inserted rather than merged. */
+  @jakarta.persistence.Version public Long version;
 }
