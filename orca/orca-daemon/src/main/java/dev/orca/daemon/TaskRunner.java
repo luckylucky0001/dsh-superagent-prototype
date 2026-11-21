@@ -240,7 +240,10 @@ final class TaskRunner implements Runnable {
       case INTERRUPTED -> cancelRequested ? "cancelled" : "failed";
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";
     };
-    return completed(status, r.finalText(), r.structured(), session.sessionRef(), r.errorCode(), r.error(), usage);
+    // the answer is posted as a comment: paths in this machine's work folder read as repository paths
+    String root = dir.toAbsolutePath().normalize().toString();
+    String text = r.finalText() == null ? null : shortenPaths(r.finalText(), root, root + java.io.File.separator);
+    return completed(status, text, r.structured(), session.sessionRef(), r.errorCode(), r.error(), usage);
   }
 
   /**
