@@ -155,8 +155,12 @@ public final class Daemon {
       return;
     }
     AgentProvider p = providers.get(t.provider());
-    if (p == null || busy() >= config.capacity()) {
-      String why = p == null ? "provider " + t.provider() + " is not available on this runtime" : "runtime is at capacity";
+    // one task at a time per folder: a runner the server already ended may still be stopping (git, autoCommit)
+    boolean folderBusy = t.workspaceKey() != null && running.values().stream()
+        .anyMatch(r -> !r.finished() && t.workspaceKey().equals(r.workspaceKey()));
+    if (p == null || busy() >= config.capacity() || folderBusy) {
+      String why = p == null ? "provider " + t.provider() + " is not available on this runtime"
+          : folderBusy ? "another task is still working in " + t.workspaceKey() : "runtime is at capacity";
       link.send(Wire.frame(Wire.TASK_COMPLETED, new Wire.TaskCompleted(t.taskId(), "failed", null, null, null,
           p == null ? dev.orca.protocol.ErrorCodes.PROVIDER_UNAVAILABLE : dev.orca.protocol.ErrorCodes.RUNTIME_BUSY,
           why, Map.of(), 0)));

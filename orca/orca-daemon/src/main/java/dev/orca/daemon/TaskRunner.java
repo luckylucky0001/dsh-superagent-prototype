@@ -73,6 +73,11 @@ final class TaskRunner implements Runnable {
     this.onDone = onDone;
   }
 
+  /** The folder this task works in (issue, project run or one-off). */
+  String workspaceKey() {
+    return task.workspaceKey();
+  }
+
   String taskId() {
     return task.taskId();
   }
