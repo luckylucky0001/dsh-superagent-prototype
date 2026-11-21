@@ -257,11 +257,17 @@ final class TaskRunner implements Runnable {
         followUps.clear();
       }
     }
-    // a review must not commit what it was asked to review; a cancelled task leaves its changes uncommitted
-    if (r.ok() && !cancelRequested && task.repo() != null && task.review() == null) {
+    // the drivers turn a cancel during a turn into an interrupted turn; a completed one finished its work, so
+    // a cancel that came after that keeps the work (and says so) instead of leaving it uncommitted
+    if (r.ok() && cancelRequested) {
+      buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "info", "message",
+          "the cancel arrived after the agent had finished; its work was kept"));
+    }
+    // a review must not commit what it was asked to review
+    if (r.ok() && task.repo() != null && task.review() == null) {
       autoCommit(dir, r.finalText());
     }
-    String status = cancelRequested ? "cancelled" : switch (r.status()) {
+    String status = switch (r.status()) {
       case COMPLETED -> "succeeded";
       case INTERRUPTED -> cancelRequested ? "cancelled" : "failed";
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";

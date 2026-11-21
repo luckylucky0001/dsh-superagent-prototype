@@ -148,7 +148,7 @@ class TaskRunnerTest {
   }
 
   @Test
-  void aCancelThatArrivesAsTheTurnFinishesStillCancelsTheTask() throws Exception {
+  void aCancelAfterTheAgentFinishedKeepsItsWork() throws Exception {
     CountDownLatch inTurn = new CountDownLatch(1);
     CountDownLatch cancelled = new CountDownLatch(1);
     Recorder link = new Recorder();
@@ -156,6 +156,27 @@ class TaskRunnerTest {
       inTurn.countDown();
       cancelled.await(10, TimeUnit.SECONDS);
       return done("finished anyway");
+    }, new AtomicInteger()), link, null, false);
+    Thread t = Thread.ofVirtual().start(r::run);
+    assertTrue(inTurn.await(10, TimeUnit.SECONDS));
+    r.cancel("user");
+    cancelled.countDown();
+    t.join(10_000);
+    // the session reports the turn completed: the cancel came too late to stop it
+    assertEquals("succeeded", link.completion().get("status"));
+    assertTrue(link.events(AgentEvent.NOTICE).stream()
+        .anyMatch(e -> String.valueOf(((Map<?, ?>) e.get("data")).get("message")).contains("work was kept")));
+  }
+
+  @Test
+  void aCancelledTurnEndsTheTaskAsCancelled() throws Exception {
+    CountDownLatch inTurn = new CountDownLatch(1);
+    CountDownLatch cancelled = new CountDownLatch(1);
+    Recorder link = new Recorder();
+    TaskRunner r = runner(provider(Set.of(), (t, h) -> {
+      inTurn.countDown();
+      cancelled.await(10, TimeUnit.SECONDS);
+      return new TurnResult(TurnResult.Status.INTERRUPTED, null, null, "CANCELLED", "cancelled", Map.of());
     }, new AtomicInteger()), link, null, false);
     Thread t = Thread.ofVirtual().start(r::run);
     assertTrue(inTurn.await(10, TimeUnit.SECONDS));
