@@ -1,0 +1,112 @@
+# Mirrors the standalone fellowloop repository's CI, run from the fellowloop/ subfolder.
+name: fellowloop-ci
+on:
+  push:
+    paths:
+    - fellowloop/**
+    - .github/workflows/fellowloop-ci.yml
+  pull_request:
+    paths:
+    - fellowloop/**
+    - .github/workflows/fellowloop-ci.yml
+jobs:
+  backend:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '21'
+        cache: maven
+    - name: Build and test (offline fakes; live provider tests are excluded)
+      env:
+        MAVEN_OPTS: -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+      run: mvn -B -q install
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: fellowloop/web/package-lock.json
+    - name: Package the release (server with web UI, daemon, CLI, installer)
+      run: sh scripts/package.sh
+    defaults:
+      run:
+        working-directory: fellowloop
+  postgres:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_DB: fellowloop_e2e
+          POSTGRES_USER: fellowloop
+          POSTGRES_PASSWORD: fellowloop-test
+        ports:
+        - 5432:5432
+        options: --health-cmd "pg_isready -U fellowloop -d fellowloop_e2e" --health-interval 5s --health-timeout 5s --health-retries 20
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-java@v5
+      with:
+        distribution: temurin
+        java-version: '21'
+        cache: maven
+    - name: End-to-end tests on PostgreSQL 16
+      env:
+        MAVEN_OPTS: -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
+        ORCA_TEST_DB_URL: jdbc:postgresql://localhost:5432/fellowloop_e2e
+        ORCA_TEST_DB_USER: fellowloop
+        ORCA_TEST_DB_PASSWORD: fellowloop-test
+      run: 'mvn -B -q install -DskipTests
+
+        mvn -B -q test -pl fellowloop-server
+
+        '
+    defaults:
+      run:
+        working-directory: fellowloop
+  image:
+    runs-on: ubuntu-latest
+    steps:
+    - uses: actions/checkout@v5
+    - name: Build the image
+      run: docker build -t fellowloop-server:ci .
+    - name: Start it and check
+      run: 'docker run -d --name fellowloop -p 8080:8080 -e ORCA_ADMIN_PASSWORD=ci-pass-123 fellowloop-server:ci
+
+        for i in $(seq 60); do curl -sf localhost:8080/api/health && break; sleep 2; done
+
+        curl -sf localhost:8080/api/health | grep -q ''"version"''
+
+        curl -sf -o /dev/null localhost:8080/downloads/install-runtime.sh
+
+        curl -sf -o /dev/null localhost:8080/downloads/fellowloop-daemon.jar
+
+        curl -sf -o /dev/null localhost:8080/downloads/fellowloop-cli.jar
+
+        curl -sf localhost:8080/ | grep -q "<title>Orca</title>"
+
+        test "$(docker exec fellowloop id -un)" = fellowloop
+
+        '
+    - if: failure()
+      run: docker logs fellowloop || true
+    defaults:
+      run:
+        working-directory: fellowloop
+  web:
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: fellowloop/web
+    steps:
+    - uses: actions/checkout@v5
+    - uses: actions/setup-node@v5
+      with:
+        node-version: '22'
+        cache: npm
+        cache-dependency-path: fellowloop/web/package-lock.json
+    - run: npm ci --no-audit --no-fund
+    - run: npm run typecheck
+    - run: npm run build

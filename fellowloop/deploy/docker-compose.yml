@@ -1,0 +1,51 @@
+# Self-hosted Fellowloop: PostgreSQL + the server (with the web UI).
+#   cp deploy/.env.example deploy/.env   # then edit the passwords and the public URL
+#   docker compose -f deploy/docker-compose.yml --env-file deploy/.env up -d --build
+# Daemons run on developer or build machines, not in this compose file (see README).
+services:
+  postgres:
+    image: postgres:16
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: fellowloop
+      POSTGRES_USER: fellowloop
+      POSTGRES_PASSWORD: ${FELLOWLOOP_DB_PASSWORD:?set FELLOWLOOP_DB_PASSWORD}
+    volumes:
+      - fellowloop-db:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fellowloop -d fellowloop"]
+      interval: 5s
+      timeout: 5s
+      retries: 20
+
+  server:
+    build:
+      context: ..
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      FELLOWLOOP_DB_URL: jdbc:postgresql://postgres:5432/fellowloop
+      FELLOWLOOP_DB_USER: fellowloop
+      FELLOWLOOP_DB_PASSWORD: ${FELLOWLOOP_DB_PASSWORD}
+      FELLOWLOOP_ADMIN_EMAIL: ${FELLOWLOOP_ADMIN_EMAIL:-admin@fellowloop.local}
+      FELLOWLOOP_ADMIN_PASSWORD: ${FELLOWLOOP_ADMIN_PASSWORD:?set FELLOWLOOP_ADMIN_PASSWORD}
+      FELLOWLOOP_PUBLIC_URL: ${FELLOWLOOP_PUBLIC_URL:-http://localhost:8080}
+      FELLOWLOOP_TIMEZONE: ${FELLOWLOOP_TIMEZONE:-Asia/Singapore}
+      FELLOWLOOP_HTTP_ALLOWED_HOSTS: ${FELLOWLOOP_HTTP_ALLOWED_HOSTS:-}
+      FELLOWLOOP_NOTIFY_WEBHOOK_URL: ${FELLOWLOOP_NOTIFY_WEBHOOK_URL:-}
+      FELLOWLOOP_NOTIFY_FORMAT: ${FELLOWLOOP_NOTIFY_FORMAT:-slack}
+      # a reverse proxy on the host reaches the container from the Docker bridge (172.16.0.0/12); trust
+      # X-Forwarded-For from there. With FELLOWLOOP_HTTP_BIND=127.0.0.1 nothing else can reach that port.
+      FELLOWLOOP_TRUSTED_PROXIES: ${FELLOWLOOP_TRUSTED_PROXIES:-172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|127\.\d+\.\d+\.\d+}
+    volumes:
+      - fellowloop-files:/var/lib/fellowloop/files   # uploaded attachments; back up with the database
+    ports:
+      # behind a reverse proxy on this host, set FELLOWLOOP_HTTP_BIND=127.0.0.1 so clients cannot bypass it
+      - "${FELLOWLOOP_HTTP_BIND:-0.0.0.0}:${FELLOWLOOP_HTTP_PORT:-8080}:8080"
+
+volumes:
+  fellowloop-db:
+  fellowloop-files:

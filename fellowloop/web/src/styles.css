@@ -1,0 +1,527 @@
+html,
+body,
+#root {
+  margin: 0;
+  height: 100%;
+}
+
+body {
+  background: #f5f7fa;
+  -webkit-font-smoothing: antialiased;
+}
+
+.fellowloop-mono,
+.fellowloop-code {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, 'Liberation Mono', monospace;
+}
+
+/* ---------------------------------------------------------------- shell */
+
+.fellowloop-sider {
+  border-inline-end: 1px solid #eef0f3;
+  position: sticky !important;
+  top: 0;
+  height: 100vh;
+  overflow: auto;
+}
+
+.fellowloop-sider .ant-layout-sider-children {
+  display: flex;
+  flex-direction: column;
+}
+
+.fellowloop-sider .ant-layout-sider-trigger {
+  border-inline-end: 1px solid #eef0f3;
+  border-top: 1px solid #eef0f3;
+}
+
+.fellowloop-brand {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 52px;
+  padding: 0 20px;
+  font-weight: 650;
+  font-size: 17px;
+  color: #1f2937;
+  letter-spacing: 0.2px;
+}
+
+.ant-layout-sider-collapsed .fellowloop-brand {
+  padding: 0 26px;
+}
+
+.fellowloop-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  border-bottom: 1px solid #eef0f3;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.fellowloop-content {
+  padding: 20px 24px 32px;
+  min-width: 0;
+}
+
+.fellowloop-page-header {
+  margin-bottom: 16px;
+}
+
+.fellowloop-login {
+  min-height: 100vh;
+  background: radial-gradient(1200px 600px at 20% -10%, #e6efff 0%, transparent 60%),
+    radial-gradient(900px 500px at 110% 110%, #eaf7f2 0%, transparent 60%), #f5f7fa;
+}
+
+/* ---------------------------------------------------------------- markdown */
+
+.fellowloop-md {
+  line-height: 1.6;
+  word-break: break-word;
+  font-size: 14px;
+}
+
+.fellowloop-md > :first-child {
+  margin-top: 0;
+}
+
+.fellowloop-md > :last-child {
+  margin-bottom: 0;
+}
+
+.fellowloop-md p {
+  margin: 0 0 0.6em;
+}
+
+.fellowloop-md ul,
+.fellowloop-md ol {
+  padding-inline-start: 1.4em;
+  margin: 0 0 0.6em;
+}
+
+.fellowloop-md code {
+  font-family: 'JetBrains Mono', 'SFMono-Regular', Menlo, Consolas, monospace;
+  font-size: 0.88em;
+  background: rgba(15, 23, 42, 0.06);
+  padding: 0.1em 0.35em;
+  border-radius: 4px;
+}
+
+.fellowloop-md pre {
+  background: #0f172a;
+  color: #e2e8f0;
+  padding: 10px 12px;
+  border-radius: 6px;
+  overflow: auto;
+}
+
+.fellowloop-md pre code {
+  background: transparent;
+  padding: 0;
+  color: inherit;
+}
+
+.fellowloop-md table {
+  border-collapse: collapse;
+  margin: 0 0 0.6em;
+}
+
+.fellowloop-md th,
+.fellowloop-md td {
+  border: 1px solid #e5e7eb;
+  padding: 4px 8px;
+}
+
+.fellowloop-md blockquote {
+  margin: 0 0 0.6em;
+  padding-inline-start: 10px;
+  border-inline-start: 3px solid #d9d9d9;
+  color: #595959;
+}
+
+.fellowloop-md.muted {
+  color: #8c8c8c;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- code */
+
+.fellowloop-code {
+  margin: 6px 0 0;
+  padding: 8px 10px;
+  background: #0f172a;
+  color: #e2e8f0;
+  border-radius: 6px;
+  font-size: 12px;
+  line-height: 1.5;
+  overflow: auto;
+  white-space: pre-wrap;
+  word-break: break-all;
+}
+
+.fellowloop-diff .add {
+  color: #86efac;
+}
+
+.fellowloop-diff .del {
+  color: #fca5a5;
+}
+
+.fellowloop-diff .hunk {
+  color: #93c5fd;
+}
+
+.fellowloop-diff .meta {
+  color: #94a3b8;
+}
+
+/* ---------------------------------------------------------------- kanban */
+
+.fellowloop-board {
+  display: flex;
+  gap: 12px;
+  overflow-x: auto;
+  padding-bottom: 8px;
+  align-items: flex-start;
+}
+
+.fellowloop-column {
+  flex: 1 1 0;
+  min-width: 200px;
+  min-height: calc(100vh - 190px);
+  background: #eef1f5;
+  border-radius: 8px;
+  padding: 8px;
+  transition: background 0.15s, box-shadow 0.15s;
+}
+
+.fellowloop-column.drop {
+  background: #e3ecfb;
+  box-shadow: inset 0 0 0 2px #0f5fd7;
+}
+
+.fellowloop-column-head {
+  padding: 4px 6px 10px;
+}
+
+.fellowloop-issue-card {
+  background: #fff;
+  border: 1px solid #e5e8ec;
+  border-radius: 8px;
+  padding: 10px 12px;
+  margin-bottom: 8px;
+  cursor: pointer;
+  transition: box-shadow 0.15s, border-color 0.15s;
+}
+
+.fellowloop-issue-card:hover {
+  border-color: #c7d2e0;
+  box-shadow: 0 2px 8px rgba(15, 23, 42, 0.06);
+}
+
+.fellowloop-issue-card.dragging {
+  opacity: 0.4;
+}
+
+/* ---------------------------------------------------------------- timeline */
+
+.fellowloop-timeline-item {
+  display: flex;
+  gap: 12px;
+  margin-bottom: 16px;
+}
+
+.fellowloop-comment {
+  flex: 1;
+  min-width: 0;
+  background: #fff;
+  border: 1px solid #e8ebef;
+  border-radius: 8px;
+  padding: 10px 14px;
+}
+
+.fellowloop-comment.agent {
+  border-color: #dbe6fb;
+  background: #fbfdff;
+}
+
+.fellowloop-comment.system {
+  background: #fafafa;
+}
+
+.fellowloop-comment-head {
+  margin-bottom: 6px;
+  font-size: 13px;
+}
+
+/* ---------------------------------------------------------------- transcript */
+
+.fellowloop-transcript {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.fellowloop-tx-scroll {
+  overflow: auto;
+  padding: 2px 4px 2px 0;
+}
+
+.fellowloop-tx-meta {
+  font-size: 12px;
+  color: #8c8c8c;
+}
+
+.fellowloop-tx-user {
+  background: #f0f5ff;
+  border: 1px solid #d6e4ff;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.fellowloop-tx-user-label {
+  font-size: 12px;
+  color: #4b6bb5;
+  margin-bottom: 4px;
+}
+
+.fellowloop-tx-msg {
+  padding: 2px 2px;
+}
+
+.fellowloop-tx-msg.final {
+  border-inline-start: 3px solid #52c41a;
+  padding-inline-start: 10px;
+}
+
+.fellowloop-tx-plan {
+  background: #fafafa;
+  border: 1px solid #f0f0f0;
+  border-radius: 8px;
+  padding: 8px 12px;
+}
+
+.fellowloop-tx-turn {
+  font-size: 12px;
+  padding: 4px 8px;
+  border-radius: 6px;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.fellowloop-tx-turn.ok {
+  color: #389e0d;
+  background: #f6ffed;
+}
+
+.fellowloop-tx-turn.bad {
+  color: #cf1322;
+  background: #fff1f0;
+}
+
+.fellowloop-tx-time {
+  margin-inline-start: auto;
+  color: #8c8c8c;
+}
+
+.fellowloop-tx-usage {
+  font-size: 12px;
+  color: #8c8c8c;
+  border-top: 1px dashed #e5e7eb;
+  padding-top: 6px;
+}
+
+.fellowloop-tx-steer {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  border-top: 1px solid #f0f0f0;
+  padding-top: 8px;
+}
+
+.fellowloop-collapsible-head {
+  cursor: pointer;
+  font-size: 13px;
+  color: #595959;
+  user-select: none;
+}
+
+.fellowloop-collapsible.muted .fellowloop-collapsible-head {
+  color: #8c8c8c;
+  font-style: italic;
+}
+
+.fellowloop-collapsible-body {
+  margin-top: 6px;
+  padding-inline-start: 16px;
+}
+
+.fellowloop-tool {
+  border: 1px solid #e8ebef;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.fellowloop-tool-failed {
+  border-color: #ffccc7;
+}
+
+.fellowloop-tool-head {
+  padding: 6px 10px;
+  background: #fafbfc;
+}
+
+.fellowloop-tool-icon {
+  color: #595959;
+}
+
+.fellowloop-tool-body {
+  padding: 6px 10px 10px;
+  border-top: 1px solid #f0f0f0;
+}
+
+.fellowloop-filechange {
+  padding: 3px 0;
+}
+
+/* ---------------------------------------------------------------- workflow editor */
+
+.fellowloop-editor {
+  display: grid;
+  grid-template-columns: 220px 1fr 340px;
+  height: calc(100vh - 52px - 20px - 32px - 64px);
+  min-height: 520px;
+  border: 1px solid #e5e8ec;
+  border-radius: 8px;
+  background: #fff;
+  overflow: hidden;
+}
+
+.fellowloop-editor.readonly {
+  grid-template-columns: 1fr 380px;
+}
+
+.fellowloop-palette {
+  border-inline-end: 1px solid #eef0f3;
+  overflow: auto;
+  padding: 10px;
+}
+
+.fellowloop-palette-item {
+  border: 1px solid #e5e8ec;
+  border-inline-start-width: 3px;
+  border-radius: 6px;
+  padding: 6px 8px;
+  margin-bottom: 6px;
+  cursor: grab;
+  background: #fff;
+  font-size: 13px;
+}
+
+.fellowloop-palette-item:hover {
+  box-shadow: 0 1px 6px rgba(15, 23, 42, 0.08);
+}
+
+.fellowloop-inspector {
+  border-inline-start: 1px solid #eef0f3;
+  overflow: auto;
+  padding: 12px 14px;
+}
+
+.fellowloop-canvas {
+  position: relative;
+  min-width: 0;
+}
+
+.fellowloop-flow-node {
+  width: 220px;
+  background: #fff;
+  border: 1px solid #d9dee5;
+  border-top-width: 4px;
+  border-radius: 8px;
+  padding: 8px 10px 10px;
+  box-shadow: 0 1px 3px rgba(15, 23, 42, 0.05);
+  font-size: 12px;
+}
+
+.fellowloop-flow-node.selected {
+  box-shadow: 0 0 0 2px #0f5fd7;
+}
+
+.fellowloop-flow-node.problem {
+  border-color: #ff4d4f;
+  box-shadow: 0 0 0 2px rgba(255, 77, 79, 0.35);
+}
+
+.fellowloop-flow-node-type {
+  font-size: 11px;
+  color: #8c8c8c;
+  display: flex;
+  align-items: center;
+  gap: 4px;
+}
+
+.fellowloop-flow-node-name {
+  font-size: 13px;
+  font-weight: 600;
+  color: #1f2937;
+  margin-top: 2px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.fellowloop-flow-node-ports {
+  display: flex;
+  justify-content: space-evenly;
+  margin-top: 6px;
+  font-size: 10px;
+  color: #8c8c8c;
+}
+
+.fellowloop-flow-node .react-flow__handle {
+  width: 10px;
+  height: 10px;
+  background: #fff;
+  border: 2px solid #8c99ad;
+}
+
+.fellowloop-flow-node .react-flow__handle.error-handle {
+  border-color: #ff4d4f;
+}
+
+.fellowloop-var {
+  display: block;
+  padding: 3px 6px;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.fellowloop-var:hover {
+  background: #f0f5ff;
+}
+
+/* command or paths an agent asks to go beyond its policy for */
+.fellowloop-approval-cmd {
+  margin: 0;
+  padding: 8px 12px;
+  border-radius: 6px;
+  background: #0f172a;
+  color: #e2e8f0;
+  font-size: 12.5px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+/* first-run checklist on the board */
+.fellowloop-setup-num {
+  display: inline-flex; align-items: center; justify-content: center;
+  width: 18px; height: 18px; border-radius: 50%;
+  border: 1px solid #cbd5e1; color: #475569; font-size: 11px; font-weight: 600; flex: none;
+}

@@ -1,0 +1,12 @@
+#!/bin/sh
+# Runs the Fellowloop daemon. Needs Java 21+ and, on this machine, Codex and/or TRAE CLI installed and logged in.
+#   fellowloop-daemon register --server https://fellowloop.example.com --code fellowloop_r_...
+#   fellowloop-daemon start
+#   fellowloop-daemon probe
+DIR=$(CDPATH= cd -- "$(dirname -- "$0")" && pwd)
+JAR="${FELLOWLOOP_DAEMON_JAR:-$DIR/fellowloop-daemon.jar}"
+if ! command -v java >/dev/null 2>&1; then
+  echo "Java 21 or newer is required (https://adoptium.net)" >&2
+  exit 1
+fi
+exec java ${FELLOWLOOP_DAEMON_JAVA_OPTS:-} -jar "$JAR" "$@"

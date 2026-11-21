@@ -1,0 +1,13 @@
+# systemd unit for a build machine. Install the jar and script under /opt/fellowloop, run as a user that has
+# Codex / TRAE CLI logged in, then: systemctl --user enable --now fellowloop-daemon
+[Unit]
+Description=Fellowloop daemon
+After=network-online.target
+
+[Service]
+ExecStart=/opt/fellowloop/fellowloop-daemon start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=default.target

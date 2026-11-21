@@ -1,0 +1,61 @@
+# Nginx in front of fellowloop-server (TLS termination). Copy into /etc/nginx/conf.d/fellowloop.conf and adjust
+# server_name and the certificate paths. Set FELLOWLOOP_PUBLIC_URL=https://fellowloop.example.com on the server.
+#
+# Two things matter beyond a plain proxy:
+#   /api/stream       server-sent events for the web UI: no buffering, long read timeout
+#   /api/daemon/ws    the daemons' WebSocket: HTTP/1.1 upgrade, long read timeout
+
+map $http_upgrade $connection_upgrade {
+    default upgrade;
+    ''      close;
+}
+
+upstream fellowloop {
+    server 127.0.0.1:8080;
+    keepalive 16;
+}
+
+server {
+    listen 80;
+    server_name fellowloop.example.com;
+    return 301 https://$host$request_uri;
+}
+
+server {
+    listen 443 ssl http2;   # nginx 1.25.1+ may write: listen 443 ssl; http2 on;
+    server_name fellowloop.example.com;
+
+    ssl_certificate     /etc/ssl/fellowloop/fullchain.pem;
+    ssl_certificate_key /etc/ssl/fellowloop/privkey.pem;
+
+    client_max_body_size 21m;   # attachments are limited to 20 MB
+
+    proxy_set_header Host              $host;
+    proxy_set_header X-Real-IP         $remote_addr;
+    # overwrite, not append: a client cannot plant its own X-Forwarded-For (audit log, login limits)
+    proxy_set_header X-Forwarded-For   $remote_addr;
+    proxy_set_header X-Forwarded-Proto $scheme;
+    proxy_http_version 1.1;
+
+    location /api/stream {
+        proxy_pass http://fellowloop;
+        proxy_set_header Connection "";
+        proxy_buffering off;
+        proxy_cache off;
+        proxy_read_timeout 1h;
+    }
+
+    location /api/daemon/ws {
+        proxy_pass http://fellowloop;
+        proxy_set_header Upgrade    $http_upgrade;
+        proxy_set_header Connection $connection_upgrade;
+        proxy_read_timeout 1h;
+        proxy_send_timeout 1h;
+    }
+
+    location / {
+        proxy_pass http://fellowloop;
+        proxy_set_header Connection "";
+        proxy_read_timeout 120s;
+    }
+}
