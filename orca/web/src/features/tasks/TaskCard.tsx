@@ -39,7 +39,8 @@ export function TaskMeta({ task }: { task: Task }) {
           {fmtDuration(durationBetween(task.startedAt, task.finishedAt))}
         </Typography.Text>
       </Tooltip>
-      {tokens !== undefined && (
+      {/* reviews report no usage: no count rather than a misleading 0 */}
+      {tokens !== undefined && tokens > 0 && (
         <Typography.Text type="secondary" style={{ fontSize: 12 }}>
           {fmtTokens(tokens)} {t('transcript.tokensShort')}
         </Typography.Text>
