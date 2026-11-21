@@ -24,13 +24,14 @@
 | 新会话 | `thread/start {cwd, model, sandbox, approvalPolicy, developerInstructions, config, serviceName}` | ✅ 实测 |
 | 按会话注入 MCP | `thread/start.config.mcp_servers.orca = {url, bearer_token_env_var}`，token 走环境变量 | ✅ 实测：Agent 通过 Orca 的 MCP 工具读 Issue、发进展评论 |
 | MCP 工具确认 | Codex 调用 MCP 工具前发 `mcpServer/elicitation/request`；对 `serverName == "orca"` 自动同意，其他 MCP 服务器转人工 | ✅ 实测 |
-| 续接 | `thread/resume {threadId, excludeTurns:true}` | ✅ 实测（续接后记得之前的文件） |
+| 续接 | `thread/resume {threadId, excludeTurns:true}`；续接后 codex 会先重放该线程累计的 `thread/tokenUsage/updated`，驱动以此为基线，`taskTokens` 只计本任务。只有 “no rollout found / not found” 才视为会话不存在（改为带回顾新开会话），进程崩溃或超时照常报错，不会丢弃原会话 | ✅ 实测（续接后记得之前的文件） |
 | 一轮 | `turn/start {threadId, input:[text/localImage], effort, outputSchema}` | ✅ 实测 |
 | 结构化输出 | `turn/start.outputSchema`，最终消息即 JSON | ✅ 实测 |
-| 代码评审 | `review/start {threadId, delivery:"inline", target:{type:"baseBranch", branch}}` → `enteredReviewMode` / `exitedReviewMode`（结论在 `review` 字段） | ✅ 实测（该模式不上报 token 用量） |
+| 代码评审 | `review/start {threadId, delivery:"inline", target:{type:"baseBranch", branch}}` → `enteredReviewMode` / `exitedReviewMode`（结论在 `review` 字段）。只有 `custom` 目标能带文字，所以带说明或提示的评审改用 `custom` 并用文字写明同一目标；评审模型设为 Agent 的模型（`review_model`）。评审以子轮次运行：`turn/started` 的 id 与 `review/start` 返回的不同（`rootTurnId` 指向后者），中断必须用子轮次 id；评审结论还会以一条普通 agentMessage 重复，驱动去重。评审进行中不能插话（codex 拒绝 steer），Orca 提示改为评审结束后评论 | ✅ 实测（该模式不上报 token 用量） |
 | 流式 | `item/started|completed`（agentMessage/reasoning/commandExecution/fileChange/mcpToolCall/webSearch…）、`item/agentMessage/delta`、`item/commandExecution/outputDelta`、`turn/plan/updated`、`turn/diff/updated`、`thread/tokenUsage/updated`、`turn/completed` | ✅ 实测（已录制报文） |
 | 交付结果 | `agentMessage.phase == "final_answer"` | ✅ 实测 |
-| 中断 | `turn/interrupt` → `turn/completed.status = interrupted` | ✅ 实测 |
+| 中断 | `turn/interrupt` → `turn/completed.status = interrupted`；轮次 id 尚未返回时收到的取消会被记住，拿到 id 后立即中断 | ✅ 实测 |
+| 错误码 | `codexErrorInfo`：`modelNotFound` → MODEL_NOT_FOUND，`usageLimitExceeded` / `rateLimitExceeded` / `sessionBudgetExceeded` → USAGE_LIMIT（不自动重试），连接类与 `responseTooManyFailedAttempts` → PROVIDER_UNAVAILABLE（可重试） | ✅ 对照 0.171 schema |
 | 插话 | `turn/steer {threadId, expectedTurnId, input}` | ✅ 实测（运行中改指令，最终回复按新指令） |
 | 审批 | `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | ✅ 实测：写工作区外（如 `$HOME`）触发命令审批，策略拒绝后 Agent 报告受阻；注意 workspace-write 默认允许写 `/tmp` |
 | 向人提问 | `item/tool/requestUserInput`、`mcpServer/elicitation/request` | 🟡 按 schema 实现 |

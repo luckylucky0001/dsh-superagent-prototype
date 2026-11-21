@@ -173,13 +173,84 @@ class CodexDriverTest {
   void nativeReviewUsesReviewStartAndReturnsTheReview() throws Exception {
     try (AgentSession s = provider("echo").open(spec(), new RecordingHandler())) {
       List<dev.orca.protocol.AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
-      TurnResult r = s.runTurn(new TurnSpec("focus on rounding", List.of(), null, null,
+      TurnResult r = s.runTurn(new TurnSpec("", List.of(), null, null,
           Map.of("type", "baseBranch", "branch", "main")), events::add);
       assertEquals(TurnResult.Status.COMPLETED, r.status());
       assertEquals("reviewed changes against main: no issues found", r.finalText());
+      // only a custom target carries text: a review with a prompt names the same target in words
+      TurnResult withText = s.runTurn(new TurnSpec("focus on rounding", List.of(), null, null,
+          Map.of("type", "baseBranch", "branch", "main", "instructions", "check the tests")), events::add);
+      assertEquals("reviewed custom: no issues found", withText.finalText());
       assertTrue(events.stream().anyMatch(e -> e.type().equals(dev.orca.protocol.AgentEvent.NOTICE)
           && String.valueOf(e.data().get("message")).contains("review started")));
     }
+  }
+
+  @Test
+  void cancellingAReviewInterruptsTheRunningSubTurn() throws Exception {
+    try (AgentSession s = provider("review_hang").open(spec(), new RecordingHandler())) {
+      Thread.ofVirtual().start(() -> {
+        try {
+          Thread.sleep(500);
+        } catch (InterruptedException ignored) {
+          // test thread
+        }
+        s.interrupt();
+      });
+      TurnResult r = s.runTurn(new TurnSpec("", List.of(), null, Duration.ofSeconds(20),
+          Map.of("type", "uncommittedChanges")), e -> {});
+      assertEquals(TurnResult.Status.INTERRUPTED, r.status(), "codex only accepts the sub-turn's id");
+    }
+  }
+
+  @Test
+  void aCancelWhileTheTurnIsStartingIsNotLost() throws Exception {
+    try (AgentSession s = provider("slow_start").open(spec(), new RecordingHandler())) {
+      Thread.ofVirtual().start(() -> {
+        try {
+          Thread.sleep(300);
+        } catch (InterruptedException ignored) {
+          // test thread
+        }
+        s.interrupt();
+      });
+      TurnResult r = s.runTurn(TurnSpec.text("do it"), e -> {});
+      assertEquals(TurnResult.Status.INTERRUPTED, r.status());
+      assertEquals(dev.orca.protocol.ErrorCodes.CANCELLED, r.errorCode());
+    }
+  }
+
+  @Test
+  void aResumedThreadCountsOnlyThisTasksTokens() throws Exception {
+    var resumed = new dev.orca.agent.core.SessionSpec(java.nio.file.Files.createTempDirectory("orca-res"), null, null,
+        null, null, "thr_fake_1", null, null, null, null, null, false);
+    try (AgentSession s = provider("echo").open(resumed, new RecordingHandler())) {
+      Thread.sleep(200); // the replayed totals arrive just after thread/resume answers
+      TurnResult r = s.runTurn(TurnSpec.text("hi"), e -> {});
+      // the fake replays 1000 tokens of earlier work; this turn takes the thread total to 1120
+      assertEquals(120L, ((Number) r.usage().get("taskTokens")).longValue(), String.valueOf(r.usage()));
+    }
+  }
+
+  @Test
+  void aReviewIsShownOnce() throws Exception {
+    try (AgentSession s = provider("echo").open(spec(), new RecordingHandler())) {
+      List<dev.orca.protocol.AgentEvent> events = new java.util.concurrent.CopyOnWriteArrayList<>();
+      s.runTurn(new TurnSpec("", List.of(), null, null, Map.of("type", "uncommittedChanges")), events::add);
+      assertEquals(1, events.stream().filter(e -> e.type().equals(dev.orca.protocol.AgentEvent.MESSAGE)).count());
+      assertEquals(dev.orca.protocol.AgentEvent.TURN_STARTED, events.stream()
+          .filter(e -> !e.type().equals(dev.orca.protocol.AgentEvent.NOTICE)).findFirst().orElseThrow().type(),
+          "the turn starts before its items");
+    }
+  }
+
+  @Test
+  void codexErrorsKeepTheirMeaning() {
+    assertEquals(dev.orca.protocol.ErrorCodes.MODEL_NOT_FOUND, dev.orca.agent.codex.CodexSessionAccess.errorCode("modelNotFound"));
+    assertEquals(dev.orca.protocol.ErrorCodes.USAGE_LIMIT, dev.orca.agent.codex.CodexSessionAccess.errorCode(Map.of("rateLimitExceeded", Map.of())));
+    assertEquals(dev.orca.protocol.ErrorCodes.USAGE_LIMIT, dev.orca.agent.codex.CodexSessionAccess.errorCode("sessionBudgetExceeded"));
+    assertEquals(dev.orca.protocol.ErrorCodes.PROVIDER_UNAVAILABLE,
+        dev.orca.agent.codex.CodexSessionAccess.errorCode("responseTooManyFailedAttempts"));
   }
 
   @Test
@@ -192,5 +263,9 @@ class CodexDriverTest {
     var readOnly = new dev.orca.agent.core.SessionSpec(dir, null, null, null, dev.orca.agent.core.Permission.READ_ONLY,
         null, null, null, null, null, null, true);
     assertTrue(dev.orca.agent.codex.CodexSessionAccess.threadConfig(readOnly).isEmpty());
+    var withModel = new dev.orca.agent.core.SessionSpec(dir, "gpt-6-luna", null, null,
+        dev.orca.agent.core.Permission.READ_ONLY, null, null, null, null, null, null, false);
+    assertEquals("gpt-6-luna", dev.orca.agent.codex.CodexSessionAccess.threadConfig(withModel).get("review_model"),
+        "native reviews run on the agent's model");
   }
 }

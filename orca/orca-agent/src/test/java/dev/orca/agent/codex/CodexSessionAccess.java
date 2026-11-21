@@ -10,4 +10,8 @@ public final class CodexSessionAccess {
   public static Map<String, Object> threadConfig(SessionSpec spec) {
     return CodexSession.threadConfig(spec);
   }
+
+  public static String errorCode(Object info) {
+    return CodexEvents.errorCode(info);
+  }
 }

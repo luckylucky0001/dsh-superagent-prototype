@@ -17,7 +17,11 @@ import java.util.concurrent.atomic.AtomicLong;
 /**
  * A scripted stand-in for {@code codex app-server}, shaped after recorded traffic of codex-cli 0.171.
  * The scenario comes from the {@code FAKE_SCENARIO} environment variable:
- * {@code echo} (default), {@code approval}, {@code question}, {@code fail_auth}, {@code hang}.
+ * {@code echo} (default), {@code approval}, {@code question}, {@code fail_auth}, {@code hang},
+ * {@code slow_start} (answers turn/start after 1.5 s), {@code review_hang} (a review that runs until interrupted).
+ * Like codex 0.171, a review runs as a sub-turn with its own id (rootTurnId = the review's id), turn/interrupt
+ * must name the running turn, a resumed thread replays its token totals, and a review's text is repeated as
+ * a plain agent message.
  */
 public final class FakeCodexAppServer {
 
@@ -29,6 +33,8 @@ public final class FakeCodexAppServer {
   private static volatile CompletableFuture<String> hangRelease = new CompletableFuture<>();
   private static int turnCounter;
   private static volatile String instructions = "";
+  /** Tokens a resumed thread already used, included in later totals like real codex. */
+  private static volatile int earlierTokens;
 
   public static void main(String[] args) throws Exception {
     if (List.of(args).contains("--version")) {
@@ -72,11 +78,18 @@ public final class FakeCodexAppServer {
             error(id, -32600, "thread not found: missing");
           } else {
             reply(id, Map.of("thread", Map.of("id", params.get("threadId"), "model", "gpt-6.2-sol")));
+            earlierTokens = 1000;
+            notify("thread/tokenUsage/updated", Map.of("threadId", THREAD, "tokenUsage", Map.of(
+                "total", Map.of("totalTokens", 1000, "inputTokens", 900, "cachedInputTokens", 0, "outputTokens", 100,
+                    "reasoningOutputTokens", 0), "last", Map.of("totalTokens", 1000), "modelContextWindow", 258400)));
           }
         }
         case "turn/start" -> {
           String turnId = "turn_" + (++turnCounter);
           activeTurn = turnId;
+          if ("slow_start".equals(scenario)) {
+            Thread.sleep(1500);
+          }
           reply(id, Map.of("turn", Map.of("id", turnId, "status", "inProgress", "items", List.of())));
           List<?> inputs = (List<?>) params.get("input");
           long imgs = inputs.stream().filter(x -> "localImage".equals(((Map<?, ?>) x).get("type"))
@@ -95,13 +108,26 @@ public final class FakeCodexAppServer {
           String turnId = "turn_" + (++turnCounter);
           Map<?, ?> target = (Map<?, ?>) params.get("target");
           reply(id, Map.of("turn", Map.of("id", turnId, "status", "inProgress", "items", List.of()), "reviewThreadId", THREAD));
+          String sub = "sub_" + turnId;
+          activeTurn = sub;
           Thread.ofVirtual().start(() -> {
             try {
-              notify("turn/started", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "inProgress")));
+              notify("turn/started", Map.of("threadId", THREAD, "turn", Map.of("id", sub, "rootTurnId", turnId,
+                  "status", "inProgress")));
+              if ("review_hang".equals(scenario)) {
+                String got = hangRelease.get(30, TimeUnit.SECONDS);
+                hangRelease = new CompletableFuture<>();
+                if ("__interrupt__".equals(got)) {
+                  notify("turn/completed", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "interrupted")));
+                  return;
+                }
+              }
               String what = "baseBranch".equals(target.get("type")) ? "changes against " + target.get("branch") : String.valueOf(target.get("type"));
               notify("item/started", item(turnId, Map.of("type", "enteredReviewMode", "id", turnId, "review", what)));
               notify("item/completed", item(turnId, Map.of("type", "exitedReviewMode", "id", turnId,
                   "review", "reviewed " + what + ": no issues found")));
+              notify("item/completed", item(turnId, Map.of("type", "agentMessage", "id", "msg_" + sub,
+                  "text", "reviewed " + what + ": no issues found")));
               notify("turn/completed", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "completed")));
             } catch (Exception e) {
               e.printStackTrace();
@@ -109,8 +135,12 @@ public final class FakeCodexAppServer {
           });
         }
         case "turn/interrupt" -> {
-          reply(id, Map.of());
-          hangRelease.complete("__interrupt__");
+          if (!String.valueOf(params.get("turnId")).equals(activeTurn)) {
+            error(id, -32600, "expected active turn id " + params.get("turnId") + " but found " + activeTurn);
+          } else {
+            reply(id, Map.of());
+            hangRelease.complete("__interrupt__");
+          }
         }
         case "turn/steer" -> {
           reply(id, Map.of("turnId", params.get("expectedTurnId")));
@@ -175,7 +205,7 @@ public final class FakeCodexAppServer {
       }
     }
     notify("thread/tokenUsage/updated", Map.of("threadId", THREAD, "turnId", turnId, "tokenUsage", Map.of(
-        "total", Map.of("totalTokens", 120, "inputTokens", 100, "cachedInputTokens", 80, "outputTokens", 20,
+        "total", Map.of("totalTokens", 120 + earlierTokens, "inputTokens", 100, "cachedInputTokens", 80, "outputTokens", 20,
             "reasoningOutputTokens", 0), "last", Map.of("totalTokens", 120), "modelContextWindow", 258400)));
     notify("turn/completed", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "completed")));
   }

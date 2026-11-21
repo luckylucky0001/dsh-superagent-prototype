@@ -48,6 +48,8 @@ final class TaskRunner implements Runnable {
   /** Approval requests a person decided (escalated from the policy). */
   private final java.util.Set<String> decidedByPerson = ConcurrentHashMap.newKeySet();
   private final ConcurrentLinkedQueue<String> followUps = new ConcurrentLinkedQueue<>();
+  /** Set (under the followUps lock) once no further turn will run; later messages are refused, not lost. */
+  private boolean followUpsClosed;
   private volatile AgentSession session;
   private volatile boolean cancelRequested;
   private volatile boolean finished;
@@ -203,24 +205,37 @@ final class TaskRunner implements Runnable {
       prompt = TurnSpec.reviewPrompt(review, prompt);
       review = null;
     }
+    if (cancelRequested) {
+      // cancelled while attachments were downloading
+      return completed("cancelled", null, null, session.sessionRef(), ErrorCodes.CANCELLED, "cancelled", Map.of());
+    }
     TurnResult r = session.runTurn(new TurnSpec(prompt, images, task.outputSchema(), timeout, review), sink);
     Map<String, Object> usage = new LinkedHashMap<>(r.usage());
-    while (r.ok() && !cancelRequested && !followUps.isEmpty()) {
+    while (r.ok() && !cancelRequested) {
       List<String> texts = new ArrayList<>();
-      String t;
-      while ((t = followUps.poll()) != null) {
-        texts.add(t);
+      synchronized (followUps) {
+        if (followUps.isEmpty()) {
+          followUpsClosed = true; // a message arriving from now on cannot be answered in this task
+          break;
+        }
+        String t;
+        while ((t = followUps.poll()) != null) {
+          texts.add(t);
+        }
       }
       String follow = String.join("\n\n", texts);
       buffer.add(AgentEvent.of(AgentEvent.USER_MESSAGE, "text", follow, "followUp", true));
       r = session.runTurn(new TurnSpec(follow, List.of(), task.outputSchema(), timeout), sink);
       usage.putAll(r.usage());
     }
-    // a review must not commit what it was asked to review
-    if (r.ok() && task.repo() != null && task.review() == null) {
+    synchronized (followUps) {
+      followUpsClosed = true;
+    }
+    // a review must not commit what it was asked to review; a cancelled task leaves its changes uncommitted
+    if (r.ok() && !cancelRequested && task.repo() != null && task.review() == null) {
       autoCommit(dir, r.finalText());
     }
-    String status = switch (r.status()) {
+    String status = cancelRequested ? "cancelled" : switch (r.status()) {
       case COMPLETED -> "succeeded";
       case INTERRUPTED -> cancelRequested ? "cancelled" : "failed";
       case FAILED -> ErrorCodes.TIMEOUT.equals(r.errorCode()) ? "timed_out" : "failed";
@@ -557,6 +572,12 @@ final class TaskRunner implements Runnable {
   }
 
   void steer(String text) {
+    if (task.review() != null) {
+      // codex refuses to steer a review, and a follow-up turn would replace the review's result
+      buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message",
+          "a review cannot take messages while it runs; the message was not sent. Comment after it finishes."));
+      return;
+    }
     AgentSession s = session;
     if (s != null && s.capabilities().contains(dev.orca.agent.core.Capability.STEER)) {
       try {
@@ -567,7 +588,14 @@ final class TaskRunner implements Runnable {
         log.debug("steer failed, queueing as follow-up: {}", e.getMessage());
       }
     }
-    followUps.add(text);
+    synchronized (followUps) {
+      if (followUpsClosed) {
+        buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message",
+            "the task is finishing; the message was not sent. Comment or ask again to continue."));
+        return;
+      }
+      followUps.add(text);
+    }
     buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "info", "message", "message queued for the next turn"));
   }
 

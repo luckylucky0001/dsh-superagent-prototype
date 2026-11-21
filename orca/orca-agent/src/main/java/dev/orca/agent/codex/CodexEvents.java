@@ -208,11 +208,12 @@ final class CodexEvents {
         : info == null ? "" : String.valueOf(info);
     return switch (key) {
       case "unauthorized" -> ErrorCodes.AUTH_REQUIRED;
-      case "usageLimitExceeded" -> ErrorCodes.USAGE_LIMIT;
+      case "usageLimitExceeded", "rateLimitExceeded", "sessionBudgetExceeded" -> ErrorCodes.USAGE_LIMIT;
+      case "modelNotFound" -> ErrorCodes.MODEL_NOT_FOUND;
       case "contextWindowExceeded" -> ErrorCodes.CONTEXT_EXCEEDED;
       case "sandboxError" -> ErrorCodes.SANDBOX;
       case "httpConnectionFailed", "responseStreamConnectionFailed", "responseStreamDisconnected", "internalServerError",
-          "serverOverloaded" -> ErrorCodes.PROVIDER_UNAVAILABLE;
+          "serverOverloaded", "responseTooManyFailedAttempts" -> ErrorCodes.PROVIDER_UNAVAILABLE;
       default -> ErrorCodes.AGENT_ERROR;
     };
   }

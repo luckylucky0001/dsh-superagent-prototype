@@ -68,6 +68,17 @@ final class CodexSession implements AgentSession {
   private volatile String lastMessage;
   private volatile Map<String, Object> usage = Map.of();
   private long baseline = -1;
+  /** Guards turnId and completedTurns together, so a turn/completed racing with turn/start is never lost. */
+  private final Object turnLock = new Object();
+  /** Root turn id (as returned by turn/start or review/start) to the id of the turn actually running. */
+  private final Map<String, String> activeTurns = new ConcurrentHashMap<>();
+  /** Root turn ids whose TURN_STARTED event was already emitted. */
+  private final Set<String> announced = ConcurrentHashMap.newKeySet();
+  /** An interrupt that arrived while a turn was starting (its id not yet known). */
+  private volatile boolean interruptPending;
+  /** True from runTurn's start until its result: an interrupt then belongs to this turn. */
+  private volatile boolean inTurn;
+  private volatile boolean turnsStarted;
 
   private CodexSession(JsonRpcConnection conn, Interaction.Handler handler, SessionSpec spec, Duration timeout,
       BufferedWriter recorder) {
@@ -160,8 +171,13 @@ final class CodexSession implements AgentSession {
       try {
         result = conn.call("thread/resume", params, timeout);
       } catch (AgentException e) {
-        throw new AgentException(ErrorCodes.SESSION_NOT_FOUND, "codex could not resume thread " + spec.resumeRef()
-            + ": " + e.getMessage(), e);
+        // only a thread codex does not know is "not found"; a crash or timeout must not abandon the thread
+        if (e.getCause() instanceof JsonRpcConnection.RpcError r && (String.valueOf(r.getMessage()).contains("no rollout")
+            || String.valueOf(r.getMessage()).toLowerCase(java.util.Locale.ROOT).contains("not found"))) {
+          throw new AgentException(ErrorCodes.SESSION_NOT_FOUND, "codex could not resume thread " + spec.resumeRef()
+              + ": " + e.getMessage(), e);
+        }
+        throw e;
       }
       resumed = true;
     } else {
@@ -210,6 +226,10 @@ final class CodexSession implements AgentSession {
     if (spec.network() && spec.permission() == Permission.WORKSPACE) {
       config.put("sandbox_workspace_write", Map.of("network_access", true));
     }
+    if (spec.model() != null && !spec.model().isBlank()) {
+      // native reviews otherwise run on codex's default review model, not the one chosen for the agent
+      config.put("review_model", spec.model());
+    }
     return config;
   }
 
@@ -229,9 +249,16 @@ final class CodexSession implements AgentSession {
     this.lastFinalEmitted = null;
     clock.reset();
     this.usage = Map.of();
-    this.turnId = null;
-    this.turnDone = new CompletableFuture<>();
-    completedTurns.clear();
+    synchronized (turnLock) {
+      this.turnId = null;
+      this.turnDone = new CompletableFuture<>();
+      completedTurns.clear();
+    }
+    inTurn = true;
+    turnsStarted = true;
+    if (interruptPending) {
+      return cancelledBeforeStart(turn);
+    }
 
     List<Map<String, Object>> input = new ArrayList<>();
     input.add(Map.of("type", "text", "text", turn.text()));
@@ -249,22 +276,31 @@ final class CodexSession implements AgentSession {
     }
     Object started;
     if (turn.review() != null) {
-      // native review: the reviewer reads the diff itself; the text, if any, travels as custom instructions
+      // native review: the reviewer reads the diff itself. Only a custom target carries text, so a review
+      // with extra instructions or a prompt becomes a custom review that names the same target in words.
       Map<String, Object> target = new LinkedHashMap<>(turn.review());
-      target.remove("instructions");
-      if ("custom".equals(target.get("type"))) {
-        target.put("instructions", TurnSpec.reviewPrompt(turn.review(), turn.text()));
+      Object extra = target.remove("instructions");
+      boolean hasText = extra instanceof String x && !x.isBlank() || turn.text() != null && !turn.text().isBlank();
+      if ("custom".equals(target.get("type")) || hasText) {
+        target = new LinkedHashMap<>(Map.of("type", "custom", "instructions", TurnSpec.reviewPrompt(turn.review(), turn.text())));
       }
       started = conn.call("review/start", Map.of("threadId", threadId, "delivery", "inline", "target", target), timeout);
     } else {
       started = conn.call("turn/start", params, timeout);
     }
     String id = Json.str(Json.obj(started, "turn"), "id");
-    turnId = id;
-    eventSink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", id));
-    Map<String, Object> early = id == null ? null : completedTurns.remove(id);
+    Map<String, Object> early;
+    synchronized (turnLock) {
+      turnId = id;
+      early = id == null ? null : completedTurns.remove(id);
+    }
+    announce(id);
     if (early != null) {
       turnDone.complete(early);
+    }
+    if (interruptPending) {
+      // cancelled while the turn was being started
+      interrupt();
     }
 
     Map<String, Object> completed;
@@ -298,6 +334,21 @@ final class CodexSession implements AgentSession {
     return finish(TurnResult.Status.COMPLETED, null, null, turn);
   }
 
+  private TurnResult cancelledBeforeStart(TurnSpec turn) {
+    interruptPending = false;
+    inTurn = false;
+    TurnResult r = new TurnResult(TurnResult.Status.INTERRUPTED, null, null, ErrorCodes.CANCELLED,
+        "cancelled before the turn started", usage);
+    return r;
+  }
+
+  /** TURN_STARTED once per turn, from whichever thread learns the turn id first. */
+  private void announce(String rootId) {
+    if (rootId != null && announced.add(rootId)) {
+      sink.accept(AgentEvent.of(AgentEvent.TURN_STARTED, "turnId", rootId));
+    }
+  }
+
   private TurnResult finish(TurnResult.Status status, String code, String error, TurnSpec turn) {
     String text = finalText != null ? finalText : lastMessage;
     Object structured = null;
@@ -310,9 +361,20 @@ final class CodexSession implements AgentSession {
         error = "the final answer is not valid JSON: " + e.getMessage();
       }
     }
+    if (interruptPending && status == TurnResult.Status.COMPLETED) {
+      // the cancel came too late to stop the turn: report what was asked for
+      status = TurnResult.Status.INTERRUPTED;
+      code = ErrorCodes.CANCELLED;
+      error = "cancelled";
+    }
     sink.accept(AgentEvent.of(AgentEvent.TURN_COMPLETED, "turnId", turnId,
         "status", status.name().toLowerCase(), "errorCode", code, "error", error));
+    if (turnId != null) {
+      activeTurns.remove(turnId);
+    }
     turnId = null;
+    interruptPending = false;
+    inTurn = false;
     return new TurnResult(status, text, structured, code, error, usage);
   }
 
@@ -329,8 +391,12 @@ final class CodexSession implements AgentSession {
   @Override
   public void interrupt() {
     String current = turnId;
+    if (inTurn) {
+      interruptPending = true; // also covers the time before turn/start answers
+    }
     if (current != null && conn.alive()) {
-      conn.request("turn/interrupt", Map.of("threadId", threadId, "turnId", current));
+      // a review runs as a sub-turn with its own id; codex only accepts the id of the turn actually running
+      conn.request("turn/interrupt", Map.of("threadId", threadId, "turnId", activeTurns.getOrDefault(current, current)));
     }
   }
 
@@ -350,14 +416,30 @@ final class CodexSession implements AgentSession {
 
   private void onNotification(String method, Map<String, Object> params) {
     switch (method) {
+      case "turn/started" -> {
+        Map<String, Object> turn = Json.obj(params, "turn");
+        String id = Json.str(turn, "id");
+        String root = Json.str(turn, "rootTurnId");
+        if (id != null) {
+          activeTurns.put(root != null ? root : id, id);
+          // before the turn's first items, in the order codex sent them
+          announce(root != null ? root : id);
+        }
+        return;
+      }
       case "turn/completed" -> {
         Map<String, Object> turn = Json.obj(params, "turn");
         String id = Json.str(turn, "id");
-        CompletableFuture<Map<String, Object>> done = turnDone;
-        if (id != null && id.equals(turnId) && done != null) {
+        CompletableFuture<Map<String, Object>> done = null;
+        synchronized (turnLock) {
+          if (id != null && id.equals(turnId) && turnDone != null) {
+            done = turnDone;
+          } else if (id != null) {
+            completedTurns.put(id, turn);
+          }
+        }
+        if (done != null) {
           done.complete(turn);
-        } else if (id != null) {
-          completedTurns.put(id, turn);
         }
         return;
       }
@@ -367,6 +449,11 @@ final class CodexSession implements AgentSession {
         Map<String, Object> tu = Json.obj(params, "tokenUsage");
         Map<String, Object> u = CodexEvents.usage(tu);
         long total = ((Number) u.get("totalTokens")).longValue();
+        if (!turnsStarted) {
+          // codex replays a resumed thread's totals before any turn of ours: that is the baseline
+          baseline = total;
+          return;
+        }
         if (baseline < 0) {
           baseline = Math.max(0, total - Json.num(Json.obj(tu, "last"), "totalTokens", total));
         }
@@ -402,6 +489,10 @@ final class CodexSession implements AgentSession {
       }
     }
     for (AgentEvent e : CodexEvents.map(method, params)) {
+      if (AgentEvent.MESSAGE.equals(e.type()) && e.data().get("phase") == null && lastFinalEmitted != null
+          && lastFinalEmitted.equals(e.data().get("text"))) {
+        continue; // codex repeats a review's text as a plain agent message after exitedReviewMode
+      }
       if (AgentEvent.MESSAGE.equals(e.type()) && "final_answer".equals(e.data().get("phase"))) {
         // a review ends with both an agent message and an exitedReviewMode item carrying the same text
         String text = String.valueOf(e.data().get("text"));

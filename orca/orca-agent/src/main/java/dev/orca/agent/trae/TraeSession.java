@@ -308,6 +308,8 @@ final class TraeSession implements AgentSession {
 
   @Override
   public synchronized TurnResult runTurn(TurnSpec turn, AgentEventSink eventSink) throws AgentException {
+    // from here a cancel belongs to this turn, even before the prompt is sent
+    userCancelled = false;
     sink = eventSink;
     usage = Map.of();
     synchronized (segment) {
@@ -355,13 +357,19 @@ final class TraeSession implements AgentSession {
     TurnResult.Status status = TurnResult.Status.COMPLETED;
     String code = null;
     String error = null;
-    userCancelled = false;
     try {
       Object result = null;
       String stop = null;
       for (int attempt = 0; ; attempt++) {
         declinedInTurn = null;
+        if (userCancelled) {
+          stop = "cancelled"; // cancelled before the prompt went out: TRAE would ignore session/cancel now
+          break;
+        }
         CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
+        if (userCancelled) {
+          interrupt(); // the cancel may have reached TRAE just before the prompt
+        }
         // continuations are part of the same turn and share its deadline
         result = clock.awaitWithinTurn(f, turn.timeout());
         stop = Json.str(result, "stopReason");
