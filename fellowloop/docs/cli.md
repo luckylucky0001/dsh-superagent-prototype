@@ -31,6 +31,7 @@ English: [cli.en.md](cli.en.md)
 | `fellowloop issue comment KEY "text"` | 评论；写 `@Agent` 让 Agent 在同一会话中继续 |
 | `fellowloop issue assign KEY AGENT` / `fellowloop issue status KEY STATUS` | 指派 / 改状态 |
 | `fellowloop agents` / `fellowloop runtimes` | Agent 与运行时列表 |
+| `fellowloop skills [--library]` / `fellowloop skill show NAME` | 技能列表（含哪些 Agent 在用）、内置技能库、某个技能的完整内容；只读，修改请在网页「设置 → 技能」，见 [技能使用指南](skills.md) |
 | `fellowloop ask AGENT "prompt" [--project KEY] [--follow-up TASK] [--no-wait]` | 直接提问；默认实时输出 Agent 的消息与命令，结束后返回；`--project` 让 Agent 在该项目仓库的全新检出中回答（否则是空的临时目录）；`--follow-up` 在上一个任务的会话与目录里追问（上一个任务失败、超时或被取消后也可以，用于从中断处继续） |
 | `fellowloop task show ID` / `follow ID` / `cancel ID` / `steer ID "text"` | 查看、跟随、取消任务，或在运行中插话 |
 | `fellowloop workflows` / `fellowloop runs [--limit N]` | 工作流与运行记录 |

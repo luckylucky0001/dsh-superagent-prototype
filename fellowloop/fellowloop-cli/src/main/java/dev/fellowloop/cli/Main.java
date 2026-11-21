@@ -93,6 +93,8 @@ public final class Main {
         case "issue" -> issue(a);
         case "agents" -> table(get("/api/agents"), List.of("name", "provider", "model", "permission", "id"));
         case "runtimes" -> table(get("/api/runtimes"), List.of("name", "status", "daemonVersion", "capacity", "id"));
+        case "skills" -> skills(a);
+        case "skill" -> skill(a);
         case "ask" -> ask(a);
         case "task" -> task(a);
         case "workflows" -> table(get("/api/workflows"), List.of("name", "enabled", "id"));
@@ -423,6 +425,73 @@ public final class Main {
   // ---------------------------------------------------------------- lookups
 
   /** Agent and member names by id, for showing who wrote what. */
+  /**
+   * Skills are read-only here: changing what agents are told needs a signed-in person in the web app
+   * (Settings &gt; Skills), which personal access tokens cannot do by design.
+   */
+  private int skills(Args a) throws IOException, InterruptedException {
+    if (a.flag("library")) {
+      return table(get("/api/skills/library"), List.of("name", "installed", "description"));
+    }
+    Map<String, List<String>> usedBy = usedBy();
+    List<Map<String, Object>> rows = new ArrayList<>();
+    for (Object sk : (List<?>) get("/api/skills")) {
+      Map<String, Object> row = new LinkedHashMap<>();
+      row.put("name", Json.str(sk, "name"));
+      row.put("usedBy", String.join(", ", usedBy.getOrDefault(Json.str(sk, "id"), List.of())));
+      row.put("description", Json.str(sk, "description"));
+      row.put("id", Json.str(sk, "id"));
+      rows.add(row);
+    }
+    return table(rows, List.of("name", "usedBy", "description"));
+  }
+
+  private int skill(Args a) throws IOException, InterruptedException {
+    String sub = a.arg(1, "skill show NAME");
+    if (!sub.equals("show")) {
+      throw new CliException(2, "unknown: skill " + sub + " (skills are edited in the web app: Settings > Skills)");
+    }
+    String ref = a.arg(2, "skill show NAME");
+    Object found = null;
+    for (Object sk : (List<?>) get("/api/skills")) {
+      if (ref.equalsIgnoreCase(Json.str(sk, "name")) || ref.equals(Json.str(sk, "id"))) {
+        found = sk;
+      }
+    }
+    if (found == null) {
+      for (Object lib : (List<?>) get("/api/skills/library")) {
+        if (ref.equalsIgnoreCase(Json.str(lib, "name"))) {
+          throw new CliException(1, ref + " is in the built-in library but not added yet: Settings > Skills > Library > Add");
+        }
+      }
+      throw new CliException(1, "no skill named " + ref + " (fellowloop skills lists them)");
+    }
+    if (json) {
+      return print(found);
+    }
+    List<String> agents = usedBy().getOrDefault(Json.str(found, "id"), List.of());
+    out.println(Json.str(found, "name") + (Json.str(found, "description") != null ? "  " + Json.str(found, "description") : ""));
+    out.println("used by " + (agents.isEmpty() ? "no agent yet" : String.join(", ", agents)) + " | updated "
+        + time(Json.num(found, "updatedAt", 0)));
+    out.println();
+    out.println(String.valueOf(Json.str(found, "content")).strip());
+    return 0;
+  }
+
+  /** Skill id -> names of the agents that use it. */
+  private Map<String, List<String>> usedBy() throws IOException, InterruptedException {
+    Map<String, List<String>> m = new LinkedHashMap<>();
+    for (Object ag : (List<?>) get("/api/agents")) {
+      Object refs = ag instanceof Map<?, ?> map ? map.get("skills") : null;
+      if (refs instanceof List<?> l) {
+        for (Object r : l) {
+          m.computeIfAbsent(String.valueOf(r), k -> new ArrayList<>()).add(Json.str(ag, "name"));
+        }
+      }
+    }
+    return m;
+  }
+
   private Map<String, String> names() throws IOException, InterruptedException {
     Map<String, String> m = new LinkedHashMap<>();
     for (Object ag : (List<?>) get("/api/agents")) {
@@ -693,6 +762,7 @@ public final class Main {
           fellowloop issue status KEY STATUS
 
           fellowloop agents | runtimes
+          fellowloop skills [--library] | skill show NAME   (edit skills in the web app)
           fellowloop ask AGENT "prompt" [--project KEY] [--follow-up TASK] [--no-wait]
           fellowloop task show|follow|cancel ID
           fellowloop task steer ID "text"
@@ -758,11 +828,11 @@ public final class Main {
       return a;
     }
 
-    private static final Set<String> KNOWN = Set.of("all", "assign", "comment", "description", "description-file",
+    private static final Set<String> KNOWN = Set.of("all", "library", "assign", "comment", "description", "description-file",
         "email", "follow-up", "h", "help", "input", "json", "label", "limit", "no-wait", "priority", "project",
         "server", "status", "title", "token", "wait");
 
-    private static final Set<String> FLAGS = Set.of("json", "help", "all", "wait", "no-wait");
+    private static final Set<String> FLAGS = Set.of("json", "help", "all", "library", "wait", "no-wait");
 
     boolean flag(String key) {
       return options.containsKey(key);

@@ -6,7 +6,7 @@
 
 📘 **[Technical design & Codex / TRAE walkthrough (PDF, 中文)](docs/Fellowloop-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and a live demo with real Codex and TRAE CLI runs on an automotive parts-warehouse (WMS) codebase: putaway, FIFO line-side picking with a three-round review loop, Codex's built-in reviewer, approval escalation, and a cycle-count feature implemented by TRAE and reviewed by Codex until approved.
 
-**English docs:** [Operations guide](docs/operations.en.md) · [CLI reference](docs/cli.en.md) · [Changelog (中文)](CHANGELOG.md)
+**English docs:** [Operations guide](docs/operations.en.md) · [CLI reference](docs/cli.en.md) · [Skills guide](docs/skills.en.md) · [Changelog (中文)](CHANGELOG.md)
 
 ---
 
@@ -129,6 +129,7 @@ fellowloop issue create --project WMS --title "Reject putaway into blocked bins"
 fellowloop ask Codex --project WMS "Where is FIFO enforced for line-side picks?"
 fellowloop run "Nightly WMS health check" --wait        # 按名称或 id 运行一个已启用的工作流
 fellowloop inbox && fellowloop approve inb_... --comment "ok"
+fellowloop skills && fellowloop skill show git-commits   # 查看技能及使用它的 Agent（只读）
 ```
 
 所有命令都支持 `--json`；CI 中可直接用 `FELLOWLOOP_SERVER` / `FELLOWLOOP_TOKEN` 环境变量。完整参考见 [docs/cli.md](docs/cli.md)。
@@ -148,7 +149,7 @@ fellowloop inbox && fellowloop approve inb_... --comment "ok"
 - **MCP 回写**：Agent 运行中可通过 Fellowloop 的 MCP 工具读 Issue、发进展、改状态（每个任务一个短期 token）。
 - **Git**：项目配置仓库后，每个 Issue 一个分支 `fellowloop/<key>`，同一 Issue 的 Agent 共享工作目录；遗留改动自动提交。
 - **两种 CLI 同等支持**：Codex（app-server）与 TRAE CLI 2.x（ACP）都经过实机验证；驱动抹平两者在模型命名、权限语义（TRAE 工作区默认联网 → Fellowloop 自定义档位关闭）、拒绝审批后的行为、插话能力与用量口径上的差异，同一条工作流可以让 TRAE 实现、Codex 评审，或反过来。
-- **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。内置 9 个经过整理的技能（git 提交规范、测试纪律、代码评审清单、安全基线、Java/Spring、Python、TypeScript/React、仓储 WMS 约定、汽车物流领域知识），首次启动自动导入，之后可在「技能 → 从内置库添加」补回缺少的技能（已存在的同名技能不会被覆盖）。
+- **技能（Skills）**：可复用的 Markdown 指令库，Agent 选用后每个任务自动注入（Codex 与 TRAE 通用）。内置 9 个经过整理的技能（git 提交规范、测试纪律、代码评审清单、安全基线、Java/Spring、Python、TypeScript/React、仓储 WMS 约定、汽车物流领域知识），首次启动自动导入，之后可在「技能 → 从内置库添加」补回缺少的技能（已存在的同名技能不会被覆盖）。新建技能、给 Agent 选用、编写建议与模板见 [技能使用指南](docs/skills.md)；命令行可用 `fellowloop skills` 查看。
 - **审计日志**：登录（含失败与锁定）、令牌、成员与角色、Agent 权限变更（档位、命令白名单、联网、审批升级）、运行时接入与移除、审批决定（含被批准的命令）、工作流与项目变更，记录操作人、时间与来源 IP；设置 → 审计日志 查看，可导出 CSV。
 - **命令行与令牌**：`fellowloop` CLI 覆盖 Issue、Agent、提问、任务、工作流、收件箱；个人访问令牌可在设置页创建与吊销。
 - **成员与用量**：成员/角色管理，按 Agent、按天的运行与 token 统计。

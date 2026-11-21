@@ -872,4 +872,28 @@ class EndToEndTest {
     assertEquals(404, raw(http, "PATCH", "/api/issues/" + id, Map.of("title", "Changed", "assigneeId", "no-such-agent"), null).status());
     assertEquals("Keep me", Json.str(call("GET", "/api/issues/" + id, null), "title"), "a 400 leaves nothing half-applied");
   }
+
+  @Test
+  void theCliListsAndShowsSkillsReadOnly() throws Exception {
+    String pat = Json.str(call("POST", "/api/auth/tokens", Map.of("label", "skills", "days", 1)), "token");
+    Path config = Files.createTempFile("fellowloop-cli", ".json");
+    Map<String, String> env = Map.of("FELLOWLOOP_SERVER", "http://localhost:" + port, "FELLOWLOOP_TOKEN", pat,
+        "FELLOWLOOP_CLI_CONFIG", config.toString());
+    Cli list = cli(env, "skills");
+    assertEquals(0, list.code(), list.err());
+    assertTrue(list.out().contains("git-commits") && list.out().contains("USED BY"), list.out());
+    Cli show = cli(env, "skill", "show", "GIT-COMMITS");
+    assertEquals(0, show.code(), show.err());
+    assertTrue(show.out().contains("# Commits"), "the full Markdown is printed: " + show.out());
+    assertEquals(0, cli(env, "skills", "--library").code());
+    // a built-in skill that was removed: the CLI says how to add it back
+    String id = ((List<?>) call("GET", "/api/skills", null)).stream().filter(x -> "security-basics".equals(Json.str(x, "name")))
+        .map(x -> Json.str(x, "id")).findFirst().orElseThrow();
+    call("DELETE", "/api/skills/" + id, null);
+    Cli missing = cli(env, "skill", "show", "security-basics");
+    assertEquals(1, missing.code());
+    assertTrue(missing.err().contains("Settings > Skills > Library"), missing.err());
+    call("POST", "/api/skills/library/security-basics", null);
+    assertEquals(2, cli(env, "skill", "edit", "git-commits").code(), "skills are changed in the web app, not with a token");
+  }
 }

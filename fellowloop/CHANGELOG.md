@@ -71,6 +71,8 @@
 
 ### 其他
 
+- 命令行新增只读的 `fellowloop skills [--library]` 与 `fellowloop skill show NAME`：列出技能及使用它的 Agent、查看内置技能库与技能全文；新增《技能使用指南》（docs/skills.md / skills.en.md）。
+
 - 发到 Issue 的评论使用仓库相对路径。
 - GitHub / GitLab / Bitbucket 仓库地址的路径不区分大小写。
 - 收件箱“本任务内允许”附说明。

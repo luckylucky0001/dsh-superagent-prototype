@@ -31,6 +31,7 @@ A token does day-to-day work as its creator (issues, questions, tasks, workflows
 | `fellowloop issue comment KEY "text"` | Comment; write `@Agent` to have the agent continue in the same session |
 | `fellowloop issue assign KEY AGENT` / `fellowloop issue status KEY STATUS` | Assign / change status |
 | `fellowloop agents` / `fellowloop runtimes` | List agents and runtimes |
+| `fellowloop skills [--library]` / `fellowloop skill show NAME` | Skills (and which agents use them), the built-in library, the full text of one skill; read only, edit them in the web app under Settings → Skills — see the [skills guide](skills.en.md) |
 | `fellowloop ask AGENT "prompt" [--project KEY] [--follow-up TASK] [--no-wait]` | Ask directly; by default streams the agent's messages and commands live and returns when it finishes; `--project` makes the agent answer in a fresh checkout of that project's repository (otherwise in an empty temporary directory); `--follow-up` asks a follow-up in the previous task's session and directory (this also works after the previous task failed, timed out or was cancelled, to continue from where it stopped) |
 | `fellowloop task show ID` / `follow ID` / `cancel ID` / `steer ID "text"` | View, follow or cancel a task, or send it a message while it is running |
 | `fellowloop workflows` / `fellowloop runs [--limit N]` | Workflows and run records |
