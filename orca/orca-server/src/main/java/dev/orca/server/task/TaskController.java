@@ -37,7 +37,7 @@ public class TaskController {
 
   @PostMapping("/{id}/cancel")
   public Views.TaskView cancel(@PathVariable String id) {
-    return Views.TaskView.of(tasks.cancel(id, "cancelled by a person"));
+    return Views.TaskView.of(dev.orca.server.support.Retry.onConflict(() -> tasks.cancel(id, "cancelled by a person")));
   }
 
   public record SteerInput(String text) {}
