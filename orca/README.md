@@ -133,6 +133,8 @@ orca inbox && orca approve inb_... --comment "ok"
 
 备份、恢复、升级、令牌管理与故障排查见 **[运维手册 docs/operations.md](docs/operations.md)**。
 
+版本变化见 **[CHANGELOG.md](CHANGELOG.md)**。
+
 ## 功能一览
 
 - **看板与 Issue**：多项目、Issue key（如 `APP-12`）、评论（支持 `@Agent`）、指派给 Agent 或成员。
