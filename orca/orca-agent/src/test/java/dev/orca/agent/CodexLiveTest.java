@@ -8,6 +8,7 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 import dev.orca.agent.codex.CodexConfig;
 import dev.orca.agent.codex.CodexProvider;
 import dev.orca.agent.core.AgentSession;
+import dev.orca.agent.core.Executables;
 import dev.orca.agent.core.Interaction;
 import dev.orca.agent.core.Permission;
 import dev.orca.agent.core.SessionSpec;
@@ -117,6 +118,38 @@ class CodexLiveTest {
       System.out.println("interrupt: " + r.status() + " " + r.errorCode());
       assertEquals(TurnResult.Status.INTERRUPTED, r.status());
       assertFalse(events.isEmpty());
+    }
+  }
+
+  @Test
+  void cancellingANativeReviewStopsIt() throws Exception {
+    // codex runs a review as a sub-turn with its own id; interrupting the review/start id was ignored before
+    Path dir = Files.createTempDirectory("orca-live-review");
+    Executables.run(List.of("git", "init", "-q", dir.toString()), Map.of(), 30);
+    Files.writeString(dir.resolve("m.py"), "def add(a, b):\n    return a + b\n");
+    Executables.run(List.of("git", "-C", dir.toString(), "add", "-A"), Map.of(), 30);
+    Executables.run(List.of("git", "-C", dir.toString(), "-c", "user.name=t", "-c", "user.email=t@t", "commit", "-qm", "init"),
+        Map.of(), 30);
+    Files.writeString(dir.resolve("m.py"), "def add(a, b):\n    return a - b\n");
+    List<AgentEvent> events = new CopyOnWriteArrayList<>();
+    try (AgentSession s = provider().open(new SessionSpec(dir, MODEL, "low", null, Permission.READ_ONLY, null, null, null,
+        null, null, null), ACCEPT_ALL)) {
+      Thread killer = Thread.ofVirtual().start(() -> {
+        try {
+          for (int i = 0; i < 600 && events.stream().noneMatch(e -> e.type().equals(AgentEvent.TURN_STARTED)); i++) {
+            Thread.sleep(100);
+          }
+          Thread.sleep(1500);
+          s.interrupt();
+        } catch (InterruptedException ignored) {
+          // test ends
+        }
+      });
+      TurnResult r = s.runTurn(new TurnSpec("", List.of(), null, Duration.ofMinutes(5), Map.of("type", "uncommittedChanges")),
+          events::add);
+      killer.join();
+      System.out.println("review interrupt: " + r.status() + " " + r.errorCode());
+      assertEquals(TurnResult.Status.INTERRUPTED, r.status());
     }
   }
 
