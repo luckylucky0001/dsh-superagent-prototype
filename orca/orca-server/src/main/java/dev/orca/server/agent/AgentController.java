@@ -51,6 +51,29 @@ public class AgentController {
     return m;
   }
 
+  /**
+   * What an approved command can do outside the sandbox is set by these fields; only owners and admins change
+   * them (an allow-listed {@code python3} is code execution on the runtime machine).
+   */
+  private static void checkPowers(Agent a, java.util.Map<String, Object> before) {
+    if (dev.orca.server.auth.Roles.isAdmin()) {
+      return;
+    }
+    java.util.Map<String, Object> after = powers(a);
+    for (String k : java.util.List.of("permission", "allowedCommands", "extraArgs", "networkAccess")) {
+      Object was = before == null ? null : before.get(k);
+      Object now = after.get(k);
+      boolean widened = before == null
+          ? "permission".equals(k) ? "full".equals(now) : "networkAccess".equals(k) ? Boolean.TRUE.equals(now)
+              : now != null && !now.equals("[]")
+          : !java.util.Objects.equals(was, now);
+      if (widened) {
+        throw new ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+            "only owners and admins can change an agent's permission tier, allowed commands, extra arguments or network access");
+      }
+    }
+  }
+
   private static String sha256(String s) {
     if (s == null) {
       return "";
@@ -94,6 +117,7 @@ public class AgentController {
     a.maxConcurrency = 1;
     a.timeoutMinutes = 60;
     apply(a, in);
+    checkPowers(a, null);
     if (a.name == null) {
       throw ApiException.bad("name is required");
     }
@@ -112,6 +136,7 @@ public class AgentController {
     Agent a = find(id);
     java.util.Map<String, Object> before = powers(a);
     apply(a, in);
+    checkPowers(a, before);
     java.util.Map<String, Object> after = powers(a);
     java.util.Map<String, Object> changes = new java.util.LinkedHashMap<>();
     for (String k : after.keySet()) {

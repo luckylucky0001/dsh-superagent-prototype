@@ -216,4 +216,22 @@ class WorkflowEngineTest {
     assertEquals(RunStatus.SUCCEEDED, s.status);
     assertEquals(NodeStatus.SUCCEEDED, s.node("join").status);
   }
+
+  @Test
+  void onlyTheNodeThatFailedTheRunCanBeRetried() {
+    var handled = new NodeDef("f", "t.flaky", "Flaky", Map.of(), 0, 0, NodeDef.OnError.CONTINUE, Map.of());
+    var def = new WorkflowDefinition(
+        List.of(node("start", "t.manual", Map.of()), handled, node("g", "t.flaky", Map.of())),
+        List.of(new EdgeDef("e1", "start", "f"), new EdgeDef("e2", "start", "g")));
+    failures.set(2); // both f (failure handled) and g (failure fails the run) fail once
+    RunState s = engine.start("r", "w", def, "start", Map.of());
+    assertEquals(RunStatus.FAILED, s.status);
+    assertEquals(NodeStatus.FAILED, s.node("f").status);
+    assertEquals(NodeStatus.FAILED, s.node("g").status);
+    org.junit.jupiter.api.Assertions.assertThrows(IllegalStateException.class, () -> engine.retry(s, def, "f"),
+        "retrying the handled failure would report the run succeeded while g is still failed");
+    engine.retry(s, def, "g");
+    assertEquals(RunStatus.SUCCEEDED, s.status);
+  }
+
 }

@@ -28,6 +28,23 @@ public class AuthFilter extends OncePerRequestFilter {
   private static final List<String> OPEN = List.of("/api/auth/login", "/api/daemon/register", "/api/daemon/ws", "/api/daemon/whoami",
       "/api/hooks/", "/api/health", "/api/mcp");
 
+  /**
+   * Changing what agents may do (their configuration, the shared skills, workflow definitions) needs a
+   * signed-in person; a token can still ask agents, run workflows and answer the inbox.
+   */
+  static boolean configuresAgents(String path) {
+    if (path.startsWith("/api/skills")) {
+      return true;
+    }
+    if (path.startsWith("/api/agents")) {
+      return !path.matches("/api/agents/[^/]+/ask");
+    }
+    if (path.startsWith("/api/workflows")) {
+      return !path.matches("/api/workflows/[^/]+/runs") && !path.equals("/api/workflows/validate");
+    }
+    return false;
+  }
+
   /** Authenticated inside the controller (session or task token). */
   private static boolean selfAuthenticated(String path) {
     return path.startsWith("/api/attachments/") && path.endsWith("/file");
@@ -73,13 +90,13 @@ public class AuthFilter extends OncePerRequestFilter {
       return;
     }
     if (AuthService.PERSONAL.equals(tok.get().kind) && !"GET".equals(req.getMethod())
-        && ACCOUNT_ADMIN.stream().anyMatch(path::startsWith)) {
+        && (ACCOUNT_ADMIN.stream().anyMatch(path::startsWith) || configuresAgents(path))) {
       // a leaked token must not be able to change passwords, mint more tokens, manage members or add machines
       res.setStatus(403);
       res.setContentType("application/json");
       res.setCharacterEncoding("UTF-8");
-      res.getWriter().write("{\"error\":\"personal access tokens cannot manage members, tokens, runtimes or projects; "
-          + "sign in to the web app for that\"}");
+      res.getWriter().write("{\"error\":\"personal access tokens cannot manage members, tokens, runtimes, projects, agents, "
+          + "skills or workflow definitions; sign in to the web app for that\"}");
       return;
     }
     req.setAttribute(CurrentUser.ATTR, m.get());

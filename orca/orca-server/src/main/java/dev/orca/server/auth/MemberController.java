@@ -81,6 +81,11 @@ public class MemberController {
       requireAdmin();
     }
     Member m = members.findById(id).orElseThrow(() -> ApiException.notFound("member"));
+    // an admin manages members, not the owner or other admins: only the owner can reset an admin's password,
+    // and nobody but the owner changes the owner's account
+    if (!self && ("owner".equals(m.role) || "admin".equals(m.role) && !"owner".equals(me.role))) {
+      throw new ApiException(HttpStatus.FORBIDDEN, "only the owner can change another admin's or the owner's account");
+    }
     if (in.name() != null && !in.name().isBlank()) {
       m.name = in.name().trim();
     }

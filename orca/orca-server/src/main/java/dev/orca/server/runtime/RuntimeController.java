@@ -46,6 +46,7 @@ public class RuntimeController {
 
   @PostMapping("/api/runtimes/registration-codes")
   public Map<String, Object> code() {
+    dev.orca.server.auth.Roles.requireAdmin("add runtimes");
     audit.record("runtime.registration_code", "runtime", null, Map.of());
     String code = auth.issueRegistrationCode(CurrentUser.id(), "runtime registration");
     String server = props.publicUrl();
@@ -84,6 +85,7 @@ public class RuntimeController {
 
   @PostMapping("/api/runtimes/{id}/probe")
   public Map<String, Object> probe(@PathVariable String id) {
+    dev.orca.server.auth.Roles.requireAdmin("re-probe runtimes");
     if (!gateway.send(id, Wire.frame(Wire.PROBE, Map.of()))) {
       throw ApiException.bad("the runtime is offline");
     }
@@ -92,6 +94,7 @@ public class RuntimeController {
 
   @DeleteMapping("/api/runtimes/{id}")
   public Map<String, Object> delete(@PathVariable String id) {
+    dev.orca.server.auth.Roles.requireAdmin("remove runtimes");
     String name = runtimes.find(id).map(r -> r.name).orElseThrow(() -> ApiException.notFound("runtime"));
     gateway.disconnect(id);
     runtimes.delete(id);

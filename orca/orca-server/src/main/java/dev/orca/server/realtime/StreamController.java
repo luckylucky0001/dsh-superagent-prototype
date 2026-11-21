@@ -14,7 +14,8 @@ public class StreamController {
   }
 
   @GetMapping(path = "/api/stream", produces = MediaType.TEXT_EVENT_STREAM_VALUE)
-  public SseEmitter stream() {
-    return realtime.subscribe();
+  public SseEmitter stream(jakarta.servlet.http.HttpServletRequest req) {
+    String token = dev.orca.server.auth.AuthFilter.token(req);
+    return realtime.subscribe(token == null ? null : dev.orca.server.auth.AuthService.hash(token));
   }
 }

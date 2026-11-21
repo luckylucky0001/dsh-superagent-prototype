@@ -14,6 +14,7 @@ import dev.orca.server.support.ApiException;
 import dev.orca.server.support.Ids;
 import dev.orca.server.support.JsonCols;
 import dev.orca.server.task.TaskFinished;
+import dev.orca.server.task.TaskStatus;
 import dev.orca.workflow.engine.NodeState;
 import dev.orca.workflow.engine.NodeStatus;
 import dev.orca.workflow.engine.RunListener;
@@ -55,10 +56,12 @@ public class WorkflowService {
   private final WorkflowEngine engine;
   private final WorkflowValidator validator;
   private final org.springframework.transaction.support.TransactionTemplate isolated;
+  private final dev.orca.server.repo.TaskRepo taskRepo;
 
   public WorkflowService(WorkflowRepo workflows, WorkflowVersionRepo versions, WorkflowRunRepo runs,
       InboxService inbox, Realtime realtime, List<NodeComponent> components,
-      org.springframework.transaction.PlatformTransactionManager txm) {
+      org.springframework.transaction.PlatformTransactionManager txm, dev.orca.server.repo.TaskRepo taskRepo) {
+    this.taskRepo = taskRepo;
     this.isolated = new org.springframework.transaction.support.TransactionTemplate(txm);
     this.isolated.setPropagationBehavior(org.springframework.transaction.TransactionDefinition.PROPAGATION_REQUIRES_NEW);
     this.workflows = workflows;
@@ -305,8 +308,8 @@ public class WorkflowService {
     }
   }
 
+  /** Each run in its own transaction: one that cannot be advanced must not hold up the others' timeouts. */
   @Scheduled(fixedDelay = 15_000, initialDelay = 15_000)
-  @Transactional
   public void expireDeadlines() {
     long now = Ids.now();
     for (WorkflowRun run : runs.findByStatusIn(List.of("waiting", "running"))) {
@@ -314,8 +317,35 @@ public class WorkflowService {
       s.nodes.forEach((nodeId, ns) -> {
         if (ns.status == NodeStatus.WAITING && ns.deadlineAt > 0 && ns.deadlineAt < now) {
           String key = ns.waitKey;
-          mutate(run.id, r -> engine.failWaiting(state(r), definition(r), nodeId, key, "timed out"));
+          try {
+            isolated.executeWithoutResult(st ->
+                mutate(run.id, r -> engine.failWaiting(state(r), definition(r), nodeId, key, "timed out")));
+          } catch (RuntimeException ex) {
+            log.error("could not time out node {} of run {}", nodeId, run.id, ex);
+          }
         }
+      });
+    }
+  }
+
+  /**
+   * A task's result reaches its run by an event after the task is saved; if that was lost (a crash in
+   * between, an error while resuming), the node would wait forever. Nodes still waiting on a task that
+   * finished more than a minute ago get its result again.
+   */
+  @Scheduled(fixedDelay = 60_000, initialDelay = 60_000)
+  public void redeliverFinishedTasks() {
+    long before = Ids.now() - 60_000;
+    for (WorkflowRun run : runs.findByStatusIn(List.of("waiting"))) {
+      state(run).nodes.forEach((nodeId, ns) -> {
+        if (ns.status != NodeStatus.WAITING || ns.waitKey == null || !ns.waitKey.startsWith("tsk_")) {
+          return;
+        }
+        taskRepo.findById(ns.waitKey).filter(t -> TaskStatus.TERMINAL.contains(t.status)
+            && t.finishedAt != null && t.finishedAt < before).ifPresent(t -> {
+              log.warn("run {} node {} was still waiting for finished task {}; delivering its result", run.id, nodeId, t.id);
+              onTaskFinished(new TaskFinished(t));
+            });
       });
     }
   }

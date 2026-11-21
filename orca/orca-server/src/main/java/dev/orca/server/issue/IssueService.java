@@ -50,7 +50,9 @@ public class IssueService {
   public record IssueInput(String projectId, String title, String description, String status, String priority,
       String assigneeType, String assigneeId, List<String> labels) {}
 
-  @Transactional
+  // a validation error (unknown issue, status or project) must not mark a workflow's surrounding transaction
+  // rollback-only: the engine records the failed node, and its run must still be saved
+  @Transactional(noRollbackFor = ApiException.class)
   public Issue create(IssueInput in, String actorType, String actorId) {
     if (in.title() == null || in.title().isBlank()) {
       throw ApiException.bad("title is required");
@@ -86,7 +88,9 @@ public class IssueService {
   public record IssuePatch(String title, String description, String status, String priority, String assigneeType,
       String assigneeId, List<String> labels, Boolean clearAssignee) {}
 
-  @Transactional
+  // a validation error (unknown issue, status or project) must not mark a workflow's surrounding transaction
+  // rollback-only: the engine records the failed node, and its run must still be saved
+  @Transactional(noRollbackFor = ApiException.class)
   public Issue update(String id, IssuePatch patch, String actorType, String actorId) {
     Issue i = get(id);
     String oldStatus = i.status;
@@ -127,7 +131,9 @@ public class IssueService {
     return i;
   }
 
-  @Transactional
+  // a validation error (unknown issue, status or project) must not mark a workflow's surrounding transaction
+  // rollback-only: the engine records the failed node, and its run must still be saved
+  @Transactional(noRollbackFor = ApiException.class)
   public Comment comment(String issueId, String body, String authorType, String authorId, String taskId) {
     Issue i = get(issueId);
     if (body == null || body.isBlank()) {

@@ -141,6 +141,11 @@ public final class WorkflowEngine {
     if (ns.status != NodeStatus.FAILED || s.status != RunStatus.FAILED) {
       throw new IllegalStateException("only a failed node of a failed run can be retried");
     }
+    // a node whose failure was handled (onError: continue) already took its error path; only the node that
+    // failed the run can be retried, or the run would end "succeeded" while that node is still failed
+    if (def.requireNode(nodeId).onError() == NodeDef.OnError.CONTINUE) {
+      throw new IllegalStateException("node " + nodeId + " handled its failure; retry the node that failed the run");
+    }
     s.status = RunStatus.RUNNING;
     s.error = null;
     s.finishedAt = 0;

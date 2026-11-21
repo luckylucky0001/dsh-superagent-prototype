@@ -96,13 +96,16 @@ public class ReviewLoopComponent implements NodeComponent {
       return enqueue(ctx, state, agent(ctx.string("reviewer")), review, "new", VERDICT);
     }
     Map<String, Object> verdict = p.get("structured") instanceof Map<?, ?> m ? Json.toMap(m) : Map.of();
-    String v = String.valueOf(verdict.getOrDefault("verdict", "changes_requested"));
-    history.add(Map.of("round", round, "verdict", v, "summary", String.valueOf(verdict.getOrDefault("summary", "")),
-        "issues", verdict.getOrDefault("issues", List.of())));
+    // a CLI may return the verdict loosely (TRAE does not validate against the schema): "PASS", issues as a
+    // string or null; read it forgivingly instead of failing the loop or burning a round
+    String v = normalizeVerdict(verdict.get("verdict"));
+    String summary = verdict.get("summary") == null ? "" : String.valueOf(verdict.get("summary"));
+    List<String> issues = issueList(verdict.get("issues"));
+    history.add(Map.of("round", round, "verdict", v, "summary", summary, "issues", issues));
     state.put("history", history);
     state.put("verdict", v);
-    state.put("summary", verdict.getOrDefault("summary", ""));
-    state.put("issues", verdict.getOrDefault("issues", List.of()));
+    state.put("summary", summary);
+    state.put("issues", issues);
     state.put("rounds", round);
     if ("pass".equals(v)) {
       state.remove("phase");
@@ -115,7 +118,7 @@ public class ReviewLoopComponent implements NodeComponent {
     state.put("round", round + 1);
     state.put("phase", "implement");
     List<String> points = new ArrayList<>();
-    for (Object o : (List<Object>) state.get("issues")) {
+    for (String o : issues) {
       points.add("- " + o);
     }
     String fix = "The reviewer requested changes (round " + round + " of " + max + "):\n\n" + state.get("summary") + "\n"
@@ -156,4 +159,26 @@ public class ReviewLoopComponent implements NodeComponent {
     }
     return agents.findById(ref).or(() -> agents.findByNameIgnoreCase(ref)).orElse(null);
   }
+
+  /** "pass" in any letter case or spacing (also "passed", "approved"); anything else asks for changes. */
+  static String normalizeVerdict(Object raw) {
+    String v = raw == null ? "" : String.valueOf(raw).trim().toLowerCase(java.util.Locale.ROOT).replace(' ', '_');
+    return v.equals("pass") || v.equals("passed") || v.equals("approved") ? "pass" : "changes_requested";
+  }
+
+  /** The reviewer's points as strings: a list, a single string, or nothing. */
+  static List<String> issueList(Object raw) {
+    List<String> out = new ArrayList<>();
+    if (raw instanceof java.util.Collection<?> c) {
+      for (Object o : c) {
+        if (o != null && !String.valueOf(o).isBlank()) {
+          out.add(o instanceof Map<?, ?> m ? Json.write(m) : String.valueOf(o));
+        }
+      }
+    } else if (raw != null && !String.valueOf(raw).isBlank()) {
+      out.add(String.valueOf(raw));
+    }
+    return out;
+  }
+
 }

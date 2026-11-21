@@ -21,14 +21,36 @@ import org.springframework.web.servlet.mvc.method.annotation.SseEmitter;
 public class Realtime {
 
   private final Set<SseEmitter> emitters = new CopyOnWriteArraySet<>();
+  /** The token hash each stream was opened with: the stream ends when that token stops being valid. */
+  private final Map<SseEmitter, String> owners = new java.util.concurrent.ConcurrentHashMap<>();
   private final AtomicLong ids = new AtomicLong();
+  private final dev.orca.server.repo.ApiTokenRepo tokens;
+
+  /** Streams one token may hold open at a time (browser tabs). */
+  static final int PER_TOKEN = 20;
+
+  public Realtime(dev.orca.server.repo.ApiTokenRepo tokens) {
+    this.tokens = tokens;
+  }
 
   public SseEmitter subscribe() {
+    return subscribe(null);
+  }
+
+  /** {@code tokenHash}: the session or personal token the stream was opened with. */
+  public SseEmitter subscribe(String tokenHash) {
     SseEmitter e = new SseEmitter(0L);
+    if (tokenHash != null && owners.values().stream().filter(tokenHash::equals).count() >= PER_TOKEN) {
+      e.complete();
+      return e;
+    }
     emitters.add(e);
-    e.onCompletion(() -> emitters.remove(e));
-    e.onTimeout(() -> emitters.remove(e));
-    e.onError(x -> emitters.remove(e));
+    if (tokenHash != null) {
+      owners.put(e, tokenHash);
+    }
+    e.onCompletion(() -> drop(e));
+    e.onTimeout(() -> drop(e));
+    e.onError(x -> drop(e));
     send(e, "hello", Map.of("ok", true));
     return e;
   }
@@ -82,9 +104,22 @@ public class Realtime {
     }
   }
 
+  private void drop(SseEmitter e) {
+    emitters.remove(e);
+    owners.remove(e);
+  }
+
   @Scheduled(fixedDelay = 20_000)
   void keepAlive() {
+    long now = System.currentTimeMillis();
     for (SseEmitter e : emitters) {
+      String owner = owners.get(e);
+      // signed out, password changed, member removed or token expired: stop streaming to it
+      if (owner != null && tokens.findByTokenHash(owner).filter(t -> t.expiresAt == null || t.expiresAt > now).isEmpty()) {
+        drop(e);
+        e.complete();
+        continue;
+      }
       try {
         e.send(SseEmitter.event().comment("ping"));
       } catch (IOException | IllegalStateException ex) {

@@ -634,7 +634,12 @@ public class TaskService {
     statuses.add(TaskStatus.QUEUED); // re-queued while the runtime was out of reach
     for (Task t : tasks.findByStatusIn(statuses)) {
       boolean mine = runtimeId.equals(t.runtimeId);
-      if (known.contains(t.id) && (mine || t.runtimeId == null && TaskStatus.QUEUED.equals(t.status))) {
+      // a re-queued task is taken back only by the runtime its agent is bound to (dispatch only ever sends it
+      // there) and only if it had been sent out before: any other runtime claiming it is refused
+      boolean adoptable = t.runtimeId == null && TaskStatus.QUEUED.equals(t.status)
+          && t.statusDetail != null && t.statusDetail.startsWith("re-queued")
+          && agents.findById(t.agentId).map(a -> runtimeId.equals(a.runtimeId)).orElse(false);
+      if (known.contains(t.id) && (mine || adoptable)) {
         // still running there: renew the lease now (expiry may run before the first heartbeat), and take back
         // a task that was re-queued while the runtime was out of reach instead of running it twice
         if (!mine) {

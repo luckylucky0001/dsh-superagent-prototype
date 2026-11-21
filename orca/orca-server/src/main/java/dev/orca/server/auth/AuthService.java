@@ -58,10 +58,21 @@ public class AuthService {
 
   @Transactional
   public Optional<String> login(String email, String password) {
-    return members.findByEmailIgnoreCase(email)
-        .filter(m -> m.passwordHash != null && encoder.matches(password, m.passwordHash))
-        .map(m -> issue(SESSION, m.id, null, "web session", SESSION_TTL));
+    // only plain ASCII addresses: the database's case folding would otherwise match look-alikes such as a
+    // long s, which also gave each variant its own failed-attempt counter
+    Optional<dev.orca.server.model.Member> m = email == null || !email.matches("\\p{ASCII}+")
+        ? Optional.empty() : members.findByEmailIgnoreCase(email);
+    if (m.isEmpty() || m.get().passwordHash == null) {
+      encoder.matches(String.valueOf(password), DUMMY_HASH); // same time as a wrong password: no address probing
+      return Optional.empty();
+    }
+    return m.filter(x -> encoder.matches(password, x.passwordHash))
+        .map(x -> issue(SESSION, x.id, null, "web session", SESSION_TTL));
   }
+
+  /** A hash of a random string, checked against when there is no such member. */
+  private final String DUMMY_HASH = new org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder()
+      .encode(Ids.random(24));
 
   /** Creates a token and returns its plaintext; only the hash is persisted. */
   @Transactional
@@ -97,12 +108,8 @@ public class AuthService {
   /** Consumes a registration code; returns false if it is unknown, used or expired. */
   @Transactional
   public boolean consumeRegistration(String code) {
-    Optional<ApiToken> t = verify(code, REGISTRATION).filter(x -> x.usedAt == null);
-    t.ifPresent(x -> {
-      x.usedAt = Ids.now();
-      tokens.save(x);
-    });
-    return t.isPresent();
+    // one atomic update: concurrent registrations with the same code cannot both succeed
+    return code != null && tokens.markUsed(hash(code), REGISTRATION, Ids.now()) == 1;
   }
 
   @Transactional

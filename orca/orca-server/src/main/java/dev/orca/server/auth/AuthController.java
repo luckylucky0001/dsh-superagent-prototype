@@ -71,7 +71,7 @@ public class AuthController {
 
   @PostMapping("/login")
   public Map<String, Object> login(@RequestBody LoginRequest req, HttpServletRequest http, HttpServletResponse res) {
-    String key = String.valueOf(req.email()).toLowerCase() + "|" + http.getRemoteAddr();
+    String key = String.valueOf(req.email()).toLowerCase(java.util.Locale.ROOT) + "|" + http.getRemoteAddr();
     long now = System.currentTimeMillis();
     if (failures.size() > 10_000) {
       failures.entrySet().removeIf(en -> en.getValue().stream().allMatch(t -> t < now - WINDOW_MS));
