@@ -89,7 +89,21 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 
 注意：这个回调地址里带有登录令牌，只在构建机上使用，不要发到聊天群或工单里。也可以改用个人访问令牌：`TRAECLI_PERSONAL_ACCESS_TOKEN=... traecli login --with-trae-pat`。
 
-## 6. 故障排查
+## 6. Agent 配置建议（Codex 与 TRAE）
+
+| 项目 | 建议 | 原因 |
+|---|---|---|
+| 权限档位 | 实现者用 `workspace`，评审者用 `read_only`；`full` 只给以 `--isolated` 启动的一次性机器 | 评审任务即使配置为 workspace 也按只读执行；`full` 不经沙箱 |
+| 命令白名单 | 写到具体任务：`python3 -m unittest`、`npm test`、`./gradlew test`；不写 `bash`、`python3`、`./gradlew *` | 条目是前缀，带参数可加载任意脚本，且在沙箱外执行 |
+| 推送 | 用工作流的 `repo.push` 节点；确需让 Agent 推送时白名单写 `git push`（只能推 `orca/*` 到 `origin`） | daemon 用固定 refspec 推送，不会覆盖主干 |
+| 受阻时询问人 | 只为确实需要偶尔越界的 Agent 打开；收件箱里优先选“允许一次” | “本任务内允许”只对完全相同的命令与目录生效 |
+| 沙箱联网 | 需要下载依赖时：Agent 开启“沙箱内联网”，daemon 以 `--allow-network` 启动 | 两处都开启才生效，默认断网 |
+| Codex 模型 | 实现与评审用同一模型（评审模型自动设为 Agent 的模型）；`effort` 用 `medium` 起步 | 原生评审（`review/start`）不上报 token 用量 |
+| TRAE 模型 | 实现用 Doubao-Seed-Code（id `Doubao_1_6`），评审用 GLM-5.3-Flash；推理强度只有 low / high / xhigh | 可写显示名或 id；不支持的强度会提示并回退 |
+| 评审 | 交叉评审（TRAE 实现、Codex 评审或反之）配合“实现 ⇄ 评审循环”模板，`maxRounds` 3 | 评审仍有问题时发布问题清单，不会无限循环 |
+| 指令与技能 | 写进 Agent 指令或技能库；TRAE 通过系统提示词下发，Codex 通过 developer instructions 下发 | 两者都在会话开始时生效，续接会话保持 |
+
+## 7. 故障排查
 
 | 现象 | 先看 | 处理 |
 |---|---|---|
@@ -102,7 +116,7 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 | 浏览器中实时更新不刷新，或 daemon 反复断线 | 反向代理配置 | `/api/stream`（SSE）需要关闭缓冲，`/api/daemon/ws` 需要 WebSocket 升级，两者都要放宽读超时；参考 `deploy/nginx.conf.example`（已在 Nginx 1.24 上实测 TLS、SSE 与 daemon 长连接） |
 | 附件在容器重建后丢失 | `ORCA_STORAGE_DIR` 是否在持久卷上 | 使用 1.0 的 compose 文件（已挂载 `orca-files` 卷） |
 
-## 7. 审计
+## 8. 审计
 
 设置 → 审计日志（仅 owner / admin）列出谁在何时、从哪个 IP 做了什么：登录成功、失败与锁定，个人令牌签发与吊销，成员增删、角色与密码变更，Agent 的创建、归档与权限变更（权限档位、命令白名单、附加参数、技能、联网、审批升级；指令只记录“已修改”，不记录内容），运行时注册码签发、注册与移除，审批决定（含被批准或拒绝的命令），工作流的增删改、启停与手动运行，项目的创建与仓库变更（含旧值）。
 
@@ -112,7 +126,7 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 
 失败登录按“邮箱 + 地址”计数，同一组合连续失败 10 次后锁定 15 分钟（锁定本身记一条审计）；全局每分钟最多记录 600 条失败登录，超出部分在下一分钟以 `auth.audit_throttled` 记录被省略的条数。
 
-## 8. 监控
+## 9. 监控
 
 - `GET /api/health`：无需登录，返回 `{"ok":true,"version":"…"}`，适合负载均衡与可用性探测。
 - 运行时页面：每台机器的在线状态、CLI 登录状态、并发占用。
