@@ -135,6 +135,12 @@ class TraeDriverTest {
   }
 
   @Test
+  void theStandInReviewPromptIsNotSentToTrae() {
+    assertEquals("/review", dev.orca.agent.trae.TraeSessionAccess.reviewCommand(Map.of("type", "uncommittedChanges"),
+        TurnSpec.DEFAULT_REVIEW_PROMPT));
+  }
+
+  @Test
   void reviewsUseTraesOwnReviewerOnce() throws Exception {
     try (AgentSession s = provider("echo").open(spec(), new Handler())) {
       assertTrue(s.capabilities().contains(Capability.REVIEW));

@@ -481,8 +481,8 @@ final class TraeSession implements AgentSession {
     if (!"custom".equals(type) && review.get("instructions") instanceof String i && !i.isBlank()) {
       b.append(' ').append(i);
     }
-    if (extra != null && !extra.isBlank()) {
-      b.append("\n\n").append(extra);
+    if (extra != null && !extra.isBlank() && !extra.strip().equals(TurnSpec.DEFAULT_REVIEW_PROMPT)) {
+      b.append("\n\n").append(extra); // the server's stand-in prompt adds nothing to /review
     }
     return b.toString();
   }
