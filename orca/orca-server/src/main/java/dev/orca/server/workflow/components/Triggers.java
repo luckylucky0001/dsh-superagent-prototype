@@ -71,8 +71,10 @@ public class Triggers {
   @Bean
   NodeComponent webhookTrigger() {
     return trigger(d("trigger.webhook", "trigger", "Webhook",
-        "Starts when something POSTs JSON to /api/hooks/{workflowId}/{nodeId}?secret=…", true,
+        "Starts when something POSTs JSON to /api/hooks/{workflowId}/{nodeId} (secret in X-Orca-Secret or ?secret=). "
+            + "A redelivery with the same Idempotency-Key, X-GitHub-Delivery or X-Gitlab-Event-UUID starts no second run.", true,
         List.of(req("secret", "Secret", FieldKind.STRING)),
-        List.of(), List.of(out("body", "object", "the JSON body"), out("query", "object", "query parameters"))));
+        List.of(), List.of(out("body", "object", "the JSON body"), out("query", "object", "query parameters"),
+            out("deliveryId", "string", "the delivery id, when the sender gave one"))));
   }
 }

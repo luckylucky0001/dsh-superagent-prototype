@@ -155,10 +155,24 @@ public class WorkflowController {
   @PostMapping("/hooks/{workflowId}/{nodeId}")
   public Map<String, Object> hook(@PathVariable String workflowId, @PathVariable String nodeId,
       @RequestParam(required = false) String secret, @RequestHeader(value = "X-Orca-Secret", required = false) String header,
-      @RequestParam Map<String, String> query, @RequestBody(required = false) Map<String, Object> body) {
+      @RequestParam Map<String, String> query, @RequestBody(required = false) Map<String, Object> body,
+      @RequestHeader(value = "Idempotency-Key", required = false) String idempotencyKey,
+      @RequestHeader(value = "X-GitHub-Delivery", required = false) String githubDelivery,
+      @RequestHeader(value = "X-Gitlab-Event-UUID", required = false) String gitlabDelivery) {
     Map<String, String> q = new java.util.LinkedHashMap<>(query);
     q.remove("secret");
-    WorkflowRun r = triggers.webhook(workflowId, nodeId, secret != null ? secret : header, body, q);
+    String delivery = idempotencyKey != null ? idempotencyKey : githubDelivery != null ? githubDelivery : gitlabDelivery;
+    String key = TriggerService.deliveryKey(workflowId, nodeId, delivery);
+    WorkflowRun r;
+    try {
+      r = triggers.webhook(workflowId, nodeId, secret != null ? secret : header, body, q, delivery);
+    } catch (org.springframework.dao.DataIntegrityViolationException race) {
+      // the same delivery arrived twice at once; the other request started the run
+      r = key == null ? null : workflows.byDelivery(key).orElse(null);
+      if (r == null) {
+        throw race;
+      }
+    }
     return Map.of("runId", r.id, "status", r.status);
   }
 

@@ -54,13 +54,22 @@ The protocol is backward compatible: an old daemon can connect to a new server, 
 | Action | How |
 |---|---|
 | Someone leaves | Remove them in Settings → Members; their sessions and personal access tokens become invalid with it |
-| A personal access token may have leaked | The owner deletes it in Settings → API tokens, or changes their password (after the change, all of their other sessions and tokens become invalid). A personal token cannot change the password, issue tokens, or manage members, runtimes or projects, so even a leaked token cannot be used to take over the account. In the Audit log, audited actions performed with a token carry the `via: token` tag and can be filtered by actor (day-to-day actions such as issues, comments and questions are not recorded in the Audit log) |
+| A personal access token may have leaked | The owner deletes it in Settings → API tokens, or changes their password (after the change, all of their other sessions and tokens become invalid). A personal token cannot change the password, issue tokens, manage members, runtimes or projects, or change agents, skills or workflow definitions (it can still ask agents, start workflow runs and answer the inbox), so even a leaked token cannot be used to take over the account or widen what agents may do. In the Audit log, audited actions performed with a token carry the `via: token` tag and can be filtered by actor (day-to-day actions such as issues, comments and questions are not recorded in the Audit log) |
 | An admin resets someone else's password | Change it in Settings → Members; all of that member's sessions and tokens become invalid |
 | Retire a runtime machine | Delete the runtime on the Runtimes page: the runtime token is revoked immediately, and the daemon reports that it needs to register again |
 | Replace a runtime machine | Connect the new machine with a new registration code, then point the agent to the new runtime in the agent's settings |
 | Sign out of the command line | `orca logout`: revokes the token on the server and deletes the local configuration |
 
 Only SHA-256 hashes of tokens are stored in the database; registration codes are valid for 1 hour and can be used only once.
+
+Who may do what:
+
+- Registration codes, runtime probes and deleting runtimes: owners and admins.
+- Widening an agent (the `full` tier, allowed commands, extra CLI arguments, network access): owners and admins. Members can create and edit agents within those limits.
+- Changing roles: members cannot change an owner, and only the owner changes an admin.
+- An Ask is the asker's conversation: only they continue it; only they or an owner/admin steer or cancel it. Issue and workflow tasks belong to the team.
+- Browser writes must come from Orca's own origin (`Origin` equal to the Host header or to `ORCA_PUBLIC_URL`). Behind a proxy, keep the Host header (`proxy_set_header Host $host`) or set `ORCA_PUBLIC_URL` to the address people open.
+- Webhooks: the secret goes in `X-Orca-Secret` (preferred over `?secret=`, which ends up in proxy logs). A redelivery with the same `Idempotency-Key`, `X-GitHub-Delivery` or `X-Gitlab-Event-UUID` returns the run it started the first time.
 
 ## 5. Runtime machines
 

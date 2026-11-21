@@ -171,7 +171,7 @@ public class TriggerService {
 
   @Transactional
   public dev.orca.server.model.WorkflowRun webhook(String workflowId, String nodeId, String secret,
-      Map<String, Object> body, Map<String, String> query) {
+      Map<String, Object> body, Map<String, String> query, String deliveryId) {
     Workflow w = workflows.get(workflowId);
     if (!w.enabled) {
       throw new ApiException(HttpStatus.CONFLICT, "workflow is disabled");
@@ -188,7 +188,23 @@ public class TriggerService {
     payload.put("event", "webhook");
     payload.put("body", body == null ? Map.of() : body);
     payload.put("query", query == null ? Map.of() : query);
-    return workflows.start(w, node.id(), payload, null);
+    String key = deliveryKey(w.id, node.id(), deliveryId);
+    if (key != null) {
+      payload.put("deliveryId", deliveryId.trim());
+      var earlier = workflows.byDelivery(key);
+      if (earlier.isPresent()) {
+        return earlier.get(); // a retried delivery: the run it started already
+      }
+    }
+    return workflows.start(w, node.id(), payload, null, key);
+  }
+
+  /** {@code null} without a usable delivery id. */
+  public static String deliveryKey(String workflowId, String nodeId, String deliveryId) {
+    if (deliveryId == null || deliveryId.isBlank() || deliveryId.trim().length() > 200) {
+      return null;
+    }
+    return workflowId + ":" + nodeId + ":" + deliveryId.trim();
   }
 
   // ---------------------------------------------------------------- schedules

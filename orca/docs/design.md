@@ -67,7 +67,7 @@
 
 | 分类 | 类型 |
 |---|---|
-| 触发 | `trigger.manual`（带输入）、`trigger.issue`（assigned / commented / created / status_changed，可按 Agent、标签、状态、表达式过滤；默认忽略 Agent/工作流自己造成的变化，避免循环）、`trigger.schedule`（cron + 时区）、`trigger.webhook`（密钥校验） |
+| 触发 | `trigger.manual`（带输入）、`trigger.issue`（assigned / commented / created / status_changed，可按 Agent、标签、状态、表达式过滤；默认忽略 Agent/工作流自己造成的变化，避免循环）、`trigger.schedule`（cron + 时区）、`trigger.webhook`（密钥校验，按投递 id 去重） |
 | Agent | `agent.run`：Agent（可为模板）、Prompt、Issue、会话 continue/new、输出 JSON Schema、超时；评审模式（`mode=review`）下改为代码评审：Codex 用内置评审器 `review/start`，其他 CLI 用等价提示词<br>`agent.review_loop`：实现者与评审者在一个节点内轮转（实现者续接会话，评审者每轮新会话并给出结构化结论），通过走 `passed`，超过轮数走 `failed`——在 DAG 里表达“改到评审通过为止” |
 | 逻辑 | `logic.condition`（true/false）、`logic.set`、`logic.join` |
 | 人工 | `human.approval`（approved/rejected）、`human.input` |
@@ -101,7 +101,7 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 
 ## 7. 安全
 
-- Web 会话 cookie（HttpOnly、SameSite=Lax）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较）。
+- Web 会话 cookie（HttpOnly、SameSite=Lax，写请求另校验 `Origin`）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较），按投递 id 去重。
 - 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（沙箱内联网须 Agent 请求且 daemon 以 `--allow-network` 启动；Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令，且每次只批准这一条命令（不会“本会话内一直允许”）。被批准的命令在沙箱外执行，所以规则全部是白名单：
   - 命令的工作目录（解析符号链接后的真实路径）必须在工作区内；`cd` 只允许作为第一段、且只能回到工作区根目录（TRAE 的写法 `cd <工作区> && git add -A && git commit -m "…"`）；
   - 引号外不允许 `;`、`|`、`&`、重定向、换行、通配符与子 shell，任何位置不允许 `$`、反引号、反斜杠；`&&` 的每一段都必须被允许；

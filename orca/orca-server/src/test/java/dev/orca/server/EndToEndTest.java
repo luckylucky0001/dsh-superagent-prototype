@@ -818,4 +818,33 @@ class EndToEndTest {
         .filter(i -> run.equals(Json.str(i, "runId")) && "Expire me".equals(Json.str(i, "title"))).findFirst().orElseThrow();
     assertEquals("expired", Json.str(item, "status"), "a timed-out approval can no longer be answered");
   }
+
+  @Test
+  void aRedeliveredWebhookStartsNoSecondRun() throws Exception {
+    Map<String, Object> def = Map.of("nodes", List.of(
+            Map.of("id", "hook", "type", "trigger.webhook", "config", Map.of("secret", "s3cret-for-test")),
+            Map.of("id", "note", "type", "logic.set", "config", Map.of("values", Map.of("ok", true)))),
+        "edges", List.of(Map.of("id", "e1", "source", "hook", "target", "note")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Hooked", "enabled", true, "definition", def)), "id");
+    java.util.function.Function<String, String> deliver = id -> {
+      try {
+        HttpRequest.Builder b = HttpRequest.newBuilder(URI.create("http://localhost:" + port + "/api/hooks/" + wf + "/hook"))
+            .header("Content-Type", "application/json").header("X-Orca-Secret", "s3cret-for-test")
+            .POST(HttpRequest.BodyPublishers.ofString("{\"ref\":\"main\"}"));
+        if (id != null) {
+          b.header("X-GitHub-Delivery", id);
+        }
+        HttpResponse<String> res = http.send(b.build(), HttpResponse.BodyHandlers.ofString());
+        assertEquals(200, res.statusCode(), res.body());
+        return Json.str(Json.MAPPER.readValue(res.body(), Object.class), "runId");
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    };
+    String first = deliver.apply("d-1");
+    assertEquals(first, deliver.apply("d-1"), "GitHub retried the delivery: the same run is returned");
+    assertTrue(!first.equals(deliver.apply("d-2")), "a new delivery starts a new run");
+    assertTrue(!deliver.apply(null).equals(deliver.apply(null)), "without a delivery id every POST is a run");
+    assertEquals(4, ((List<?>) call("GET", "/api/runs?workflowId=" + wf, null)).size());
+  }
 }

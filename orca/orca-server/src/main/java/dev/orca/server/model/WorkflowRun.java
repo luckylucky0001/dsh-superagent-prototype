@@ -14,6 +14,8 @@ public class WorkflowRun {
   public String status;
   public String triggerNodeId;
   public String issueId;
+  /** {@code workflowId:nodeId:deliveryId} of the webhook delivery that started it, if it named one. */
+  public String deliveryKey;
   public String stateJson;
   public String error;
   public long startedAt;

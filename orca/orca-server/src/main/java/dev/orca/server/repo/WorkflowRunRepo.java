@@ -17,6 +17,8 @@ public interface WorkflowRunRepo extends JpaRepository<WorkflowRun, String> {
 
   List<WorkflowRun> findByIssueIdOrderByStartedAtAsc(String issueId);
 
+  Optional<WorkflowRun> findByDeliveryKey(String deliveryKey);
+
   List<WorkflowRun> findByStatusIn(Collection<String> statuses);
 
   /** Row lock held until the transaction ends; serialises every state change of one run. */

@@ -202,6 +202,15 @@ public class WorkflowService {
   /** Starts a run of the workflow's current version from one of its trigger nodes. */
   @Transactional(propagation = Propagation.REQUIRED)
   public WorkflowRun start(Workflow w, String triggerNodeId, Map<String, Object> payload, String issueId) {
+    return start(w, triggerNodeId, payload, issueId, null);
+  }
+
+  /**
+   * {@code deliveryKey} is unique: the row is flushed before the engine runs anything, so a concurrent
+   * redelivery fails here, before any step had an effect.
+   */
+  public WorkflowRun start(Workflow w, String triggerNodeId, Map<String, Object> payload, String issueId,
+      String deliveryKey) {
     WorkflowDefinition def = parse(w.definitionJson);
     WorkflowRun run = new WorkflowRun();
     run.id = Ids.next("run");
@@ -212,6 +221,7 @@ public class WorkflowService {
     run.startedAt = Ids.now();
     run.status = "running";
     run.stateJson = "{}";
+    run.deliveryKey = deliveryKey;
     runs.saveAndFlush(run);
     log.info("run {} of '{}' started from {}", run.id, w.name, triggerNodeId);
     runs.lockById(run.id);
@@ -261,6 +271,10 @@ public class WorkflowService {
 
   public RunState state(WorkflowRun run) {
     return Json.read(run.stateJson, RunState.class);
+  }
+
+  public java.util.Optional<WorkflowRun> byDelivery(String deliveryKey) {
+    return runs.findByDeliveryKey(deliveryKey);
   }
 
   public WorkflowRun run(String id) {
