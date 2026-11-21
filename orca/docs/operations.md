@@ -41,7 +41,7 @@ docker compose -f deploy/docker-compose.yml start server
 ## 3. 升级
 
 1. **先备份**（见上）。数据库迁移（Flyway）只向前执行，回退版本需要恢复升级前的备份。
-2. **先升级 server**：替换 `orca-server.jar` 或重新构建镜像（`docker compose ... up -d --build`）。启动时自动迁移数据库；`curl https://orca.example.com/api/health` 返回新版本号即完成。
+2. **先升级 server**：替换 `orca-server.jar` 或重新构建镜像（`docker compose ... up -d --build`）。启动时自动迁移数据库；`curl https://orca.example.com/api/health` 返回新版本号即完成。重启 server 不会中断正在运行的任务：daemon 自动重连，重连时 server 立即续租这些任务，期间产生的事件与结果在重连后补发（已实测：任务运行中重启 server，任务照常完成）。
 3. **再升级各台 daemon**：重新执行一键安装命令（会覆盖 `~/.orca/bin` 下的 jar，保留注册信息），或替换 `orca-daemon.jar` 后重启服务（`systemctl --user restart orca-daemon`）。重启 daemon 会使正在执行的任务失败（可重新运行），所以最好在机器空闲时升级（运行时页面显示当前任务数）。
 4. 在每台机器上运行 `orca-daemon doctor`：它会显示服务器版本，并在 daemon 比 server 新时提示先升级 server。
 
