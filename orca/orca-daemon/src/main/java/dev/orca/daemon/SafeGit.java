@@ -16,7 +16,7 @@ final class SafeGit {
 
   static final List<String> FLAGS = List.of("-c", "core.fsmonitor=false", "-c", "core.hooksPath=/dev/null",
       "-c", "core.untrackedCache=false", "-c", "diff.external=", "-c", "submodule.recurse=false",
-      "-c", "protocol.file.allow=user");
+      "-c", "protocol.file.allow=user", "-c", "protocol.ext.allow=never");
 
   /** {@code git -C dir <safe flags> args…} */
   static List<String> cmd(Path dir, String... args) {

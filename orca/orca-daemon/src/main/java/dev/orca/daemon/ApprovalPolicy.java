@@ -219,7 +219,12 @@ public final class ApprovalPolicy {
       if (options != null) {
         return gitArgsAllowed(words.subList(2, words.size()), options, cwd);
       }
-      if (words.stream().skip(2).anyMatch(ApprovalPolicy::forbiddenGitArg)) {
+      if (words.get(1).equals("push")) {
+        // only when an administrator allowed it, and only Orca's own branches to origin
+        return allowedCommands.stream().anyMatch(a -> a.equals("git push") || a.startsWith("git push "))
+            && pushAllowed(words.subList(2, words.size()));
+      }
+      if (words.stream().skip(2).anyMatch(w -> forbiddenGitArg(w) || remoteLike(w))) {
         return false;
       }
     }
@@ -263,6 +268,47 @@ public final class ApprovalPolicy {
       }
     }
     return true;
+  }
+
+  private static final java.util.regex.Pattern ORCA_REF =
+      java.util.regex.Pattern.compile("(refs/heads/)?orca/[A-Za-z0-9._/-]+");
+
+  /**
+   * An allowed {@code git push}: to {@code origin} only, Orca's {@code orca/*} branches only, no force,
+   * delete or mirror — the admin allowed publishing the agent's work, not rewriting or copying the
+   * repository elsewhere. {@code git push origin orca/x}, {@code git push -u origin HEAD:orca/x}.
+   */
+  static boolean pushAllowed(List<String> args) {
+    List<String> positional = new ArrayList<>();
+    for (String a : args) {
+      if (a.startsWith("-")) {
+        if (!Set.of("-u", "--set-upstream", "-q", "--quiet", "--porcelain", "-v", "--verbose", "--dry-run", "-n")
+            .contains(a)) {
+          return false;
+        }
+      } else {
+        positional.add(a);
+      }
+    }
+    if (positional.size() < 2 || !positional.get(0).equals("origin")) {
+      return false; // an explicit branch: a bare "git push" follows push.default and may publish main
+    }
+    for (String spec : positional.subList(1, positional.size())) {
+      int colon = spec.indexOf(':');
+      String src = colon < 0 ? spec : spec.substring(0, colon);
+      String dst = colon < 0 ? null : spec.substring(colon + 1);
+      boolean srcOk = ORCA_REF.matcher(src).matches() || src.equals("HEAD") && dst != null;
+      if (!srcOk || dst != null && !ORCA_REF.matcher(dst).matches()) {
+        return false;
+      }
+    }
+    return true;
+  }
+
+  /** A URL, scp-style address, local path or transport helper where a remote name belongs. */
+  private static boolean remoteLike(String w) {
+    return !w.startsWith("-") && (w.contains("://") || w.contains("::") || w.contains("@") || w.contains(":")
+        || w.startsWith("/") || w.startsWith(".") || w.startsWith("~"));
   }
 
   /** -1 when a flag is not allowed, else how many following words it takes as a value (0 or 1). */
@@ -344,6 +390,9 @@ public final class ApprovalPolicy {
    * True when the workspace has no nested repository: no {@code .git} (directory or file, any letter case)
    * anywhere below the root. git reads a nested repository's configuration — which the agent wrote — when
    * run inside it or when recursing into a submodule, and that configuration can name programs to run.
+   * Symlinked directories are not followed: git does not follow them either, and a working directory
+   * reached through one must resolve inside the workspace, where the walk sees its real location. The
+   * check runs when the request is answered; the agent waits for that answer before the command runs.
    */
   boolean repositorySafe() {
     int[] seen = {0};
@@ -356,6 +405,7 @@ public final class ApprovalPolicy {
             return FileVisitResult.CONTINUE;
           }
           if (dir.getParent().equals(workspace) && dir.getFileName().toString().equals(".git")) {
+            // the workspace's own repository (exact name; ".GIT" or ".git." beside it is treated as nested)
             return FileVisitResult.SKIP_SUBTREE; // the workspace's own repository
           }
           return visit(dir);
@@ -373,7 +423,7 @@ public final class ApprovalPolicy {
         }
 
         private FileVisitResult visit(Path p) {
-          if (++seen[0] > WALK_LIMIT || p.getFileName().toString().equalsIgnoreCase(".git")) {
+          if (++seen[0] > WALK_LIMIT || isGitName(p.getFileName().toString())) {
             nested[0] = true;
             return FileVisitResult.TERMINATE;
           }
@@ -393,11 +443,19 @@ public final class ApprovalPolicy {
 
   private static boolean gitDirPart(Path relative) {
     for (Path part : relative) {
-      if (part.toString().toLowerCase(Locale.ROOT).equals(".git")) {
+      if (isGitName(part.toString())) {
         return true;
       }
     }
     return false;
+  }
+
+  /**
+   * {@code .git} as some file system may open it: any letter case (macOS, Windows) and with trailing dots
+   * or spaces (Windows drops them, so {@code .git.} opens {@code .git}).
+   */
+  static boolean isGitName(String name) {
+    return name.replaceAll("[. ]+$", "").toLowerCase(Locale.ROOT).equals(".git");
   }
 
   boolean insideWorkspace(String path) {

@@ -75,6 +75,7 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 - **网络**：Agent 沙箱默认不能联网；需要下载依赖时以 `--allow-network` 启动 daemon，并在 Agent 上开启“沙箱内联网”。
 - **完全访问权限**：`full` 档位只在以 `--isolated` 启动的机器上生效，只应用于一次性虚拟机或容器。
 - **凭证**：Agent 使用这台机器上已登录的 Codex / TRAE 账号和 git 凭证；推送分支同样使用本机 git 凭证。请为构建机使用专用账号，不要放个人令牌。
+- **命令白名单**：被批准的命令在沙箱外、以 daemon 用户的权限执行。条目是前缀（后面可跟任意参数），请写到具体任务（`./gradlew test`、`npm test`），不要写 `./gradlew *`、`bash`、`python3` 这类可执行任意代码的入口；`git push` 条目只允许把 `orca/*` 分支推到 `origin`。推送更推荐用工作流里的 `repo.push` 节点，由 daemon 以固定的 refspec 完成。
 
 ### 在没有浏览器的机器上登录 TRAE 企业版
 
