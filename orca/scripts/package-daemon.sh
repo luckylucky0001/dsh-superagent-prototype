@@ -17,6 +17,6 @@ DIR=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
 exec "$DIR/runtime/bin/java" ${ORCA_DAEMON_JAVA_OPTS:-} -jar "$DIR/orca-daemon.jar" "$@"
 SH
 chmod +x "$OUT/bin/orca-daemon"
-cp "$ROOT/dist-scripts/orca-daemon.service" "$ROOT/THIRD-PARTY-NOTICES.md" "$OUT/"
+cp "$ROOT/dist-scripts/orca-daemon.service" "$ROOT/LICENSE" "$ROOT/THIRD-PARTY-NOTICES.md" "$OUT/"
 (cd "$ROOT/dist" && tar czf "orca-daemon-$OS-$ARCH.tar.gz" "orca-daemon-$OS-$ARCH")
 echo "built $ROOT/dist/orca-daemon-$OS-$ARCH.tar.gz"

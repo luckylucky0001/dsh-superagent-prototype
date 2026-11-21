@@ -181,7 +181,7 @@ ORCA_TEST_DB_URL=jdbc:postgresql://localhost:5432/orca_e2e ORCA_TEST_DB_USER=orc
 ## 许可与合规说明
 
 - 第三方开源组件及其许可证见 [THIRD-PARTY-NOTICES.md](THIRD-PARTY-NOTICES.md)（`python3 scripts/third-party-notices.py` 重新生成）。
-- 参考了 Multica 的产品概念，**未使用其代码、UI 或素材**（Multica 许可证限制托管/嵌入式商用与 UI 品牌）。
+- Orca 以 [MIT 许可证](LICENSE) 发布；全部代码、界面与素材均为独立设计与实现，不包含第三方同类产品的代码、UI 或素材。
 - Codex CLI 与 TRAE CLI 由用户自行安装、登录，本项目不分发它们。产品名不使用 "Codex"/"Trae"。
 - Codex app-server 要求在 `clientInfo.name` 标识客户端（本项目为 `orca`）；面向企业正式分发前应联系 OpenAI 加入已知客户端名单。
 - TRAE CLI 2.0 仅对 TRAE 企业版旗舰版开放，客户需自备账号。
