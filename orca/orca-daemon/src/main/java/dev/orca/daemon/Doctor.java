@@ -138,6 +138,11 @@ final class Doctor {
 
     check(usable, usable ? "at least one agent CLI is ready" : "no agent CLI is installed and logged in",
         "install Codex CLI or TRAE CLI on this machine and log in (see above)");
+    int saved = savedRules(Path.of(System.getProperty("user.home")), work);
+    warn(saved == 0, saved == 0 ? "no saved \"don't ask again\" rules for the work folder"
+        : saved + " saved \"don't ask again\" rule(s) point into the work folder",
+        "they let matching commands run outside the sandbox without asking; delete those lines from "
+            + "~/.trae/cli/rules/*.rules and ~/.codex/rules/*.rules (left by Orca before 1.0 or chosen by hand)");
 
     out.println();
     warn(true, "sandbox network for agents: " + (cfg.allowNetwork() ? "allowed (--allow-network)"
@@ -159,6 +164,31 @@ final class Doctor {
     out.println(failures == 0 ? (warnings == 0 ? "All good." : "Ready, with " + warnings + " warning(s).")
         : failures + " problem(s) to fix before this machine can run tasks.");
     return failures == 0 ? 0 : 1;
+  }
+
+  /**
+   * Lines of the CLIs' saved approval rules ({@code prefix_rule(...)}) that mention the work folder: a rule
+   * like {@code ["cd", "<work>/issues/X"]} runs every matching command outside the sandbox, unasked.
+   */
+  static int savedRules(Path home, Path work) {
+    int n = 0;
+    for (Path dir : List.of(home.resolve(".trae/cli/rules"), home.resolve(".codex/rules"))) {
+      if (!Files.isDirectory(dir)) {
+        continue;
+      }
+      try (var files = Files.list(dir)) {
+        for (Path f : files.filter(x -> x.toString().endsWith(".rules")).toList()) {
+          for (String line : Files.readAllLines(f)) {
+            if (line.contains("prefix_rule") && line.contains(work.toAbsolutePath().normalize().toString())) {
+              n++;
+            }
+          }
+        }
+      } catch (Exception e) {
+        // unreadable: nothing to report
+      }
+    }
+    return n;
   }
 
   /** 300 minutes reads "5-hour", 10080 "weekly". */

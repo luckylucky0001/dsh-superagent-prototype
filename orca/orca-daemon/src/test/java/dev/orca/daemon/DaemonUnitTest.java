@@ -148,6 +148,16 @@ class DaemonUnitTest {
   }
 
   @Test
+  void doctorFindsSavedRulesThatSkipTheSandbox(@org.junit.jupiter.api.io.TempDir Path home) throws Exception {
+    Path work = home.resolve(".orca/work");
+    Path rules = Files.createDirectories(home.resolve(".trae/cli/rules"));
+    Files.writeString(rules.resolve("default.rules"), "prefix_rule(pattern=[\"cd\", \"" + work.resolve("issues/WMS-5")
+        + "\"], decision=\"allow\")\nprefix_rule(pattern=[\"npm\", \"test\"], decision=\"allow\")\n");
+    assertEquals(1, Doctor.savedRules(home, work));
+    assertEquals(0, Doctor.savedRules(home.resolve("nobody"), work));
+  }
+
+  @Test
   void toolTitlesShowWorkspacePathsRelative() {
     Path dir = Path.of("/work/issues/WMS-5");
     AgentEvent e = AgentEvent.of(AgentEvent.TOOL_STARTED, "title", "Search for '**/*.py' in /work/issues/WMS-5",
