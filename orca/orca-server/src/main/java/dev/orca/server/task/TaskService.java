@@ -187,7 +187,8 @@ public class TaskService {
 
   /**
    * Continues a finished Ask in the same provider session and directory, so the agent remembers the
-   * conversation. Only the agent's own, successful Ask tasks can be continued.
+   * conversation. Only the agent's own, finished Ask tasks with a session can be continued (also after a failure,
+   * a timeout or a cancel: the session holds the work so far).
    */
   @Transactional
   public Task followUp(Agent agent, String previousTaskId, String prompt, String by) {
@@ -199,8 +200,12 @@ public class TaskService {
     if (askedBy != null && !askedBy.equals(by)) {
       throw ApiException.bad("only the person who asked can continue this conversation; ask again instead");
     }
-    if (!TaskStatus.SUCCEEDED.equals(prev.status) || prev.sessionRef == null) {
-      throw ApiException.bad("the previous answer has not finished successfully");
+    // a failed, timed-out or cancelled Ask can be continued too: its session holds the work so far
+    if (!TaskStatus.TERMINAL.contains(prev.status)) {
+      throw ApiException.bad("the previous answer is still running; wait for it or cancel it first");
+    }
+    if (prev.sessionRef == null) {
+      throw ApiException.bad("the previous answer has no session to continue; ask again instead");
     }
     Map<String, Object> origin = new LinkedHashMap<>();
     origin.put("source", "ask");

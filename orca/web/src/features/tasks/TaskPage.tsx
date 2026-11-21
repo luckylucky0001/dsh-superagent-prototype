@@ -11,7 +11,7 @@ import { JsonView } from '@/components/CodeBlock';
 import { QueryState } from '@/components/QueryState';
 import { fmtDateTime } from '@/components/format';
 import { useNotify } from '@/components/useNotify';
-import type { Task } from '@/api/types';
+import { TERMINAL_TASK_STATUSES, type Task } from '@/api/types';
 import { CancelTaskButton, Transcript } from '@/components/transcript/Transcript';
 import { TaskMeta } from './TaskCard';
 
@@ -52,7 +52,7 @@ export function TaskPage() {
               <Card title={t('tasks.transcript')} size="small">
                 <Transcript task={d} maxHeight="calc(100vh - 320px)" />
               </Card>
-              {d.kind === 'ask' && d.status === 'succeeded' && mine && <AskFollowUp task={d} />}
+              {d.kind === 'ask' && TERMINAL_TASK_STATUSES.includes(d.status) && !!d.sessionRef && mine && <AskFollowUp task={d} />}
               {typeof d.origin?.followUpOf === 'string' && (
                 <Typography.Paragraph type="secondary" style={{ marginTop: 8, fontSize: 12 }}>
                   {t('tasks.followUpOf')} <Link to={`/tasks/${d.origin.followUpOf}`} className="orca-mono">{d.origin.followUpOf}</Link>
