@@ -280,7 +280,9 @@ final class CodexSession implements AgentSession {
       // with extra instructions or a prompt becomes a custom review that names the same target in words.
       Map<String, Object> target = new LinkedHashMap<>(turn.review());
       Object extra = target.remove("instructions");
-      boolean hasText = extra instanceof String x && !x.isBlank() || turn.text() != null && !turn.text().isBlank();
+      // the server's stand-in prompt for a review without one is not an instruction
+      boolean hasText = extra instanceof String x && !x.isBlank() || turn.text() != null && !turn.text().isBlank()
+          && !turn.text().strip().equals(TurnSpec.DEFAULT_REVIEW_PROMPT);
       if ("custom".equals(target.get("type")) || hasText) {
         target = new LinkedHashMap<>(Map.of("type", "custom", "instructions", TurnSpec.reviewPrompt(turn.review(), turn.text())));
       }

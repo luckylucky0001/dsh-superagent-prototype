@@ -177,6 +177,10 @@ class CodexDriverTest {
           Map.of("type", "baseBranch", "branch", "main")), events::add);
       assertEquals(TurnResult.Status.COMPLETED, r.status());
       assertEquals("reviewed changes against main: no issues found", r.finalText());
+      TurnResult placeholder = s.runTurn(new TurnSpec(TurnSpec.DEFAULT_REVIEW_PROMPT, List.of(), null, null,
+          Map.of("type", "baseBranch", "branch", "main")), events::add);
+      assertEquals("reviewed changes against main: no issues found", placeholder.finalText(),
+          "the server's stand-in prompt keeps codex's own diff of the branch");
       // only a custom target carries text: a review with a prompt names the same target in words
       TurnResult withText = s.runTurn(new TurnSpec("focus on rounding", List.of(), null, null,
           Map.of("type", "baseBranch", "branch", "main", "instructions", "check the tests")), events::add);

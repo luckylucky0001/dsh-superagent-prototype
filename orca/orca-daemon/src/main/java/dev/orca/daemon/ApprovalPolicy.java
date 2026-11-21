@@ -77,7 +77,11 @@ public final class ApprovalPolicy {
    * abbreviated long options, so a block-list cannot be complete.
    */
   private record GitOptions(Set<String> exact, List<String> prefixes, String shortFlags, String attachedValue,
-      String nextValue) {}
+      String nextValue, Set<String> longNext) {
+    GitOptions(Set<String> exact, List<String> prefixes, String shortFlags, String attachedValue, String nextValue) {
+      this(exact, prefixes, shortFlags, attachedValue, nextValue, Set.of());
+    }
+  }
 
   private static final Map<String, GitOptions> GIT_OPTIONS = Map.of(
       "status", new GitOptions(Set.of("--short", "--branch", "--porcelain", "--long", "--untracked-files", "--ignored",
@@ -89,18 +93,22 @@ public final class ApprovalPolicy {
           "--no-color", "--color", "--word-diff", "--minimal", "--patience", "--histogram", "--ignore-all-space",
           "--ignore-space-change", "--ignore-blank-lines", "--ignore-cr-at-eol", "--function-context", "--check",
           "--exit-code", "--quiet", "--find-renames", "--no-renames", "--merge-base", "--relative", "--no-ext-diff",
-          "--no-textconv", "--full-index", "--binary", "--abbrev"),
+          "--no-textconv", "--full-index", "--binary", "--abbrev", "--color-words"),
           List.of("--stat=", "--color=", "--word-diff=", "--unified=", "--diff-filter=", "--find-renames=",
-              "--relative=", "--abbrev=", "--diff-algorithm="), "pusbwRzW", "UM", ""),
+              "--relative=", "--abbrev=", "--diff-algorithm=", "--color-words="), "pusbwRzW", "UMSG", "SG",
+          Set.of("--diff-filter")),
       "log", new GitOptions(Set.of("--oneline", "--stat", "--shortstat", "--numstat", "--name-only", "--name-status",
           "--graph", "--decorate", "--no-decorate", "--abbrev-commit", "--all", "--branches", "--reverse",
           "--first-parent", "--no-merges", "--merges", "--follow", "--no-color", "--patch", "--no-patch",
           "--summary", "--date-order", "--topo-order", "--no-ext-diff", "--no-textconv", "--source"),
           List.of("--format=", "--pretty=", "--pretty", "--decorate=", "--since=", "--until=", "--after=",
               "--before=", "--author=", "--committer=", "--grep=", "--max-count=", "--skip=", "--date=",
-              "--unified=", "--diff-filter=", "--abbrev="), "ps", "Un", "n"),
-      "add", new GitOptions(Set.of("--all", "--update", "--verbose", "--dry-run", "--force", "--intent-to-add",
-          "--ignore-errors", "--renormalize"), List.of(), "AuvnfN", "", ""),
+              "--unified=", "--diff-filter=", "--abbrev="), "ps", "UnSG", "nSG",
+          Set.of("--max-count", "--grep", "--author", "--committer", "--since", "--until", "--after", "--before",
+              "--format", "--pretty", "--skip", "--date", "--diff-filter")),
+      // no --force: it would stage ignored folders (node_modules, …) that the nested-repository check skips
+      "add", new GitOptions(Set.of("--all", "--update", "--verbose", "--dry-run", "--intent-to-add",
+          "--ignore-errors", "--renormalize"), List.of(), "AuvnN", "", ""),
       "commit", new GitOptions(Set.of("--all", "--amend", "--no-edit", "--quiet", "--signoff", "--allow-empty",
           "--verbose", "--no-gpg-sign", "--no-status", "--message"),
           List.of("--message="), "aqsv", "m", "m"));
@@ -150,6 +158,7 @@ public final class ApprovalPolicy {
       return false;
     }
     Path dir = cwd;
+    safeMemo.remove();
     for (int i = 0; i < parts.size(); i++) {
       List<String> w = words(parts.get(i).trim());
       if (i == 0 && parts.size() > 1 && w.size() == 2 && w.get(0).equals("cd")) {
@@ -212,7 +221,7 @@ public final class ApprovalPolicy {
     }
     if (words.get(0).equals("git")) {
       // no options before the subcommand (-c, -C, --git-dir, …) and no nested repository git would wander into
-      if (words.size() < 2 || words.get(1).startsWith("-") || !repositorySafe()) {
+      if (words.size() < 2 || words.get(1).startsWith("-") || !safeOnce()) {
         return false;
       }
       GitOptions options = GIT_OPTIONS.get(words.get(1));
@@ -221,23 +230,22 @@ public final class ApprovalPolicy {
       }
       if (words.get(1).equals("push")) {
         // only when an administrator allowed it, and only Orca's own branches to origin
-        return allowedCommands.stream().anyMatch(a -> a.equals("git push") || a.startsWith("git push "))
+        return allowedCommands.stream().anyMatch(a -> entryMatches(a, List.of("git", "push")))
             && pushAllowed(words.subList(2, words.size()));
       }
       if (words.stream().skip(2).anyMatch(w -> forbiddenGitArg(w) || remoteLike(w))) {
         return false;
       }
     }
-    for (String allowed : allowedCommands) {
-      if (allowed.endsWith("*")) {
-        if (String.join(" ", words).startsWith(allowed.substring(0, allowed.length() - 1))) {
-          return true;
-        }
-      } else if (startsWith(words, words(allowed))) {
-        return true;
-      }
+    return allowedCommands.stream().anyMatch(a -> entryMatches(a, words));
+  }
+
+  /** An allow-list entry is a prefix of whole words, or ends with * to match any text after it. */
+  private static boolean entryMatches(String allowed, List<String> words) {
+    if (allowed.endsWith("*")) {
+      return String.join(" ", words).startsWith(allowed.substring(0, allowed.length() - 1));
     }
-    return false;
+    return startsWith(words, words(allowed));
   }
 
   /** Every option is on the subcommand's list; every other argument is a ref or a path inside the workspace. */
@@ -248,10 +256,10 @@ public final class ApprovalPolicy {
       if (!paths && a.equals("--")) {
         paths = true;
       } else if (!paths && a.startsWith("--")) {
-        if (!o.exact().contains(a) && o.prefixes().stream().noneMatch(a::startsWith)) {
+        if (!o.exact().contains(a) && !o.longNext().contains(a) && o.prefixes().stream().noneMatch(a::startsWith)) {
           return false;
         }
-        if (a.equals("--message")) {
+        if (a.equals("--message") || o.longNext().contains(a)) {
           i++; // its value, any text
         }
       } else if (!paths && a.startsWith("-") && a.length() > 1) {
@@ -383,8 +391,20 @@ public final class ApprovalPolicy {
     return out;
   }
 
+  /** One walk per command, however many git parts it chains. */
+  private final ThreadLocal<Boolean> safeMemo = new ThreadLocal<>();
+
+  private boolean safeOnce() {
+    Boolean b = safeMemo.get();
+    if (b == null) {
+      b = repositorySafe();
+      safeMemo.set(b);
+    }
+    return b;
+  }
+
   /** Most entries walked when looking for nested repositories; a bigger tree is treated as unsafe. */
-  static final int WALK_LIMIT = 400_000;
+  static final int WALK_LIMIT = 1_000_000;
 
   /**
    * True when the workspace has no nested repository: no {@code .git} (directory or file, any letter case)
@@ -395,6 +415,20 @@ public final class ApprovalPolicy {
    * check runs when the request is answered; the agent waits for that answer before the command runs.
    */
   boolean repositorySafe() {
+    boolean skipIgnored;
+    try {
+      skipIgnored = Files.readString(workspace.resolve(".git/info/exclude")).contains("# orca");
+    } catch (IOException e) {
+      skipIgnored = false;
+    }
+    return repositorySafe(skipIgnored);
+  }
+
+  /** Folders {@code Workspaces.excludeCaches} lists in {@code .git/info/exclude}. */
+  static final Set<String> IGNORED_DIRS = Set.of("node_modules", ".venv", ".mypy_cache", ".ruff_cache", ".gradle",
+      "__pycache__", ".pytest_cache");
+
+  private boolean repositorySafe(boolean skipIgnored) {
     int[] seen = {0};
     boolean[] nested = {false};
     try {
@@ -408,7 +442,11 @@ public final class ApprovalPolicy {
             // the workspace's own repository (exact name; ".GIT" or ".git." beside it is treated as nested)
             return FileVisitResult.SKIP_SUBTREE; // the workspace's own repository
           }
-          return visit(dir);
+          FileVisitResult r = visit(dir);
+          // dependency folders the daemon excluded from git in .git/info/exclude (which agents cannot edit): git
+          // neither enters them nor stages them (git add -f is not approved), so a repository inside is inert
+          return r == FileVisitResult.CONTINUE && skipIgnored && IGNORED_DIRS.contains(dir.getFileName().toString())
+              ? FileVisitResult.SKIP_SUBTREE : r;
         }
 
         @Override
@@ -418,8 +456,8 @@ public final class ApprovalPolicy {
 
         @Override
         public FileVisitResult visitFileFailed(Path file, IOException e) {
-          nested[0] = true; // unreadable: cannot tell
-          return FileVisitResult.TERMINATE;
+          // unreadable for the daemon's user, so unreadable for the git it would approve as well
+          return FileVisitResult.SKIP_SUBTREE;
         }
 
         private FileVisitResult visit(Path p) {

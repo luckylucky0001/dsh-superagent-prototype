@@ -14,6 +14,10 @@ import java.util.Map;
  */
 public record TurnSpec(String text, List<Path> images, Map<String, Object> outputSchema, Duration timeout,
     Map<String, Object> review) {
+
+  /** What the server sends as the prompt of a review that has none; not an instruction for the reviewer. */
+  public static final String DEFAULT_REVIEW_PROMPT = "Review the changes.";
+
   public TurnSpec {
     images = images == null ? List.of() : List.copyOf(images);
     timeout = timeout == null ? Duration.ofMinutes(60) : timeout;

@@ -163,8 +163,10 @@ final class TaskRunner implements Runnable {
         }
         Interaction.Decision d = policy.decide(r);
         if (d == Interaction.Decision.DECLINE && r.kind() == Interaction.ApprovalKind.COMMAND && r.command() != null
-            && taskGrants.contains(dev.orca.agent.core.Executables.unwrapShell(r.command()))) {
-          // a person allowed exactly this command for the rest of the task; kept here, not in the CLI
+            && taskGrants.contains(grantKey(r))
+            && (!dev.orca.agent.core.Executables.unwrapShell(r.command()).startsWith("git ") || policy.repositorySafe())) {
+          // a person allowed exactly this command, in this directory, for the rest of the task; kept here, not in
+          // the CLI, and a git command still needs a workspace without nested repositories
           return Interaction.Decision.ACCEPT;
         }
         return d == Interaction.Decision.DECLINE && escalate ? askPerson(r) : d;
@@ -526,7 +528,8 @@ final class TaskRunner implements Runnable {
       d = Interaction.Decision.ACCEPT;
     }
     if (d == Interaction.Decision.ACCEPT_FOR_SESSION && command) {
-      taskGrants.add(shown);
+      taskGrants.add(grantKey(r));
+      d = Interaction.Decision.ACCEPT; // this time only, as far as the CLI knows; repeats come back here
     }
     buffer.add(AgentEvent.of(AgentEvent.INPUT_RESOLVED, "requestId", requestId, "declined", reply.declined(),
         "answers", reply.answers()));
@@ -535,6 +538,12 @@ final class TaskRunner implements Runnable {
       decidedByPerson.add(r.requestId());
     }
     return d;
+  }
+
+  /** A task-wide grant: the exact command (shell wrapper removed) and the directory it runs in. */
+  private static String grantKey(Interaction.ApprovalRequest r) {
+    String cwd = r.cwd() == null ? "" : Path.of(r.cwd()).toAbsolutePath().normalize().toString();
+    return dev.orca.agent.core.Executables.unwrapShell(r.command()) + "\n" + cwd;
   }
 
   static final String APPROVE_ONCE = "Allow once";

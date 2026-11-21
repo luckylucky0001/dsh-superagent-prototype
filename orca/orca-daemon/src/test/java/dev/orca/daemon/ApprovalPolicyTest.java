@@ -209,6 +209,32 @@ class ApprovalPolicyTest {
   }
 
   @Test
+  void commonReadOnlyGitFormsAreStillApproved() {
+    assertTrue(p.commandAllowed("git log --max-count 5 --author Ann --since yesterday --format %h"));
+    assertTrue(p.commandAllowed("git log -S putaway --oneline"));
+    assertTrue(p.commandAllowed("git diff --color-words"));
+    assertTrue(p.commandAllowed("git diff -G suggest_bin"));
+    assertFalse(p.commandAllowed("git add -f node_modules/evil"), "force-adding an ignored folder");
+    assertFalse(p.commandAllowed("git add --force node_modules/evil"));
+    ApprovalPolicy any = new ApprovalPolicy(Permission.WORKSPACE, ws, List.of("git *"));
+    assertTrue(any.commandAllowed("git push origin orca/wms-5"), "a wildcard entry covers the pinned push");
+    assertFalse(any.commandAllowed("git push origin main"));
+    ApprovalPolicy npm = new ApprovalPolicy(Permission.WORKSPACE, ws, List.of("npm test"));
+    assertFalse(npm.commandAllowed("npm"), "an entry is not satisfied by a shorter command");
+  }
+
+  @Test
+  void dependencyFoldersTheDaemonExcludesAreNotScanned() throws Exception {
+    Files.createDirectories(ws.resolve("node_modules/dep/.git"));
+    assertFalse(p.repositorySafe(), "without the daemon's exclude list the folder counts");
+    Files.createDirectories(ws.resolve(".git/info"));
+    Files.writeString(ws.resolve(".git/info/exclude"), "\n# orca: build and tool caches\nnode_modules/\n");
+    assertTrue(p.repositorySafe(), "git neither enters nor stages an excluded folder");
+    Files.createDirectories(ws.resolve("src/vendored/.git"));
+    assertFalse(p.repositorySafe(), "elsewhere a nested repository still blocks git approvals");
+  }
+
+  @Test
   void allowListedGitCommandsCannotRunPrograms() {
     assertTrue(p.commandAllowed("git push origin orca/wms-5"));
     assertFalse(p.commandAllowed("git push --receive-pack=/tmp/x origin"));

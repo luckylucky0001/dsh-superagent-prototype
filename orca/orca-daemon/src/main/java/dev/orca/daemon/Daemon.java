@@ -151,7 +151,7 @@ public final class Daemon {
     TaskRunner existing = running.get(t.taskId());
     if (existing != null) {
       // assigned again while still here (the server lost track during an outage): report where it stands
-      existing.replay();
+      Thread.ofVirtual().start(existing::replay); // not on the reader thread: a large replay would stall it
       return;
     }
     AgentProvider p = providers.get(t.provider());

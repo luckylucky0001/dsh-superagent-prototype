@@ -272,7 +272,11 @@ public class TaskService {
       return;
     }
     Set<String> busyPairs = new HashSet<>();
+    long now = Ids.now();
     for (Task t : queued) {
+      if (t.leaseUntil != null && t.leaseUntil > now) {
+        continue; // backing off after the runtime said it was busy
+      }
       Agent agent = agents.findById(t.agentId).orElse(null);
       if (agent == null) {
         finish(t, TaskStatus.FAILED, ErrorCodes.AGENT_ERROR, "agent was deleted", null);
@@ -540,7 +544,8 @@ public class TaskService {
       // the runtime is still finishing an earlier task: try again later rather than failing the work
       t.status = TaskStatus.QUEUED;
       t.runtimeId = null;
-      t.leaseUntil = null;
+      // for a queued task the lease is a "not before": give the runtime time to finish what it is ending
+      t.leaseUntil = Ids.now() + 15_000L;
       t.statusDetail = "re-queued: the runtime was busy";
       tasks.save(t);
       changed(t);

@@ -190,8 +190,8 @@ class TaskRunnerTest {
     assertTrue(requestId != null, "the person was asked");
     r.input(requestId, Map.of("decision", List.of(TaskRunner.APPROVE_TASK)));
     t.join(10_000);
-    assertEquals(List.of(Interaction.Decision.ACCEPT_FOR_SESSION, Interaction.Decision.ACCEPT), decisions,
-        "the same command again is approved once by the daemon, without asking");
+    assertEquals(List.of(Interaction.Decision.ACCEPT, Interaction.Decision.ACCEPT), decisions,
+        "the CLI only ever hears 'this once'; the same command again is approved by the daemon, without asking");
     assertEquals(1, link.events(AgentEvent.INPUT_REQUESTED).size());
   }
 }
