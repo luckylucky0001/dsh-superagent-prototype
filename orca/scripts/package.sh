@@ -16,6 +16,6 @@ cp "$ROOT/dist-scripts/orca" "$ROOT/dist-scripts/orca.cmd" "$OUT/cli/"
 # what the server hands out at /downloads/ (set ORCA_DOWNLOADS_DIR to this folder)
 cp "$OUT/daemon/orca-daemon.jar" "$OUT/cli/orca-cli.jar" "$ROOT/dist-scripts/install-runtime.sh" "$OUT/downloads/"
 cp -r "$ROOT/deploy" "$OUT/deploy"
-cp "$ROOT/README.md" "$OUT/"
+cp "$ROOT/README.md" "$ROOT/THIRD-PARTY-NOTICES.md" "$OUT/"
 (cd "$ROOT/dist" && tar czf "orca-$VERSION.tar.gz" "orca-$VERSION")
 echo "built $ROOT/dist/orca-$VERSION.tar.gz"

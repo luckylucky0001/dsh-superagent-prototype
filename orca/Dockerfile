@@ -26,6 +26,7 @@ COPY --from=build /src/orca-server/target/orca-server.jar /opt/orca/orca-server.
 COPY --from=build /src/orca-daemon/target/orca-daemon-exec.jar /opt/orca/downloads/orca-daemon.jar
 COPY --from=build /src/orca-cli/target/orca-cli-exec.jar /opt/orca/downloads/orca-cli.jar
 COPY dist-scripts/install-runtime.sh /opt/orca/downloads/install-runtime.sh
+COPY THIRD-PARTY-NOTICES.md /opt/orca/THIRD-PARTY-NOTICES.md
 COPY --from=web /web/dist /opt/orca/web
 USER orca
 ENV ORCA_WEB_DIR=file:/opt/orca/web/ \
