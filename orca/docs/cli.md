@@ -34,7 +34,7 @@
 | `orca workflows` / `orca runs [--limit N]` | 工作流与运行记录 |
 | `orca run WORKFLOW [--input key=value]... [--wait]` | 按名称或 id 手动运行工作流；`--wait` 等到结束，成功退出码 0 |
 | `orca inbox [--all]` | 收件箱（默认只看待处理） |
-| `orca approve ID [--comment C]` / `orca reject ID [--comment C]` | 处理审批（含 Agent 的命令 / 文件审批请求） |
+| `orca approve ID [--comment C]` / `orca reject ID [--comment C]` | 处理审批（含 Agent 的命令 / 文件审批请求：approve 即“允许一次”，“本任务内允许”请在网页收件箱中选择） |
 | `orca answer ID key=value...` | 回答 Agent 的提问或工作流表单 |
 | `orca version` | 客户端版本 |
 
