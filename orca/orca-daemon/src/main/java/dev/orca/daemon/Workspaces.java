@@ -52,8 +52,15 @@ public final class Workspaces {
       path = scheme ? (slash < 0 ? "" : u.substring(slash)) : "/" + u.substring(u.indexOf(':') + 1);
       host = authority.toLowerCase(java.util.Locale.ROOT).replaceFirst(":(22|80|443)$", "");
     }
-    return host + path.replaceAll("(\\.git)?/*$", "");
+    path = path.replaceAll("(\\.git)?/*$", "");
+    // these hosts treat owner and repository names without regard to case
+    if (CASE_INSENSITIVE_HOSTS.contains(host)) {
+      path = path.toLowerCase(java.util.Locale.ROOT);
+    }
+    return host + path;
   }
+
+  static final java.util.Set<String> CASE_INSENSITIVE_HOSTS = java.util.Set.of("github.com", "gitlab.com", "bitbucket.org");
 
   public Path prepare(String key, Wire.RepoSpec repo) throws AgentException {
     if (key == null || !KEY.matcher(key).matches() || key.contains("..")) {

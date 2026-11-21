@@ -130,6 +130,8 @@ class DaemonUnitTest {
         "https://git.example.com/wms/core"), "another port can be another server");
     org.junit.jupiter.api.Assertions.assertFalse(Workspaces.sameRepo("/srv/git/Repo", "/srv/git/repo"),
         "paths keep their case");
+    org.junit.jupiter.api.Assertions.assertTrue(Workspaces.sameRepo("https://github.com/Acme/WMS.git",
+        "git@github.com:acme/wms"), "GitHub ignores case in owner and repository names");
     org.junit.jupiter.api.Assertions.assertEquals("https://***@h/r", Workspaces.Redacted.url("https://u:t@h/r"));
   }
 
