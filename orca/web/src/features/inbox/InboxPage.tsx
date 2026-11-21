@@ -92,9 +92,11 @@ function TaskApprovalForm({ item }: { item: InboxItem }) {
           {t('inbox.allowOnce')}
         </Button>
         {a.sessionAllowed !== false && (
-          <Button icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow for this task'} onClick={() => send('Allow for this task')}>
-            {t('inbox.allowTask')}
-          </Button>
+          <Tooltip title={t(a.command ? 'inbox.allowTaskCommandHelp' : 'inbox.allowTaskFilesHelp')}>
+            <Button icon={<CheckOutlined />} loading={answer.isPending && which === 'Allow for this task'} onClick={() => send('Allow for this task')}>
+              {t('inbox.allowTask')}
+            </Button>
+          </Tooltip>
         )}
         <Button danger icon={<CloseOutlined />} loading={answer.isPending && which === 'Deny'} onClick={() => send('Deny')}>
           {t('inbox.deny')}
