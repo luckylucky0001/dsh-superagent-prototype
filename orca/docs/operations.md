@@ -65,7 +65,7 @@ docker compose -f deploy/docker-compose.yml start server
 ```bash
 systemctl --user status orca-daemon        # 服务状态
 journalctl --user -u orca-daemon -f        # 实时日志
-systemctl --user restart orca-daemon       # 重启（运行中的任务会失败并标记为 RUNTIME_LOST，可重新运行）
+systemctl --user restart orca-daemon       # 重启（运行中的任务在 daemon 重连时标记为 RUNTIME_LOST，可重新运行；提问可在原会话中追问继续）
 sudo loginctl enable-linger $USER          # 注销后仍保持运行
 ~/.orca/bin/orca-daemon doctor             # 逐项自检，附修复建议
 ```
