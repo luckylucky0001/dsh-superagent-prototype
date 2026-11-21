@@ -50,6 +50,8 @@ final class TaskRunner implements Runnable {
   private final ConcurrentLinkedQueue<String> followUps = new ConcurrentLinkedQueue<>();
   /** Set (under the followUps lock) once no further turn will run; later messages are refused, not lost. */
   private boolean followUpsClosed;
+  /** Commands a person allowed "for this task": exact, after unwrapping the shell; gone when the task ends. */
+  private final java.util.Set<String> taskGrants = ConcurrentHashMap.newKeySet();
   private volatile AgentSession session;
   private volatile boolean cancelRequested;
   private volatile boolean finished;
@@ -147,7 +149,15 @@ final class TaskRunner implements Runnable {
     boolean escalate = a != null && a.escalateApprovals() && permission != Permission.READ_ONLY;
     Interaction.Handler handler = new Interaction.Handler() {
       public Interaction.Decision approve(Interaction.ApprovalRequest r) {
+        if (cancelRequested) {
+          return Interaction.Decision.DECLINE; // a request already queued when the task was cancelled
+        }
         Interaction.Decision d = policy.decide(r);
+        if (d == Interaction.Decision.DECLINE && r.kind() == Interaction.ApprovalKind.COMMAND && r.command() != null
+            && taskGrants.contains(dev.orca.agent.core.Executables.unwrapShell(r.command()))) {
+          // a person allowed exactly this command for the rest of the task; kept here, not in the CLI
+          return Interaction.Decision.ACCEPT;
+        }
         return d == Interaction.Decision.DECLINE && escalate ? askPerson(r) : d;
       }
 
@@ -230,6 +240,11 @@ final class TaskRunner implements Runnable {
     }
     synchronized (followUps) {
       followUpsClosed = true;
+      if (!followUps.isEmpty()) {
+        buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", "warn", "message", followUps.size()
+            + " queued message(s) were not sent because the turn did not complete; comment again to continue"));
+        followUps.clear();
+      }
     }
     // a review must not commit what it was asked to review; a cancelled task leaves its changes uncommitted
     if (r.ok() && !cancelRequested && task.repo() != null && task.review() == null) {
@@ -500,6 +515,9 @@ final class TaskRunner implements Runnable {
     Interaction.Decision d = decisionFrom(reply);
     if (d == Interaction.Decision.ACCEPT_FOR_SESSION && !sessionAllowed) {
       d = Interaction.Decision.ACCEPT;
+    }
+    if (d == Interaction.Decision.ACCEPT_FOR_SESSION && command) {
+      taskGrants.add(shown);
     }
     buffer.add(AgentEvent.of(AgentEvent.INPUT_RESOLVED, "requestId", requestId, "declined", reply.declined(),
         "answers", reply.answers()));

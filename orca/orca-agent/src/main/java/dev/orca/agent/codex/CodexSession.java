@@ -391,9 +391,8 @@ final class CodexSession implements AgentSession {
   @Override
   public void interrupt() {
     String current = turnId;
-    if (inTurn) {
-      interruptPending = true; // also covers the time before turn/start answers
-    }
+    // also covers the time before turn/start answers, and a cancel between two turns (cleared when a turn ends)
+    interruptPending = true;
     if (current != null && conn.alive()) {
       // a review runs as a sub-turn with its own id; codex only accepts the id of the turn actually running
       conn.request("turn/interrupt", Map.of("threadId", threadId, "turnId", activeTurns.getOrDefault(current, current)));

@@ -9,7 +9,8 @@ import java.util.Map;
  * Daemon-side settings for the TRAE CLI driver.
  *
  * @param command  the CLI to run; empty means {@code traecli} on PATH
- * @param trustRoot directory whose workspaces are marked trusted so project rules apply
+ * @param trustRoot unused: TRAE persists a trusted-project override into the user's global config, so the
+ *                  driver no longer marks workspaces trusted
  */
 public record TraeConfig(List<String> command, Map<String, String> env, String clientName, String clientVersion,
     Duration requestTimeout, Path recordDir, Path trustRoot) {

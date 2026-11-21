@@ -46,7 +46,7 @@
 
 实测环境：TRAE CLI **0.216.0**，企业版 SSO 登录（`console.enterprise.trae.cn`），模型 GLM-5.3-Flash。以下全部为**实机验证**结果，`TraeLiveTest`（4 个用例，`ORCA_TRAE_BIN=$(which traecli) mvn test -pl orca-agent -Dgroups=live -Dorca.excludedGroups=none`）覆盖其中关键行为。
 
-启动参数（daemon 生成）：`traecli acp serve -c model="…" [-c model_reasoning_effort="…"] -c projects."<cwd>".trust_level="trusted"`，再按权限档位追加：
+启动参数（daemon 生成）：`traecli acp serve -c model="…" [-c model_reasoning_effort="…"]`（不再传 `projects."<cwd>".trust_level`：实测 TRAE 会把这个覆盖写进 `~/.trae/traecli.toml`，每个任务目录都会永久留在“受信任”列表里。注意：即使不传，TRAE 与 Codex 在工作目录中执行任务后也会自行把它记为受信任项目——这是 CLI 自身的行为，运维可定期清理，见运维手册），再按权限档位追加：
 
 | 档位 | 参数 | 实测效果 |
 |---|---|---|
@@ -68,7 +68,7 @@
 | 用量 | `session/prompt` 结果的 `usage` 与 `_meta._trae/tokenUsage{turn, sessionTotal, contextWindow}`；驱动换算成与 Codex 相同的字段，`taskTokens` 只计本任务的轮次 | ✅ |
 | 套餐额度 | ACP 无对应方法；实验性的 `traecli app-server` 有 `account/rateLimits/read`，但企业 SSO 账号返回 “browser account authentication required to read rate limits”，因此运行时页面只显示 Codex 的额度窗口。TRAE 开放后可用与 Codex 相同的 `UsageWindow` 接入 | ✅ 实测（0.216.0） |
 | 图片 | prompt 中 `{type:"image", mimeType, data(base64)}` | ✅ |
-| 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次，与原请求共用同一个超时；用尽后任务以失败而不是“已取消”结束），使两者行为一致。daemon 批准时只选 `approved`（仅这一次），不选“不再询问” | ✅ |
+| 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次，与原请求共用同一个超时；用尽后任务以失败而不是“已取消”结束），使两者行为一致。daemon 批准时只选 `approved`（仅这一次），从不选 `approved-execpolicy-amendment`：实测它会以前缀规则写入 `~/.trae/cli/rules/default.rules`，此后匹配的命令在整台机器上不经询问直接在沙箱外执行。人在收件箱里选“本任务内允许”时，由 daemon 记住这条命令（精确匹配，任务结束即失效），再次出现时自动批准一次。超时后驱动会再等最多 5 秒取回被取消轮次的 token 用量；自动续跑时保留 JSON 输出要求 | ✅ |
 | 命令白名单 | 不使用 `--allowed-tool Bash(...)`：实测与条目完全相同的命令会被 TRAE 直接在沙箱外执行、不经过审批，绕过 daemon 对工作目录与嵌套仓库的检查。白名单命令改由 daemon 的审批策略在提权请求时逐条判断 | ✅ |
 | `.git` 保护 | `:workspace` 档位下工作区根目录的 `.git` 为只读（写 `.git/config`、`.git/hooks` 被沙箱拒绝），但可以在子目录 `git init` 嵌套仓库；daemon 因此在工作区存在嵌套仓库时不批准任何 git 命令 | ✅ |
 | 插话 | `_meta.steering.supported=true`，但 ACP 下没有对应方法：`_session/steer` 返回 Method not found，进行中再发 `session/prompt` 被拒（“an ACP prompt is already in progress”）。驱动不声明 steer 能力，插话排到下一轮发送 | ✅（结论：不支持） |

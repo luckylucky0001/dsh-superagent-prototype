@@ -113,6 +113,16 @@ class TraeDriverTest {
   }
 
   @Test
+  void taskWideApprovalsNeverBecomeTraesMachineWideRules() throws Exception {
+    Handler h = new Handler();
+    h.decision = Interaction.Decision.ACCEPT_FOR_SESSION;
+    try (AgentSession s = provider("permission").open(spec(), h)) {
+      // "approved-execpolicy-amendment" would be saved in ~/.trae/cli/rules and skip the sandbox from then on
+      assertEquals("chosen=approved", s.runTurn(TurnSpec.text("test"), e -> {}).finalText());
+    }
+  }
+
+  @Test
   void anAgentThatKeepsAskingFailsInsteadOfLookingCancelled() throws Exception {
     Handler h = new Handler();
     h.decision = Interaction.Decision.DECLINE;

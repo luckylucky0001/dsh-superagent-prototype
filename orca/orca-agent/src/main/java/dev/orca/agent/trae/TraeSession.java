@@ -55,6 +55,7 @@ final class TraeSession implements AgentSession {
   private boolean resumed;
   private boolean instructionsSent;
   private volatile boolean reviewTurn;
+  private volatile CompletableFuture<Object> lastPrompt = CompletableFuture.completedFuture(null);
   private volatile boolean userCancelled;
   private volatile String declinedInTurn;
   private long taskTokens;
@@ -105,8 +106,9 @@ final class TraeSession implements AgentSession {
       args.add("-c");
       args.add("model_reasoning_effort=\"" + spec.effort().replace("\"", "") + "\"");
     }
-    args.add("-c");
-    args.add("projects.\"" + cwd.replace("\"", "") + "\".trust_level=\"trusted\"");
+    // no projects."<cwd>".trust_level override: TRAE writes it into ~/.trae/traecli.toml, so every task
+    // folder would stay trusted on the machine for good (verified). The permission profile below is
+    // passed explicitly and does not depend on trust.
     switch (spec.permission()) {
       case READ_ONLY -> {
         // verified: no writes anywhere, no network
@@ -190,8 +192,12 @@ final class TraeSession implements AgentSession {
       try {
         result = conn.call("session/load", params, timeout);
       } catch (AgentException e) {
-        throw new AgentException(ErrorCodes.SESSION_NOT_FOUND, "traecli could not load session " + spec.resumeRef()
-            + ": " + e.getMessage(), e);
+        // only TRAE's own answer means the session is gone; a crash or timeout must not drop its context
+        if (e.getCause() instanceof JsonRpcConnection.RpcError) {
+          throw new AgentException(ErrorCodes.SESSION_NOT_FOUND, "traecli could not load session " + spec.resumeRef()
+              + ": " + e.getMessage(), e);
+        }
+        throw e;
       }
       sessionId = spec.resumeRef();
       resumed = true;
@@ -231,6 +237,7 @@ final class TraeSession implements AgentSession {
     String current = option == null ? Json.str(result, "models.currentModelId") : Json.str(option, "currentValue");
     String wanted = spec.model();
     if (wanted == null || wanted.isBlank() || option == null) {
+      selectEffort(result); // the default model's efforts still need checking
       return current != null ? current : wanted;
     }
     String id = null;
@@ -308,8 +315,7 @@ final class TraeSession implements AgentSession {
 
   @Override
   public synchronized TurnResult runTurn(TurnSpec turn, AgentEventSink eventSink) throws AgentException {
-    // from here a cancel belongs to this turn, even before the prompt is sent
-    userCancelled = false;
+    // a cancel that arrived since the last turn ended belongs to this one (cleared when a turn ends)
     sink = eventSink;
     usage = Map.of();
     synchronized (segment) {
@@ -367,6 +373,7 @@ final class TraeSession implements AgentSession {
           break;
         }
         CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
+        lastPrompt = f;
         if (userCancelled) {
           interrupt(); // the cancel may have reached TRAE just before the prompt
         }
@@ -381,7 +388,9 @@ final class TraeSession implements AgentSession {
               "the request was declined; asking TRAE CLI to continue without it"));
           prompt = List.of(Map.of("type", "text", "text", "Your request to run `" + declinedInTurn
               + "` was declined and will not be approved. Continue the task without it: find another way within your"
-              + " permissions, or finish and explain clearly what you could not do and why."));
+              + " permissions, or finish and explain clearly what you could not do and why."
+              + (turn.outputSchema() == null ? "" : "\n\nYour final answer must still be only a JSON value (no prose, no"
+                  + " code fence) that validates against this JSON Schema:\n" + Json.write(turn.outputSchema()))));
           continue;
         }
         break;
@@ -405,6 +414,12 @@ final class TraeSession implements AgentSession {
       }
     } catch (TimeoutException e) {
       interrupt();
+      // TRAE answers the cancelled prompt within milliseconds, with the turn's token usage
+      try {
+        recordUsage(lastPrompt.get(5, java.util.concurrent.TimeUnit.SECONDS));
+      } catch (Exception ignored) {
+        // no usage for this turn
+      }
       status = TurnResult.Status.FAILED;
       code = ErrorCodes.TIMEOUT;
       error = "turn timed out after " + turn.timeout();
@@ -445,6 +460,7 @@ final class TraeSession implements AgentSession {
     }
     eventSink.accept(AgentEvent.of(AgentEvent.TURN_COMPLETED, "turnId", turnId, "status",
         status.name().toLowerCase(), "errorCode", code, "error", error));
+    userCancelled = false; // consumed by this turn
     return new TurnResult(status, finalText, structured, code, error, usage);
   }
 
@@ -693,8 +709,10 @@ final class TraeSession implements AgentSession {
 
   static Map<String, Object> permissionOutcome(List<Object> options, Decision d) {
     List<String> wanted = switch (d) {
-      case ACCEPT -> List.of("allow_once", "allow_always");
-      case ACCEPT_FOR_SESSION -> List.of("allow_always", "allow_once");
+      case ACCEPT -> List.of("allow_once");
+      // never "allow_always": TRAE saves it as a machine-wide prefix rule (~/.trae/cli/rules) that later
+      // runs matching commands outside the sandbox without asking; "for this task" is kept by the daemon
+      case ACCEPT_FOR_SESSION -> List.of("allow_once");
       case DECLINE -> List.of("reject_once", "reject_always");
       case CANCEL -> List.of();
     };

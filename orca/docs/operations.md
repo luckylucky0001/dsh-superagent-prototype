@@ -85,6 +85,8 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 2. 在自己电脑的浏览器里打开该网址，用企业账号完成 SSO。
 3. 浏览器最后会跳到 `http://127.0.0.1:<端口>/authorize?...` 并显示无法访问（因为那个端口在构建机上）。复制这个完整地址，粘贴到构建机上 traecli 的提示“Paste callback URL to verify automatically”处（或在另一个终端执行 `curl "<该地址>"`），登录即完成，`traecli login status` 显示已登录。
 
+**升级自较早版本**：1.0 之前的 daemon 在“本任务内允许”时会让 TRAE 保存“不再询问”规则，并把每个任务目录标为受信任。请在每台运行时机器上检查并删除这些残留：`~/.trae/cli/rules/default.rules` 中指向 Orca 工作目录的 `prefix_rule`，以及 `~/.trae/traecli.toml` 中 `~/.orca/work/...` 的 `[projects."…"]` 条目。TRAE 与 Codex 自己也会把执行过任务的目录记为受信任项目（`~/.trae/traecli.toml`、`~/.codex/config.toml`），清理 `~/.orca/work` 时可一并删除对应条目。
+
 注意：这个回调地址里带有登录令牌，只在构建机上使用，不要发到聊天群或工单里。也可以改用个人访问令牌：`TRAECLI_PERSONAL_ACCESS_TOKEN=... traecli login --with-trae-pat`。
 
 ## 6. 故障排查
