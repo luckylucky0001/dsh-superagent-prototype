@@ -450,6 +450,16 @@ class EndToEndTest {
     assertEquals(403, raw(bare, "POST", "/api/auth/tokens", Map.of("label", "more", "days", 365), pat).status());
     assertEquals(403, raw(bare, "POST", "/api/runtimes/registration-codes", null, pat).status());
     assertEquals(403, raw(bare, "POST", "/api/projects", Map.of("key", "PX" + RUN, "name", "x"), pat).status());
+    // ...nor change what agents may do
+    assertEquals(403, raw(bare, "POST", "/api/agents", Map.of("name", "patagent" + RUN), pat).status());
+    assertEquals(403, raw(bare, "PATCH", "/api/agents/anything", Map.of("permission", "full"), pat).status());
+    assertEquals(403, raw(bare, "POST", "/api/skills", Map.of("name", "x"), pat).status());
+    assertEquals(403, raw(bare, "PUT", "/api/workflows/anything", Map.of("name", "x"), pat).status());
+    // a member's web session: agents within limits, but no widening and no machines
+    assertEquals(403, raw(web, "POST", "/api/agents", Map.of("name", "wide" + RUN, "permission", "full"), null).status());
+    assertEquals(403, raw(web, "POST", "/api/agents", Map.of("name", "cmds" + RUN, "allowedCommands", List.of("python3")), null).status());
+    assertEquals(200, raw(web, "POST", "/api/agents", Map.of("name", "narrow" + RUN, "archived", true), null).status());
+    assertEquals(403, raw(web, "POST", "/api/runtimes/registration-codes", null, null).status());
 
     // the web session needs the current password, and changing it signs out every other session and token
     assertEquals(400, raw(web, "PATCH", "/api/members/" + me, Map.of("password", "second-pass-2"), null).status());

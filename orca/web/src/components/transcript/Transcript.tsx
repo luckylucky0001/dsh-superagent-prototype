@@ -20,6 +20,7 @@ import { api } from '@/api/client';
 import { qk, useRuntimeMap, useTaskEvents } from '@/api/queries';
 import { ACTIVE_TASK_STATUSES, taskTokensOf, TERMINAL_TASK_STATUSES, type Task, type Usage } from '@/api/types';
 import { useT } from '@/app/i18n';
+import { useMe } from '@/app/auth';
 import { Markdown } from '../Markdown';
 import { DiffView, JsonView } from '../CodeBlock';
 import { fmtTime, fmtTokens, prettyJson } from '../format';
@@ -267,6 +268,15 @@ function SteerBox({ task }: { task: Task }) {
   );
 }
 
+/** An Ask is the asker's conversation: the server lets only them (or an owner/admin) steer or cancel it. */
+export function useCanControl(task: Task): boolean {
+  const me = useMe().data;
+  if (task.kind !== 'ask') return true;
+  const by = task.origin?.by;
+  if (by == null || !me) return true;
+  return by === me.id || me.role === 'owner' || me.role === 'admin';
+}
+
 export function CancelTaskButton({ task, size = 'small' }: { task: Task; size?: 'small' | 'middle' }) {
   const t = useT();
   const notify = useNotify();
@@ -280,7 +290,8 @@ export function CancelTaskButton({ task, size = 'small' }: { task: Task; size?: 
     },
     onError: notify.error,
   });
-  if (TERMINAL_TASK_STATUSES.includes(task.status)) return null;
+  const canControl = useCanControl(task);
+  if (TERMINAL_TASK_STATUSES.includes(task.status) || !canControl) return null;
   return (
     <Popconfirm title={t('transcript.cancelConfirm')} onConfirm={() => cancel.mutate()} okButtonProps={{ danger: true }}>
       <Button danger size={size} icon={<StopOutlined />} loading={cancel.isPending || task.statusDetail === 'cancelling'}
@@ -309,6 +320,7 @@ export function Transcript({ task, maxHeight = 560, showControls = true }: Trans
   const transcript = useMemo(() => buildTranscript(events.data ?? []), [events.data]);
   const scroller = useRef<HTMLDivElement>(null);
   const active = ACTIVE_TASK_STATUSES.includes(task.status);
+  const canControl = useCanControl(task);
   // follow the end of live transcripts; finished ones open at the prompt
   const stick = useRef(active || task.status === 'queued');
   const lastSeq = events.data?.length ? events.data[events.data.length - 1].seq : 0;
@@ -356,7 +368,7 @@ export function Transcript({ task, maxHeight = 560, showControls = true }: Trans
         )}
       </div>
       {transcript.usage && <UsageFooter usage={transcript.usage} />}
-      {showControls && active && <SteerBox task={task} />}
+      {showControls && active && canControl && <SteerBox task={task} />}
     </div>
   );
 }
