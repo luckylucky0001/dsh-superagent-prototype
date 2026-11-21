@@ -65,6 +65,7 @@
 | 会话 | `session/new {cwd, mcpServers:[{type:"http", name, url, headers:[{name,value}]}]}`、`session/load`（新进程中恢复，回放历史 17 条，驱动忽略回放并保留上下文）、`session/prompt`、`session/cancel` | ✅ |
 | 流式 | `session/update`：`agent_message_chunk`、`agent_thought_chunk`、`tool_call`（含 `rawInput.command`）、`tool_call_update`、`plan`、`usage_update`（上下文占用 `used/size`）、`available_commands_update` | ✅ |
 | 用量 | `session/prompt` 结果的 `usage` 与 `_meta._trae/tokenUsage{turn, sessionTotal, contextWindow}`；驱动换算成与 Codex 相同的字段，`taskTokens` 只计本任务的轮次 | ✅ |
+| 套餐额度 | ACP 无对应方法；实验性的 `traecli app-server` 有 `account/rateLimits/read`，但企业 SSO 账号返回 “browser account authentication required to read rate limits”，因此运行时页面只显示 Codex 的额度窗口。TRAE 开放后可用与 Codex 相同的 `UsageWindow` 接入 | ✅ 实测（0.216.0） |
 | 图片 | prompt 中 `{type:"image", mimeType, data(base64)}` | ✅ |
 | 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次，与原请求共用同一个超时；用尽后任务以失败而不是“已取消”结束），使两者行为一致。daemon 批准时只选 `approved`（仅这一次），不选“不再询问” | ✅ |
 | 命令白名单 | 不使用 `--allowed-tool Bash(...)`：实测与条目完全相同的命令会被 TRAE 直接在沙箱外执行、不经过审批，绕过 daemon 对工作目录与嵌套仓库的检查。白名单命令改由 daemon 的审批策略在提权请求时逐条判断 | ✅ |
