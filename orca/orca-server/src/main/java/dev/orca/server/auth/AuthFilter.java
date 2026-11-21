@@ -53,9 +53,24 @@ public class AuthFilter extends OncePerRequestFilter {
   private static final org.springframework.web.util.UrlPathHelper PATHS = new org.springframework.web.util.UrlPathHelper();
 
   private final AuthService auth;
+  private final String publicOrigin;
 
-  public AuthFilter(AuthService auth) {
+  public AuthFilter(AuthService auth, dev.orca.server.support.OrcaProperties props) {
     this.auth = auth;
+    this.publicOrigin = originOf(props.publicUrl());
+  }
+
+  /** {@code scheme://host[:port]} of a URL, lower case, or {@code null}. */
+  static String originOf(String url) {
+    try {
+      java.net.URI u = java.net.URI.create(url.trim());
+      if (u.getScheme() == null || u.getHost() == null) {
+        return null;
+      }
+      return (u.getScheme() + "://" + u.getHost() + (u.getPort() < 0 ? "" : ":" + u.getPort())).toLowerCase(java.util.Locale.ROOT);
+    } catch (RuntimeException e) {
+      return null;
+    }
   }
 
   @Override
@@ -99,9 +114,55 @@ public class AuthFilter extends OncePerRequestFilter {
           + "skills or workflow definitions; sign in to the web app for that\"}");
       return;
     }
+    if (!sameOrigin(req, publicOrigin)) {
+      res.setStatus(403);
+      res.setContentType("application/json");
+      res.setCharacterEncoding("UTF-8");
+      res.getWriter().write("{\"error\":\"cross-origin request refused\"}");
+      return;
+    }
     req.setAttribute(CurrentUser.ATTR, m.get());
     req.setAttribute(CurrentUser.KIND, tok.get().kind);
     chain.doFilter(req, res);
+  }
+
+  /**
+   * The session cookie is {@code SameSite=Lax}, which still sends it from sibling subdomains (same site). A
+   * browser marks every cross-origin write with {@code Origin}; cookie-authenticated writes must come from the
+   * app's own origin. Requests without {@code Origin} (the CLI, scripts, older browsers on same-origin forms)
+   * and bearer-token requests (no ambient credential) are not affected.
+   */
+  static boolean sameOrigin(HttpServletRequest req, String publicOrigin) {
+    String method = req.getMethod();
+    if ("GET".equals(method) || "HEAD".equals(method) || "OPTIONS".equals(method)) {
+      return true;
+    }
+    String h = req.getHeader("Authorization");
+    if (h != null && h.startsWith("Bearer ")) {
+      return true;
+    }
+    String origin = req.getHeader("Origin");
+    if (origin == null) {
+      return true;
+    }
+    if (publicOrigin != null && publicOrigin.equals(originOf(origin))) {
+      return true; // behind a proxy that rewrites Host
+    }
+    String host = req.getHeader("Host");
+    try {
+      java.net.URI o = java.net.URI.create(origin.trim());
+      if (o.getHost() == null || host == null) {
+        return false;
+      }
+      String authority = o.getPort() < 0 ? o.getHost() : o.getHost() + ":" + o.getPort();
+      String expected = host.trim().toLowerCase(java.util.Locale.ROOT);
+      String got = authority.toLowerCase(java.util.Locale.ROOT);
+      // a default port may be spelt out in one header and left out in the other
+      return got.equals(expected) || got.equals(expected.replaceFirst(":(80|443)$", ""))
+          || expected.equals(got.replaceFirst(":(80|443)$", ""));
+    } catch (IllegalArgumentException e) {
+      return false;
+    }
   }
 
   public static String token(HttpServletRequest req) {

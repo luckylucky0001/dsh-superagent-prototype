@@ -194,6 +194,8 @@ public class TriggerService {
   // ---------------------------------------------------------------- schedules
 
   /** Each schedule fires and records its next time in its own transaction, so one failure cannot replay others. */
+  static final long STALE_MS = 10 * 60_000L;
+
   @Scheduled(fixedDelay = 30_000, initialDelay = 20_000)
   public void tick() {
     long now = Ids.now();
@@ -212,12 +214,18 @@ public class TriggerService {
         } catch (RuntimeException ex) {
           continue;
         }
+        String spec = str(n.config().get("cron"), "").trim() + "|" + zone.getId();
         ScheduleState st = schedules.findById(id).orElse(null);
-        if (st == null) {
-          st = new ScheduleState();
-          st.id = id;
-          st.workflowId = w.id;
-          st.nodeId = n.id();
+        // new, edited (cron or time zone), or stale: a schedule whose time passed long ago, because the workflow
+        // was disabled or the server was down, starts from now instead of firing a run nobody expects
+        if (st == null || !spec.equals(st.spec) || st.nextFireAt < now - STALE_MS) {
+          if (st == null) {
+            st = new ScheduleState();
+            st.id = id;
+            st.workflowId = w.id;
+            st.nodeId = n.id();
+          }
+          st.spec = spec;
           st.nextFireAt = next(cron, zone, now);
           schedules.save(st);
           continue;

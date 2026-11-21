@@ -763,4 +763,59 @@ class EndToEndTest {
     }
   }
 
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.workflow.TriggerService triggerService;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.repo.ScheduleRepo scheduleRepo;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.workflow.WorkflowService workflowService;
+
+  private static Map<String, Object> scheduled(String cron) {
+    return Map.of("nodes", List.of(
+            Map.of("id", "every", "type", "trigger.schedule", "config", Map.of("cron", cron, "timezone", "Asia/Singapore")),
+            Map.of("id", "note", "type", "logic.set", "config", Map.of("values", Map.of("ok", true)))),
+        "edges", List.of(Map.of("id", "e1", "source", "every", "target", "note")));
+  }
+
+  @Test
+  void aScheduleIsRecomputedWhenEditedAndDoesNotReplayAStaleTime() throws Exception {
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Nightly", "enabled", true,
+        "definition", scheduled("0 0 3 * * *"))), "id");
+    triggerService.tick();
+    var st = scheduleRepo.findById(wf + ":every").orElseThrow();
+    long nightly = st.nextFireAt;
+    assertTrue(nightly > System.currentTimeMillis());
+    // a stale time (the workflow was disabled for a day) is not fired on the next tick
+    st.nextFireAt = System.currentTimeMillis() - 86_400_000L;
+    scheduleRepo.save(st);
+    triggerService.tick();
+    assertTrue(scheduleRepo.findById(wf + ":every").orElseThrow().nextFireAt > System.currentTimeMillis());
+    assertEquals(0, ((List<?>) call("GET", "/api/runs?workflowId=" + wf, null)).size(), "no surprise run");
+    // editing the cron takes effect at once, not after the old next time
+    call("PUT", "/api/workflows/" + wf, Map.of("definition", scheduled("0 */5 * * * *")));
+    triggerService.tick();
+    long edited = scheduleRepo.findById(wf + ":every").orElseThrow().nextFireAt;
+    assertTrue(edited - System.currentTimeMillis() <= 5 * 60_000L, "the new schedule's next time is used");
+    call("POST", "/api/workflows/" + wf + "/enabled", Map.of("enabled", false));
+  }
+
+  @Test
+  void aTimedOutApprovalIsClosedInTheInbox() throws Exception {
+    Map<String, Object> def = Map.of(
+        "nodes", List.of(
+            Map.of("id", "start", "type", "trigger.manual", "config", Map.of()),
+            Map.of("id", "ask", "type", "human.approval", "timeoutSeconds", 1, "config", Map.of("title", "Expire me"))),
+        "edges", List.of(Map.of("id", "e1", "source", "start", "target", "ask")));
+    String wf = Json.str(call("POST", "/api/workflows", Map.of("name", "Expiring", "definition", def)), "id");
+    String run = Json.str(call("POST", "/api/workflows/" + wf + "/runs", Map.of("input", Map.of())), "id");
+    Thread.sleep(1_200);
+    workflowService.expireDeadlines();
+    assertEquals("failed", Json.str(call("GET", "/api/runs/" + run, null), "status"));
+    Object item = ((List<?>) call("GET", "/api/inbox", null)).stream()
+        .filter(i -> run.equals(Json.str(i, "runId")) && "Expire me".equals(Json.str(i, "title"))).findFirst().orElseThrow();
+    assertEquals("expired", Json.str(item, "status"), "a timed-out approval can no longer be answered");
+  }
 }

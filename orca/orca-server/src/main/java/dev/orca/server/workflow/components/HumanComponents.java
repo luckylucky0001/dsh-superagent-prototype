@@ -53,6 +53,12 @@ public class HumanComponents {
       }
 
       @Override
+      public void cancel(NodeContext ctx) {
+        // a timed-out or cancelled approval must not stay answerable in the inbox
+        inbox.closeWait(ctx.waitKey());
+      }
+
+      @Override
       public NodeResult onSignal(NodeContext ctx, Map<String, Object> p) {
         boolean ok = "approved".equals(p.get("decision"));
         return NodeResult.done(p, ok ? "approved" : "rejected");
@@ -86,6 +92,11 @@ public class HumanComponents {
         inbox.input(ctx.runId(), ctx.node().id(), key, ctx.string("title", "Input needed"), ctx.string("body"),
             questions, issueOf(ctx));
         return NodeResult.waiting(key);
+      }
+
+      @Override
+      public void cancel(NodeContext ctx) {
+        inbox.closeWait(ctx.waitKey());
       }
 
       @Override

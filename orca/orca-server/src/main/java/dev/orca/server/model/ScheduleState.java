@@ -12,4 +12,6 @@ public class ScheduleState {
   public String workflowId;
   public String nodeId;
   public long nextFireAt;
+  /** {@code cron|zone} that {@link #nextFireAt} was computed from. */
+  public String spec;
 }

@@ -177,6 +177,19 @@ public class InboxService {
     }
   }
 
+  /** Closes the item a waiting workflow step opened, when the step timed out, was cancelled or is retried. */
+  @Transactional
+  public void closeWait(String waitKey) {
+    if (waitKey == null) {
+      return;
+    }
+    items.findById(waitKey).filter(i -> PENDING.equals(i.status)).ifPresent(i -> {
+      i.status = EXPIRED;
+      i.resolvedAt = Ids.now();
+      save(i);
+    });
+  }
+
   @Transactional
   public void closeRun(String runId) {
     for (InboxItem i : items.findByRunIdAndStatus(runId, PENDING)) {

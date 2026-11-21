@@ -35,8 +35,25 @@ public class TaskController {
     return tasks.events(id, after).stream().map(Views.EventView::of).toList();
   }
 
+  /**
+   * An Ask is one person's conversation with an agent: only they (or an owner/admin) steer or cancel it. Tasks
+   * of issues and workflows belong to the team, as the issue does.
+   */
+  private void checkAsker(String id) {
+    dev.orca.server.model.Task t = tasks.get(id);
+    if (!"ask".equals(t.kind) || dev.orca.server.auth.Roles.isAdmin()) {
+      return;
+    }
+    Object by = t.originJson == null ? null : dev.orca.server.support.JsonCols.map(t.originJson).get("by");
+    if (by != null && !by.equals(dev.orca.server.auth.CurrentUser.id())) {
+      throw new dev.orca.server.support.ApiException(org.springframework.http.HttpStatus.FORBIDDEN,
+          "only the person who asked can steer or cancel this Ask");
+    }
+  }
+
   @PostMapping("/{id}/cancel")
   public Views.TaskView cancel(@PathVariable String id) {
+    checkAsker(id);
     return Views.TaskView.of(dev.orca.server.support.Retry.onConflict(() -> tasks.cancel(id, "cancelled by a person")));
   }
 
@@ -44,6 +61,7 @@ public class TaskController {
 
   @PostMapping("/{id}/steer")
   public Map<String, Object> steer(@PathVariable String id, @RequestBody SteerInput in) {
+    checkAsker(id);
     tasks.steer(id, in.text());
     return Map.of("ok", true);
   }
