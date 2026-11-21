@@ -447,10 +447,19 @@ public class TaskService {
       if (TaskStatus.TERMINAL.contains(t.status)) {
         return;
       }
-      t.status = TaskStatus.RUNNING;
-      t.sessionRef = m.sessionRef();
-      t.model = m.model();
-      t.startedAt = Ids.now();
+      // the daemon resends this after a reconnect: apply it once, keep a later status (waiting for input)
+      if (TaskStatus.DISPATCHED.equals(t.status)) {
+        t.status = TaskStatus.RUNNING;
+      }
+      if (m.sessionRef() != null) {
+        t.sessionRef = m.sessionRef();
+      }
+      if (m.model() != null) {
+        t.model = m.model();
+      }
+      if (t.startedAt == null) {
+        t.startedAt = Ids.now();
+      }
       t.leaseUntil = Ids.now() + props.leaseSeconds() * 1000L;
       tasks.save(t);
       changed(t);
@@ -520,13 +529,22 @@ public class TaskService {
 
   @Transactional
   public void completed(String runtimeId, Wire.TaskCompleted m) {
-    Task t = tasks.findById(m.taskId()).orElse(null);
-    if (t == null) {
-      return;
-    }
+    // always acknowledged, even for a task unknown here (e.g. after a restore): otherwise the daemon keeps
+    // the finished runner, and its slot, forever
     afterCommit(() -> gateway.send(runtimeId, Wire.frame(Wire.ACK, new Wire.Ack(m.taskId(), m.lastSeq(), true))));
-    if (TaskStatus.TERMINAL.contains(t.status) || !runtimeId.equals(t.runtimeId)) {
+    Task t = tasks.findById(m.taskId()).orElse(null);
+    if (t == null || TaskStatus.TERMINAL.contains(t.status) || !runtimeId.equals(t.runtimeId)) {
       return; // already ended here, or reported by a runtime that does not hold this task
+    }
+    if (ErrorCodes.RUNTIME_BUSY.equals(m.errorCode()) && t.startedAt == null) {
+      // the runtime is still finishing an earlier task: try again later rather than failing the work
+      t.status = TaskStatus.QUEUED;
+      t.runtimeId = null;
+      t.leaseUntil = null;
+      t.statusDetail = "re-queued: the runtime was busy";
+      tasks.save(t);
+      changed(t);
+      return;
     }
     String status = switch (String.valueOf(m.status())) {
       case "succeeded" -> TaskStatus.SUCCEEDED;
@@ -593,11 +611,36 @@ public class TaskService {
     for (Wire.RunningTask r : running == null ? List.<Wire.RunningTask>of() : running) {
       known.add(r.taskId());
     }
+    long lease = Ids.now() + props.leaseSeconds() * 1000L;
     List<String> lost = new ArrayList<>();
-    for (Task t : tasks.findByStatusIn(TaskStatus.ACTIVE)) {
-      if (runtimeId.equals(t.runtimeId) && !known.contains(t.id) && TaskStatus.RUNNING.equals(t.status)) {
-        finish(t, TaskStatus.FAILED, ErrorCodes.RUNTIME_LOST, "the runtime restarted while the task was running", null);
-        lost.add(t.id);
+    List<String> statuses = new ArrayList<>(TaskStatus.ACTIVE);
+    statuses.add(TaskStatus.QUEUED); // re-queued while the runtime was out of reach
+    for (Task t : tasks.findByStatusIn(statuses)) {
+      boolean mine = runtimeId.equals(t.runtimeId);
+      if (known.contains(t.id) && (mine || t.runtimeId == null && TaskStatus.QUEUED.equals(t.status))) {
+        // still running there: renew the lease now (expiry may run before the first heartbeat), and take back
+        // a task that was re-queued while the runtime was out of reach instead of running it twice
+        if (!mine) {
+          t.runtimeId = runtimeId;
+          t.status = t.startedAt != null ? TaskStatus.RUNNING : TaskStatus.DISPATCHED;
+          t.statusDetail = null;
+        }
+        t.leaseUntil = lease;
+        tasks.save(t);
+        changed(t);
+      } else if (mine && !known.contains(t.id)) {
+        if (TaskStatus.DISPATCHED.equals(t.status) && t.startedAt == null) {
+          // the assignment never reached it: queue the task again
+          t.status = TaskStatus.QUEUED;
+          t.runtimeId = null;
+          t.leaseUntil = null;
+          t.statusDetail = "re-queued: the runtime did not receive it";
+          tasks.save(t);
+          changed(t);
+        } else {
+          finish(t, TaskStatus.FAILED, ErrorCodes.RUNTIME_LOST, "the runtime restarted while the task was running", null);
+          lost.add(t.id);
+        }
       }
     }
     return lost;
@@ -620,7 +663,12 @@ public class TaskService {
           tasks.save(t);
           changed(t);
         } else {
+          String rt = t.runtimeId;
           finish(t, TaskStatus.FAILED, ErrorCodes.RUNTIME_LOST, "lost contact with the runtime", null);
+          if (rt != null) {
+            // if it is still running there, stop it: its result would no longer be accepted
+            afterCommit(() -> gateway.send(rt, Wire.frame(Wire.TASK_CANCEL, new Wire.TaskCancel(t.id, "lost contact"))));
+          }
         }
       }
     }

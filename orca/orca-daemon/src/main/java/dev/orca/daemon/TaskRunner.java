@@ -56,6 +56,9 @@ final class TaskRunner implements Runnable {
   private volatile boolean cancelRequested;
   private volatile boolean finished;
   private volatile Wire.Frame completion;
+  /** The last TASK_STARTED sent; resent after a reconnect, since the first may have been lost. */
+  private volatile Wire.Frame startedFrame;
+  private volatile boolean stopFlushing;
 
   TaskRunner(Wire.TaskAssign task, AgentProvider provider, Workspaces workspaces, Link link, boolean isolated,
       boolean allowExtraArgs, boolean allowNetwork, String server, Runnable onDone) {
@@ -97,20 +100,26 @@ final class TaskRunner implements Runnable {
       }
       inputs.values().forEach(f -> f.complete(Interaction.InputReply.decline()));
     }
-    flusher.interrupt();
-    // number every remaining event now, connected or not, so the completion's lastSeq covers them and a
-    // reconnect replays them before the completion
-    List<AgentEvent> rest;
-    synchronized (this) {
-      rest = buffer.drain();
+    // stop the flusher without interrupting it: an interrupt during a socket send aborts the connection
+    stopFlushing = true;
+    try {
+      flusher.join(5_000);
+    } catch (InterruptedException e) {
+      Thread.currentThread().interrupt();
     }
-    completion = Wire.frame(Wire.TASK_COMPLETED, withSeq(result));
-    finished = true;
-    if (link.connected()) {
-      if (!rest.isEmpty()) {
-        link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), rest)));
+    // number every remaining event now, connected or not, so the completion's lastSeq covers them and a
+    // reconnect replays them before the completion. Under the same lock as replay(), so one of the two sends
+    // the completion; heartbeats resend it until the server acknowledges it (see resendCompletion).
+    synchronized (this) {
+      List<AgentEvent> rest = buffer.drain();
+      completion = Wire.frame(Wire.TASK_COMPLETED, withSeq(result));
+      finished = true;
+      if (link.connected()) {
+        if (!rest.isEmpty()) {
+          link.send(Wire.frame(Wire.TASK_EVENTS, new Wire.TaskEvents(task.taskId(), rest)));
+        }
+        link.send(completion);
       }
-      link.send(completion);
     }
     log.info("task {} {}", task.taskId(), result.status());
     // the runner stays registered until the server acknowledges the completion (see Daemon)
@@ -198,7 +207,7 @@ final class TaskRunner implements Runnable {
     if (cancelRequested) {
       return completed("cancelled", null, null, session.sessionRef(), ErrorCodes.CANCELLED, "cancelled", Map.of());
     }
-    link.send(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), session.sessionRef(), session.model(),
+    sendStarted(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), session.sessionRef(), session.model(),
         session.resumed())));
     buffer.add(AgentEvent.of(AgentEvent.SESSION, "provider", provider.id(), "sessionRef", session.sessionRef(),
         "model", session.model(), "resumed", session.resumed(), "cwd", dir.toString()));
@@ -301,7 +310,7 @@ final class TaskRunner implements Runnable {
     }
     String branch = task.repo().branch();
     Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
-    link.send(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), null, null, false)));
+    sendStarted(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), null, null, false)));
     Executables.Output head = Executables.run(SafeGit.cmd(dir, "rev-parse", "--abbrev-ref", "HEAD"),
         Map.of(), 30);
     if (head.exitCode() != 0 || !branch.equals(head.stdout().trim())) {
@@ -645,8 +654,23 @@ final class TaskRunner implements Runnable {
     buffer.ack(seq);
   }
 
+  private void sendStarted(Wire.Frame f) {
+    startedFrame = f;
+    link.send(f);
+  }
+
+  /** Until acknowledged: the completion may have been lost (sent while the link was reconnecting). */
+  synchronized void resendCompletion() {
+    if (finished && completion != null && link.connected()) {
+      replay();
+    }
+  }
+
   /** After a reconnect: resend what the server has not acknowledged, and the completion if done. */
   synchronized void replay() {
+    if (startedFrame != null) {
+      link.send(startedFrame); // applied once by the server; the first may have been sent while disconnected
+    }
     buffer.drain(); // pending events from the disconnected period join the unacknowledged ones, in order
     List<AgentEvent> again = buffer.unacked();
     if (!again.isEmpty()) {
@@ -664,7 +688,7 @@ final class TaskRunner implements Runnable {
   // ---------------------------------------------------------------- streaming
 
   private void flushLoop() {
-    while (!finished) {
+    while (!stopFlushing && !finished) {
       try {
         Thread.sleep(250);
       } catch (InterruptedException e) {

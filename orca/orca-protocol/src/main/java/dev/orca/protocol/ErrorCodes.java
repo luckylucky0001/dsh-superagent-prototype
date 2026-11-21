@@ -16,6 +16,8 @@ public final class ErrorCodes {
   public static final String AGENT_ERROR = "AGENT_ERROR";
   public static final String INVALID_OUTPUT = "INVALID_OUTPUT";
   public static final String MODEL_NOT_FOUND = "MODEL_NOT_FOUND";
+  /** The runtime refused an assignment because it is still busy; the server queues the task again. */
+  public static final String RUNTIME_BUSY = "RUNTIME_BUSY";
 
   private ErrorCodes() {}
 

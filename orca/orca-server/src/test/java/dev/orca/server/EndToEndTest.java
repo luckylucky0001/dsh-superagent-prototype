@@ -629,4 +629,55 @@ class EndToEndTest {
     }
   }
 
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.task.TaskService taskService;
+
+  @org.springframework.beans.factory.annotation.Autowired
+  dev.orca.server.repo.TaskRepo taskRepo;
+
+  private dev.orca.server.model.Task rawTask(String status, String runtimeId, Long startedAt, Long leaseUntil) {
+    dev.orca.server.model.Task t = new dev.orca.server.model.Task();
+    t.id = dev.orca.server.support.Ids.next("tsk");
+    t.agentId = "agt_reconcile";
+    t.provider = "codex";
+    t.kind = "ask";
+    t.prompt = "x";
+    t.status = status;
+    t.runtimeId = runtimeId;
+    t.startedAt = startedAt;
+    t.leaseUntil = leaseUntil;
+    t.workspaceKey = "adhoc/" + t.id;
+    t.queuedAt = System.currentTimeMillis();
+    return taskRepo.save(t);
+  }
+
+  @Test
+  void aReconnectingRuntimeKeepsItsTasksAndTakesBackRequeuedOnes() {
+    long now = System.currentTimeMillis();
+    // hold the dispatcher's lock so it cannot pick up the queued tasks while the reconnect is handled
+    Object dispatcher = org.springframework.test.util.AopTestUtils.getTargetObject(taskService);
+    synchronized (dispatcher) {
+      var running = rawTask("running", "rt_reconnect", now - 120_000, now - 5_000);
+      var requeued = rawTask("queued", null, now - 120_000, null);
+      var neverReceived = rawTask("dispatched", "rt_reconnect", null, now + 30_000);
+      var forgotten = rawTask("waiting_input", "rt_reconnect", now - 120_000, now + 30_000);
+      List<String> lost = taskService.reconcile("rt_reconnect", List.of(
+          new dev.orca.protocol.Wire.RunningTask(running.id, 0), new dev.orca.protocol.Wire.RunningTask(requeued.id, 0)));
+      var r1 = taskRepo.findById(running.id).orElseThrow();
+      assertTrue(r1.leaseUntil != null && r1.leaseUntil > now, "the lease is renewed at once, before any heartbeat");
+      var r2 = taskRepo.findById(requeued.id).orElseThrow();
+      assertEquals("rt_reconnect", r2.runtimeId, "a task re-queued during the outage is taken back, not run twice");
+      assertEquals("running", r2.status);
+      var r3 = taskRepo.findById(neverReceived.id).orElseThrow();
+      assertEquals("queued", r3.status, "an assignment that never arrived is queued again");
+      assertEquals(List.of(forgotten.id), lost, "a task waiting for input that the runtime no longer has is lost");
+      for (var t : List.of(r1, r2, r3)) {
+        t = taskRepo.findById(t.id).orElseThrow();
+        t.status = "cancelled";
+        taskRepo.save(t);
+      }
+    }
+  }
+
 }
