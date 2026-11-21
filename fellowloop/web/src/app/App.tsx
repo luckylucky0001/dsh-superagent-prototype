@@ -25,7 +25,7 @@ function Themed() {
   return (
     <ConfigProvider locale={lang === 'zh' ? zhCN : enUS} theme={theme}>
       <AntApp>
-        <RouterProvider router={router} future={{ v7_startTransition: true }} />
+        <RouterProvider router={router} />
       </AntApp>
     </ConfigProvider>
   );

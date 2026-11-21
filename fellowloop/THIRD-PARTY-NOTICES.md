@@ -31,9 +31,9 @@ Dual-licensed components (Logback EPL-2.0/LGPL-2.1, Jakarta APIs EPL-2.0/GPL-2.0
 | org.antlr:antlr4-runtime | 4.13.2 | [BSD-3-Clause](https://www.antlr.org/license.html) | fellowloop-server |
 | org.apache.logging.log4j:log4j-api | 2.25.5 | [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
 | org.apache.logging.log4j:log4j-to-slf4j | 2.25.5 | [Apache-2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
-| org.apache.tomcat.embed:tomcat-embed-core | 11.0.27 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
-| org.apache.tomcat.embed:tomcat-embed-el | 11.0.27 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
-| org.apache.tomcat.embed:tomcat-embed-websocket | 11.0.27 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
+| org.apache.tomcat.embed:tomcat-embed-core | 11.0.29 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
+| org.apache.tomcat.embed:tomcat-embed-el | 11.0.29 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
+| org.apache.tomcat.embed:tomcat-embed-websocket | 11.0.29 | [Apache License, Version 2.0](http://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-server |
 | org.aspectj:aspectjweaver | 1.9.27 | [Eclipse Public License - v 2.0](https://www.eclipse.org/org/documents/epl-2.0/EPL-2.0.txt) | fellowloop-server |
 | org.checkerframework:checker-qual | 3.55.1 | [The MIT License](https://opensource.org/licenses/MIT) | fellowloop-server |
 | org.eclipse.angus:angus-activation | 2.0.3 | [EDL 1.0](http://www.eclipse.org/org/documents/edl-v10.php) | fellowloop-server |
@@ -101,7 +101,7 @@ Dual-licensed components (Logback EPL-2.0/LGPL-2.1, Jakarta APIs EPL-2.0/GPL-2.0
 | tools.jackson.core:jackson-core | 3.1.8 | [The Apache Software License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-cli, fellowloop-daemon, fellowloop-server |
 | tools.jackson.core:jackson-databind | 3.1.8 | [The Apache Software License, Version 2.0](https://www.apache.org/licenses/LICENSE-2.0.txt) | fellowloop-cli, fellowloop-daemon, fellowloop-server |
 
-## Web app (bundled into the server): 179 packages
+## Web app (bundled into the server): 180 packages
 
 | Package | Version | Licence |
 |---|---|---|
@@ -122,7 +122,6 @@ Dual-licensed components (Logback EPL-2.0/LGPL-2.1, Jakarta APIs EPL-2.0/GPL-2.0
 | @rc-component/qrcode | 1.1.3 | MIT |
 | @rc-component/tour | 1.15.1 | MIT |
 | @rc-component/trigger | 2.3.1 | MIT |
-| @remix-run/router | 1.23.4 | MIT |
 | @tanstack/query-core | 5.108.2 | MIT |
 | @tanstack/react-query | 5.108.2 | MIT |
 | @types/d3-color | 3.1.3 | MIT |
@@ -152,6 +151,7 @@ Dual-licensed components (Logback EPL-2.0/LGPL-2.1, Jakarta APIs EPL-2.0/GPL-2.0
 | classnames | 2.5.1 | MIT |
 | comma-separated-tokens | 2.0.3 | MIT |
 | compute-scroll-into-view | 3.2.2 | MIT |
+| cookie | 1.1.1 | MIT |
 | copy-to-clipboard | 3.3.3 | MIT |
 | csstype | 3.2.4 | MIT |
 | d3-color | 3.1.1 | ISC |
@@ -259,14 +259,15 @@ Dual-licensed components (Logback EPL-2.0/LGPL-2.1, Jakarta APIs EPL-2.0/GPL-2.0
 | react-dom | 18.3.1 | MIT |
 | react-is | 18.3.1 | MIT |
 | react-markdown | 10.1.0 | MIT |
-| react-router | 6.30.6 | MIT |
-| react-router-dom | 6.30.6 | MIT |
+| react-router | 7.18.6 | MIT |
+| react-router-dom | 7.18.6 | MIT |
 | remark-gfm | 4.0.1 | MIT |
 | remark-parse | 11.0.0 | MIT |
 | remark-rehype | 11.1.2 | MIT |
 | remark-stringify | 11.0.0 | MIT |
 | resize-observer-polyfill | 1.5.1 | MIT |
 | scroll-into-view-if-needed | 3.2.1 | MIT |
+| set-cookie-parser | 2.7.3 | MIT |
 | space-separated-tokens | 2.0.2 | MIT |
 | string-convert | 0.2.1 | MIT |
 | stringify-entities | 4.0.5 | MIT |

@@ -143,3 +143,21 @@ Failed logins are counted per "email + address"; after 10 consecutive failures f
 - Runtimes page: online status, CLI login status and capacity in use for each machine.
 - Usage page: number of runs, success rate and token usage, per agent and per day.
 - The Inbox can be pushed to Slack / Teams / Feishu / DingTalk / WeCom (`FELLOWLOOP_NOTIFY_WEBHOOK_URL`).
+
+## 10. Dependency security check
+
+Run before a release (needs access to `api.osv.dev` and the npm registry):
+
+```bash
+python3 scripts/dependency-audit.py
+```
+
+It looks up every Java runtime dependency of the server, daemon, CLI and agent drivers in [OSV](https://osv.dev) (which includes the GitHub Advisory Database) and runs `npm audit` on the front end; the exit code is 1 when something is found.
+
+Latest result (2026-11-21): 90 Java runtime dependencies and 310 npm packages, **no known vulnerabilities**. Handled during this audit:
+
+- React Router upgraded from 6.30.6 to 7.18.6 for GHSA-wrjc-x8rr-h8h6 (open redirect via a backslash in `<Link>` / `useNavigate`); GHSA-337j-9hxr-rhxg only affects server-side rendering, which this product does not use.
+- The return address after sign-in only accepts paths inside the app (no `//…`, backslashes or control characters), so a phishing link cannot use the sign-in to send people to another site.
+- Embedded Tomcat pinned to 11.0.29 (Spring Boot 4.1.3 ships 11.0.27): the component that faces the network stays on the latest patch.
+
+Also recommended: the Docker images use floating tags (`eclipse-temurin:21-jre` and others), so every rebuild picks up operating-system patches; scan the image (for example with Trivy) and pin its digest for a release. Codex CLI and TRAE CLI are installed on each runtime machine by its owner; keep them updated as the vendors announce fixes.

@@ -24,7 +24,7 @@ export function LoginPage() {
       const res = await api.login(v.email.trim(), v.password);
       qc.clear();
       qc.setQueryData(qk.me, res.member);
-      navigate(from && from !== '/login' ? from : '/issues', { replace: true });
+      navigate(safeReturnPath(from) ?? '/issues', { replace: true });
     } catch (e) {
       setError(errorMessage(e));
     } finally {
@@ -57,4 +57,15 @@ export function LoginPage() {
       </Card>
     </Flex>
   );
+}
+
+/**
+ * Where to go after signing in: only a path inside this app. A value such as "//evil.example" or "/\\evil.example"
+ * would be read by the browser as another site (an open redirect a phishing link could use).
+ */
+export function safeReturnPath(from: string | undefined | null): string | null {
+  if (!from || !from.startsWith('/') || from.startsWith('//') || from.includes('\\')) return null;
+  if (/[\u0000-\u001f\u007f]/.test(from)) return null;
+  if (from === '/login' || from.startsWith('/login?')) return null;
+  return from;
 }

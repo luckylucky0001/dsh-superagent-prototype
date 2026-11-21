@@ -143,3 +143,21 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 - 运行时页面：每台机器的在线状态、CLI 登录状态、并发占用。
 - 用量页面：按 Agent、按天统计运行次数、成功率与 token 用量。
 - 收件箱可推送到 Slack / Teams / 飞书 / 钉钉 / 企业微信（`FELLOWLOOP_NOTIFY_WEBHOOK_URL`）。
+
+## 10. 依赖安全检查
+
+发版前运行（需要能访问 `api.osv.dev` 与 npm 仓库）：
+
+```bash
+python3 scripts/dependency-audit.py
+```
+
+它把 server、daemon、CLI 与 Agent 驱动的全部 Java 运行时依赖提交到 [OSV](https://osv.dev)（包含 GitHub Advisory Database）查询已知漏洞，并对前端运行 `npm audit`；有发现时退出码为 1。
+
+最近一次结果（2026-11-21）：Java 90 个运行时依赖、npm 310 个包，**均无已知漏洞**。本次审计中处理的事项：
+
+- 前端 React Router 由 6.30.6 升级到 7.18.6，修复 GHSA-wrjc-x8rr-h8h6（`<Link>` / `useNavigate` 中反斜杠导致的开放重定向）；另一项 GHSA-337j-9hxr-rhxg 只影响服务端渲染，本产品不使用。
+- 登录后的返回地址只接受站内路径（拒绝 `//…`、反斜杠与控制字符），钓鱼链接无法借登录把用户带到外部站点。
+- 内嵌 Tomcat 固定为 11.0.29（Spring Boot 4.1.3 自带 11.0.27），对外服务的组件保持在最新补丁。
+
+另外建议：Docker 镜像基于浮动标签（`eclipse-temurin:21-jre` 等），每次重建都会带上操作系统补丁；正式发布前可用 Trivy 等工具扫描镜像，并为发布版本固定镜像摘要。Codex CLI 与 TRAE CLI 由各运行时机器自行安装，请按厂商公告及时升级。

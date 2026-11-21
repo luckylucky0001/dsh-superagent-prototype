@@ -896,4 +896,22 @@ class EndToEndTest {
     call("POST", "/api/skills/library/security-basics", null);
     assertEquals(2, cli(env, "skill", "edit", "git-commits").code(), "skills are changed in the web app, not with a token");
   }
+
+  @Test
+  void unknownPagesGoToTheAppButTheApiAndFilesDoNot() throws Exception {
+    HttpClient bare = HttpClient.newHttpClient();
+    java.util.function.Function<String, HttpResponse<String>> get = path -> {
+      try {
+        return bare.send(HttpRequest.newBuilder(URI.create("http://localhost:" + port + path)).GET().build(),
+            HttpResponse.BodyHandlers.ofString());
+      } catch (Exception e) {
+        throw new IllegalStateException(e);
+      }
+    };
+    // the app (not the framework) answers a mistyped page; the API namespace and files keep their own 404s
+    assertTrue(get.apply("/no-such-page").statusCode() != 500);
+    assertEquals(404, get.apply("/api").statusCode(), "the API namespace never serves the web app");
+    assertEquals(401, get.apply("/api/no-such-endpoint").statusCode(), "unauthenticated: no hint which endpoints exist");
+    assertEquals(404, get.apply("/nope.js").statusCode());
+  }
 }

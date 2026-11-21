@@ -31,11 +31,29 @@
     <maven.compiler.release>21</maven.compiler.release>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <spring-boot.version>4.1.3</spring-boot.version>
+    <!-- newer than Spring Boot 4.1.3 manages: the embedded server faces the network, keep it on the latest patch -->
+    <tomcat.version>11.0.29</tomcat.version>
     <fellowloop.excludedGroups>live</fellowloop.excludedGroups>
   </properties>
 
   <dependencyManagement>
     <dependencies>
+      <!-- declared before the Spring Boot BOM so these versions win -->
+      <dependency>
+        <groupId>org.apache.tomcat.embed</groupId>
+        <artifactId>tomcat-embed-core</artifactId>
+        <version>${tomcat.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.tomcat.embed</groupId>
+        <artifactId>tomcat-embed-el</artifactId>
+        <version>${tomcat.version}</version>
+      </dependency>
+      <dependency>
+        <groupId>org.apache.tomcat.embed</groupId>
+        <artifactId>tomcat-embed-websocket</artifactId>
+        <version>${tomcat.version}</version>
+      </dependency>
       <dependency>
         <groupId>org.springframework.boot</groupId>
         <artifactId>spring-boot-dependencies</artifactId>
