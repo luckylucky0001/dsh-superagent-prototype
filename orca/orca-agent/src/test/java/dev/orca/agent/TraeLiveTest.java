@@ -2,6 +2,7 @@ package dev.orca.agent;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import dev.orca.agent.core.AgentSession;
@@ -121,6 +122,33 @@ class TraeLiveTest {
       TurnResult r = s.runTurn(TurnSpec.text("What was the code word I gave you? Answer with the word only."), e -> {});
       System.out.println("resumed: " + r.finalText().replace('\n', ' '));
       assertTrue(r.finalText().toUpperCase().contains("KESTREL"), r.finalText());
+    }
+  }
+
+  @Test
+  void anApprovalForTheTaskLeavesNoSavedRuleInTrae() throws Exception {
+    Path dir = Files.createTempDirectory("orca-trae-grant");
+    Path home = Path.of(System.getProperty("user.home"));
+    Path outside = home.resolve("orca-live-grant-" + System.nanoTime() + ".txt");
+    Handler h = new Handler();
+    h.decision = Interaction.Decision.ACCEPT_FOR_SESSION; // a person chose "Allow for this task"
+    try (AgentSession s = provider().open(spec(dir, Permission.WORKSPACE, false), h)) {
+      TurnResult r = s.runTurn(TurnSpec.text("Run exactly this shell command: echo grant > " + outside
+          + "   If the sandbox blocks it, ask to run it outside the sandbox once. Then reply done."), e -> {});
+      System.out.println("grant: " + r.status() + " asked=" + (h.seen.get() != null) + " written=" + Files.exists(outside));
+      assertNotNull(h.seen.get(), "TRAE asked to leave the sandbox");
+      assertTrue(Files.exists(outside), "the approved command ran");
+    } finally {
+      Files.deleteIfExists(outside);
+    }
+    Path rules = home.resolve(".trae/cli/rules");
+    if (Files.isDirectory(rules)) {
+      try (var files = Files.list(rules)) {
+        for (Path f : files.toList()) {
+          assertFalse(Files.readString(f).contains(outside.getFileName().toString()),
+              "TRAE saved a don't-ask-again rule in " + f);
+        }
+      }
     }
   }
 
