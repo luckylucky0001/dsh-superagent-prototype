@@ -84,7 +84,12 @@ public final class TraeProvider implements AgentProvider {
       return List.of();
     } finally {
       if (dir != null) {
-        dir.toFile().delete();
+        // TRAE may write into the session folder; a probe runs every half hour, so delete all of it
+        try (java.util.stream.Stream<java.nio.file.Path> all = java.nio.file.Files.walk(dir)) {
+          all.sorted(java.util.Comparator.reverseOrder()).forEach(f -> f.toFile().delete());
+        } catch (IOException ignored) {
+          // best effort
+        }
       }
     }
   }
