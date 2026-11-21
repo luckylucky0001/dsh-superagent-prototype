@@ -269,7 +269,7 @@ final class TaskRunner implements Runnable {
     String branch = task.repo().branch();
     Path dir = workspaces.prepare(task.workspaceKey(), task.repo());
     link.send(Wire.frame(Wire.TASK_STARTED, new Wire.TaskStarted(task.taskId(), null, null, false)));
-    Executables.Output head = Executables.run(List.of("git", "-C", dir.toString(), "rev-parse", "--abbrev-ref", "HEAD"),
+    Executables.Output head = Executables.run(SafeGit.cmd(dir, "rev-parse", "--abbrev-ref", "HEAD"),
         Map.of(), 30);
     if (head.exitCode() != 0 || !branch.equals(head.stdout().trim())) {
       return completed("failed", null, null, null, ErrorCodes.AGENT_ERROR,
@@ -278,7 +278,7 @@ final class TaskRunner implements Runnable {
     String shown = "git push -u origin " + branch;
     buffer.add(AgentEvent.of(AgentEvent.TOOL_STARTED, "itemId", "push", "kind", "command", "title", shown,
         "input", Map.of("command", shown)));
-    Executables.Output out = Executables.run(List.of("git", "-C", dir.toString(), "push", "--porcelain", "-u", "origin",
+    Executables.Output out = Executables.run(SafeGit.cmd(dir, "push", "--porcelain", "--no-verify", "-u", "origin",
         "refs/heads/" + branch + ":refs/heads/" + branch), Map.of("GIT_TERMINAL_PROMPT", "0"), 300);
     String output = (out.stdout() + "\n" + out.stderr()).strip();
     buffer.add(AgentEvent.of(AgentEvent.TOOL_COMPLETED, "itemId", "push", "kind", "command", "title", shown,
@@ -405,7 +405,7 @@ final class TaskRunner implements Runnable {
   }
 
   private void autoCommit(Path dir, String finalText) {
-    Executables.Output st = Executables.run(List.of("git", "-C", dir.toString(), "status", "--porcelain"), Map.of(), 30);
+    Executables.Output st = Executables.run(SafeGit.cmd(dir, "status", "--porcelain", "--ignore-submodules=all"), Map.of(), 30);
     if (st.exitCode() != 0 || st.stdout().isBlank()) {
       return;
     }
@@ -413,14 +413,14 @@ final class TaskRunner implements Runnable {
         : task.workspaceKey();
     String message = autoCommitMessage(key, st.stdout(), finalText, task.agent() == null ? "agent" : task.agent().name(),
         task.taskId());
-    Executables.run(List.of("git", "-C", dir.toString(), "add", "-A"), Map.of(), 60);
-    List<String> commit = new ArrayList<>(List.of("git", "-C", dir.toString()));
-    if (Executables.run(List.of("git", "-C", dir.toString(), "config", "user.email"), Map.of(), 10).stdout().isBlank()) {
+    Executables.run(SafeGit.cmd(dir, "add", "-A"), Map.of(), 60);
+    List<String> commit = SafeGit.cmd(dir);
+    if (Executables.run(SafeGit.cmd(dir, "config", "user.email"), Map.of(), 10).stdout().isBlank()) {
       commit.addAll(List.of("-c", "user.name=Orca Agent", "-c", "user.email=agent@orca.local"));
     }
-    commit.addAll(List.of("commit", "-q", "-m", message));
+    commit.addAll(List.of("commit", "-q", "--no-verify", "-m", message));
     Executables.Output c = Executables.run(commit, agentEnv(task.agent()), 60);
-    Executables.Output head = Executables.run(List.of("git", "-C", dir.toString(), "rev-parse", "--short", "HEAD"), Map.of(), 10);
+    Executables.Output head = Executables.run(SafeGit.cmd(dir, "rev-parse", "--short", "HEAD"), Map.of(), 10);
     buffer.add(AgentEvent.of(AgentEvent.NOTICE, "level", c.exitCode() == 0 ? "info" : "warn",
         "message", c.exitCode() == 0 ? "committed the remaining changes as " + head.stdout().trim()
             : "could not commit the remaining changes: " + Executables.plain(c.stderr())));

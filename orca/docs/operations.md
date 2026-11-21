@@ -103,9 +103,11 @@ sudo loginctl enable-linger $USER          # 注销后仍保持运行
 
 设置 → 审计日志（仅 owner / admin）列出谁在何时、从哪个 IP 做了什么：登录成功、失败与锁定，个人令牌签发与吊销，成员增删、角色与密码变更，Agent 的创建、归档与权限变更（权限档位、命令白名单、附加参数、技能、联网、审批升级；指令只记录“已修改”，不记录内容），运行时注册码签发、注册与移除，审批决定（含被批准或拒绝的命令），工作流的增删改、启停与手动运行，项目的创建与仓库变更（含旧值）。
 
-审计记录只追加、不可在界面上修改；`GET /api/audit.csv?from=&to=`（毫秒时间戳，默认近 90 天）分批流式导出 CSV，便于归档到 SIEM 或合规存储。审计表 `audit_event` 随数据库一起备份，默认保留 365 天（`ORCA_AUDIT_RETENTION_DAYS`，0 表示永久保留），每日自动清理。仓库地址中的凭证、命令中的令牌与密码在写入前脱敏；失败登录不把输入的用户名当作操作人，每分钟最多记录 60 条。
+审计记录只追加、不可在界面上修改；`GET /api/audit.csv?from=&to=`（毫秒时间戳，默认近 90 天）分批流式导出 CSV，便于归档到 SIEM 或合规存储。审计表 `audit_event` 随数据库一起备份，默认保留 365 天（`ORCA_AUDIT_RETENTION_DAYS`，0 表示永久保留），每日自动清理。仓库地址中的凭证、命令中的令牌与密码在写入前脱敏；失败登录不把输入的用户名当作操作人。
 
-**来源 IP**：server 默认 `server.forward-headers-strategy=native`，只有当请求来自内网代理地址（10/8、172.16/12、192.168/16、127/8 等）时才采用 `X-Forwarded-For`。反向代理应覆盖而不是追加该头（参考配置中 `proxy_set_header X-Forwarded-For $remote_addr;`），并让 server 端口只对代理开放（Compose 中设 `ORCA_HTTP_BIND=127.0.0.1`），否则客户端可以伪造来源 IP。
+**来源 IP**：server 只相信 `ORCA_TRUSTED_PROXIES`（对端地址的正则表达式）所列代理发来的 `X-Forwarded-For`；默认只信任本机（127.x），Compose 默认信任 Docker 网桥（172.16/12，即宿主机上的反向代理）。其他来源直接连接时，该头被忽略，客户端无法伪造登录限流与审计使用的地址。反向代理应覆盖而不是追加该头（参考配置中 `proxy_set_header X-Forwarded-For $remote_addr;`），并让 server 端口只对代理开放（Compose 中设 `ORCA_HTTP_BIND=127.0.0.1`）。代理在其他机器上时，把它的地址写进 `ORCA_TRUSTED_PROXIES`，例如 `10\.0\.0\.5`。
+
+失败登录按“邮箱 + 地址”计数，同一组合连续失败 10 次后锁定 15 分钟（锁定本身记一条审计）；全局每分钟最多记录 600 条失败登录，超出部分在下一分钟以 `auth.audit_throttled` 记录被省略的条数。
 
 ## 8. 监控
 

@@ -19,7 +19,8 @@ import java.util.concurrent.atomic.AtomicLong;
  * {@code initialize} capabilities, model ids differing from display names in {@code configOptions},
  * {@code systemPrompt {mode, content[]}}, {@code session/set_config_option}, the three permission options
  * where "abort" ends the turn as {@code cancelled}, and token usage in the prompt result.
- * Scenarios ({@code FAKE_SCENARIO}): {@code echo}, {@code permission}, {@code unauth}, {@code hang}.
+ * Scenarios ({@code FAKE_SCENARIO}): {@code echo}, {@code permission}, {@code stubborn}
+ * (asks again after every decline), {@code unauth}, {@code hang}.
  */
 public final class FakeTraeAcp {
 
@@ -124,10 +125,10 @@ public final class FakeTraeAcp {
         "status", "in_progress"))));
     update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text", "text", "Let me check. ")));
     switch (scenario) {
-      case "permission" -> {
+      case "permission", "stubborn" -> {
         update(Map.of("sessionUpdate", "tool_call", "toolCallId", "call_1", "title", "Run npm test", "kind", "execute",
             "status", "pending", "rawInput", Map.of("command", "npm test")));
-        if (text.contains("was declined")) {
+        if (text.contains("was declined") && "permission".equals(scenario)) {
           update(Map.of("sessionUpdate", "agent_message_chunk", "content", Map.of("type", "text",
               "text", "continued without it")));
           break;

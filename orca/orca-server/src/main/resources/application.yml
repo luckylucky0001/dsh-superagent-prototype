@@ -1,7 +1,12 @@
 server:
   port: ${ORCA_PORT:8080}
-  # behind Nginx / a load balancer: trust X-Forwarded-For/-Proto only from internal proxy addresses
+  # behind Nginx / a load balancer: X-Forwarded-For/-Proto are believed only from the proxies listed in
+  # ORCA_TRUSTED_PROXIES (a regular expression over the peer address; default: this machine only), so a
+  # client that reaches the server directly cannot choose the address used for sign-in limits and audit
   forward-headers-strategy: native
+  tomcat:
+    remoteip:
+      internal-proxies: ${ORCA_TRUSTED_PROXIES:127\.\d+\.\d+\.\d+|0:0:0:0:0:0:0:1}
   shutdown: graceful
 spring:
   application:

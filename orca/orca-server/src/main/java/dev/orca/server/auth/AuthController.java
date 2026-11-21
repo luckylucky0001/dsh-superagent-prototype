@@ -36,6 +36,7 @@ public class AuthController {
   }
 
   private static final int MAX_FAILURES = 10;
+  private static final int AUDIT_FAILURES_PER_MINUTE = 600;
   private static final long WINDOW_MS = 15 * 60_000L;
   private final java.util.concurrent.ConcurrentHashMap<String, java.util.Deque<Long>> failures =
       new java.util.concurrent.ConcurrentHashMap<>();
@@ -45,19 +46,22 @@ public class AuthController {
 
   /**
    * Failed sign-ins are audited without trusting the typed name as an actor (it is shown as "login") and
-   * at most 60 a minute, so a password-guessing flood cannot flood the log; a name that is not an e-mail
+   * at most 600 a minute (the overflow is counted), so a flood cannot fill the log; a name that is not an e-mail
    * address (often a password typed into the wrong box) is not stored.
    */
   private void auditFailure(String action, String login) {
     long minute = System.currentTimeMillis() / 60_000;
-    if (failureWindow.getAndSet(minute) != minute) {
-      failuresInWindow.set(0);
-    }
-    int n = failuresInWindow.incrementAndGet();
-    if (n > 60) {
-      if (n == 61) {
-        audit.record(null, null, "auth.audit_throttled", "member", null, Map.of("reason", "more than 60 failed sign-ins this minute"));
+    long previous = failureWindow.getAndSet(minute);
+    if (previous != minute) {
+      int before = failuresInWindow.getAndSet(0);
+      if (before > AUDIT_FAILURES_PER_MINUTE) {
+        audit.record(null, null, "auth.audit_throttled", "member", null,
+            Map.of("dropped", before - AUDIT_FAILURES_PER_MINUTE, "minute", previous * 60_000));
       }
+    }
+    // each e-mail and address pair is locked out after MAX_FAILURES, so one attacker adds at most that
+    // many rows per pair; the overall cap only stops a flood over many made-up names
+    if (failuresInWindow.incrementAndGet() > AUDIT_FAILURES_PER_MINUTE) {
       return;
     }
     String l = String.valueOf(login).trim();

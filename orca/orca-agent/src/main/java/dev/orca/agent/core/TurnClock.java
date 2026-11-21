@@ -16,11 +16,13 @@ public final class TurnClock {
   private long pausedNanos;
   private int activePauses;
   private long pauseStartedAt;
+  private long turnStartedAt = System.nanoTime();
 
   /** Starts a new turn. */
   public synchronized void reset() {
     pausedNanos = 0;
     activePauses = 0;
+    turnStartedAt = System.nanoTime();
   }
 
   /** Runs {@code waitForPerson} with the clock stopped (pauses may overlap). */
@@ -49,7 +51,25 @@ public final class TurnClock {
   /** Waits for {@code f} for at most {@code timeout} of working time. */
   public <T> T await(CompletableFuture<T> f, Duration timeout)
       throws InterruptedException, ExecutionException, TimeoutException {
-    long start = System.nanoTime();
+    return await(f, timeout, System.nanoTime() - pausedSoFar());
+  }
+
+  /**
+   * Waits for {@code f} until the turn has used {@code timeout} of working time since {@link #reset()}:
+   * several requests that make up one turn share one deadline.
+   */
+  public <T> T awaitWithinTurn(CompletableFuture<T> f, Duration timeout)
+      throws InterruptedException, ExecutionException, TimeoutException {
+    long start;
+    synchronized (this) {
+      start = turnStartedAt;
+    }
+    return await(f, timeout, start);
+  }
+
+  /** {@code start}: the moment working time is counted from, minus the pauses counted so far. */
+  private <T> T await(CompletableFuture<T> f, Duration timeout, long start)
+      throws InterruptedException, ExecutionException, TimeoutException {
     while (true) {
       long remaining = timeout.toNanos() + pausedSoFar() - (System.nanoTime() - start);
       if (remaining <= 0) {

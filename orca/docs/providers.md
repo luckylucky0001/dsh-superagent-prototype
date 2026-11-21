@@ -61,12 +61,14 @@
 | 能力 | `initialize` → `loadSession`、`promptCapabilities.image`、`mcpCapabilities.http`、`sessionCapabilities{list,resume,fork,close,systemPrompt,additionalDirectories}`、`authMethods`（企业 SSO / PAT） | ✅ |
 | 模型 | `session/new` 返回 `configOptions[id=model]`：`value` 是模型 id（如 `Doubao_1_6`），`name` 是显示名（“Doubao-Seed-Code”），另有描述与上下文窗口。探测时开一个空会话读取后立即 `session/close`（不发 prompt、不耗 token，30 分钟缓存）。`-c model` 接受 id 或显示名；会话中用 `session/set_config_option {configId:"model", value}` 切换；未知模型在 `session/new` 报 “is unavailable” → `MODEL_NOT_FOUND` | ✅ |
 | 模式 | `modes`：`default`（Workspace Edit）、`plan`、`auto`、`bypass_permissions`；Orca 以权限档位控制，不切换模式 | ✅ |
-| 系统提示词 | `session/new {systemPrompt: {mode: "append", content: [{type:"text", text}]}}`；Agent 指令与技能通过它下发（此前拼在首轮 prompt 前） | ✅ |
+| 系统提示词 | `session/new {systemPrompt: {mode: "append", content: [{type:"text", text}]}}`；Agent 指令与技能通过它下发（此前拼在首轮 prompt 前）。`workspace` 档位还会先附一段说明：`.git` 在沙箱内只读，需要提交时先执行 git 命令，被沙箱拦截后申请在沙箱外执行同一条命令（实测 Doubao-Seed-Code 不加说明时常常直接放弃提交）。评审轮次只发 `/review`，指令留到下一个普通轮次 | ✅ |
 | 会话 | `session/new {cwd, mcpServers:[{type:"http", name, url, headers:[{name,value}]}]}`、`session/load`（新进程中恢复，回放历史 17 条，驱动忽略回放并保留上下文）、`session/prompt`、`session/cancel` | ✅ |
 | 流式 | `session/update`：`agent_message_chunk`、`agent_thought_chunk`、`tool_call`（含 `rawInput.command`）、`tool_call_update`、`plan`、`usage_update`（上下文占用 `used/size`）、`available_commands_update` | ✅ |
 | 用量 | `session/prompt` 结果的 `usage` 与 `_meta._trae/tokenUsage{turn, sessionTotal, contextWindow}`；驱动换算成与 Codex 相同的字段，`taskTokens` 只计本任务的轮次 | ✅ |
 | 图片 | prompt 中 `{type:"image", mimeType, data(base64)}` | ✅ |
-| 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次），使两者行为一致 | ✅ |
+| 审批 | 沙箱拦截后模型可申请提权：`session/request_permission`，`toolCall.rawInput` 带 `command`、`cwd`、`reason`；选项固定三个：`approved`（allow_once）、`approved-execpolicy-amendment`（allow_always）、`abort`（reject_once）。**选 abort 会结束整轮（stopReason=cancelled）**，与 Codex 拒绝后继续工作不同；驱动在这种情况下自动在同一会话追加一轮“该请求已被拒绝，请换一种方式完成或说明原因”（最多 3 次，与原请求共用同一个超时；用尽后任务以失败而不是“已取消”结束），使两者行为一致。daemon 批准时只选 `approved`（仅这一次），不选“不再询问” | ✅ |
+| 命令白名单 | 不使用 `--allowed-tool Bash(...)`：实测与条目完全相同的命令会被 TRAE 直接在沙箱外执行、不经过审批，绕过 daemon 对工作目录与嵌套仓库的检查。白名单命令改由 daemon 的审批策略在提权请求时逐条判断 | ✅ |
+| `.git` 保护 | `:workspace` 档位下工作区根目录的 `.git` 为只读（写 `.git/config`、`.git/hooks` 被沙箱拒绝），但可以在子目录 `git init` 嵌套仓库；daemon 因此在工作区存在嵌套仓库时不批准任何 git 命令 | ✅ |
 | 插话 | `_meta.steering.supported=true`，但 ACP 下没有对应方法：`_session/steer` 返回 Method not found，进行中再发 `session/prompt` 被拒（“an ACP prompt is already in progress”）。驱动不声明 steer 能力，插话排到下一轮发送 | ✅（结论：不支持） |
 | 代码评审 | `available_commands` 中的 `review` 命令：prompt 发 `/review <目标说明>`（分支评审附 `git diff main...HEAD` 提示），返回与 Codex 相同格式的 `[P0..P3] 文件:行` 结论；TRAE 会把总体结论作为第二条消息重复一次，驱动去重 | ✅ |
 | 编辑差异 | 文件编辑的 `diff`（`oldText`/`newText`）随 `tool_call` 下发，完成事件只有 `{"success":true}`；驱动保存起始事件中的 diff 并生成统一 diff 展示 | ✅ |

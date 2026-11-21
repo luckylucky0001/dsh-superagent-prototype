@@ -113,6 +113,18 @@ class TraeDriverTest {
   }
 
   @Test
+  void anAgentThatKeepsAskingFailsInsteadOfLookingCancelled() throws Exception {
+    Handler h = new Handler();
+    h.decision = Interaction.Decision.DECLINE;
+    try (AgentSession s = provider("stubborn").open(spec(), h)) {
+      TurnResult r = s.runTurn(TurnSpec.text("test"), e -> {});
+      assertEquals(TurnResult.Status.FAILED, r.status());
+      assertEquals(ErrorCodes.AGENT_ERROR, r.errorCode());
+      assertTrue(r.error().contains("declined requests") && r.error().contains("npm test"), r.error());
+    }
+  }
+
+  @Test
   void reviewsUseTraesOwnReviewerOnce() throws Exception {
     try (AgentSession s = provider("echo").open(spec(), new Handler())) {
       assertTrue(s.capabilities().contains(Capability.REVIEW));
@@ -128,7 +140,9 @@ class TraeDriverTest {
     try (AgentSession s = provider("echo").open(spec("Fake-Mini"), new Handler())) {
       assertEquals("fake_mini_2", s.model());
       TurnResult r = s.runTurn(TurnSpec.text("system?"), e -> {});
-      assertEquals("SYSTEM: Be brief. MODEL: fake_mini_2", r.finalText());
+      // workspace sessions first learn how commits work here, then get the agent's own instructions
+      assertTrue(r.finalText().startsWith("SYSTEM: You work in a git checkout managed by Orca."), r.finalText());
+      assertTrue(r.finalText().endsWith("the task ends.\n\nBe brief. MODEL: fake_mini_2"), r.finalText());
     }
     AgentException unknown = assertThrows(AgentException.class, () -> provider("echo").open(spec("nope"), new Handler()));
     assertEquals(ErrorCodes.MODEL_NOT_FOUND, unknown.code());

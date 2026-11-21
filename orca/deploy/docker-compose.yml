@@ -37,6 +37,9 @@ services:
       ORCA_HTTP_ALLOWED_HOSTS: ${ORCA_HTTP_ALLOWED_HOSTS:-}
       ORCA_NOTIFY_WEBHOOK_URL: ${ORCA_NOTIFY_WEBHOOK_URL:-}
       ORCA_NOTIFY_FORMAT: ${ORCA_NOTIFY_FORMAT:-slack}
+      # a reverse proxy on the host reaches the container from the Docker bridge (172.16.0.0/12); trust
+      # X-Forwarded-For from there. With ORCA_HTTP_BIND=127.0.0.1 nothing else can reach that port.
+      ORCA_TRUSTED_PROXIES: ${ORCA_TRUSTED_PROXIES:-172\.(1[6-9]|2[0-9]|3[01])\.\d+\.\d+|127\.\d+\.\d+\.\d+}
     volumes:
       - orca-files:/var/lib/orca/files   # uploaded attachments; back up with the database
     ports:

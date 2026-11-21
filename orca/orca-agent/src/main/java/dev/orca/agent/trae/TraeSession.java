@@ -19,6 +19,7 @@ import dev.orca.protocol.ErrorCodes;
 import dev.orca.protocol.Json;
 import java.io.IOException;
 import java.nio.file.Files;
+import dev.orca.agent.core.Permission;
 import java.nio.file.Path;
 import java.time.Duration;
 import java.util.ArrayList;
@@ -53,6 +54,7 @@ final class TraeSession implements AgentSession {
   private String model;
   private boolean resumed;
   private boolean instructionsSent;
+  private volatile boolean reviewTurn;
   private volatile boolean userCancelled;
   private volatile String declinedInTurn;
   private long taskTokens;
@@ -78,6 +80,14 @@ final class TraeSession implements AgentSession {
 
   /** Internal capability: {@code session/new} accepts {@code systemPrompt}. */
   static final String SYSTEM_PROMPT = "system_prompt";
+
+  /** Told to every workspace-tier session that supports a system prompt. */
+  static final String WORKSPACE_NOTE = "You work in a git checkout managed by Orca. The sandbox keeps the .git folder "
+      + "read-only, so git add and git commit fail inside it. When you need to commit, run the same git command again with "
+      + "escalated sandbox permissions (require_escalated) and a one-line justification. Do not ask the user to run it or to "
+      + "confirm first: Orca answers the request itself, and approves plain git add, commit, status, diff and log in the "
+      + "workspace root. Anything else may be declined; then continue without it. Uncommitted changes are committed for you "
+      + "when the task ends.";
 
   /** How often a turn that TRAE ended because a request was declined is continued automatically. */
   private static final int MAX_DECLINE_CONTINUATIONS = 3;
@@ -112,10 +122,9 @@ final class TraeSession implements AgentSession {
         args.add("permissions." + WORKSPACE_PROFILE + ".extends=\":workspace\"");
         args.add("-c");
         args.add("permissions." + WORKSPACE_PROFILE + ".network.enabled=" + spec.network());
-        for (String allowed : spec.allowedCommands()) {
-          args.add("--allowed-tool");
-          args.add("Bash(" + allowed.replace(")", "") + ")");
-        }
+        // the agent's allowed commands are NOT passed as --allowed-tool: TRAE runs a matching command
+        // outside the sandbox without asking (verified live), past the daemon's checks of the working
+        // directory and the repository. They are answered by the daemon's approval policy instead.
       }
       case FULL -> args.add("--yolo");
     }
@@ -188,11 +197,16 @@ final class TraeSession implements AgentSession {
       resumed = true;
       instructionsSent = true;
     } else {
-      if (capabilities.contains(SYSTEM_PROMPT) && spec.instructions() != null && !spec.instructions().isBlank()) {
-        // the agent's instructions and skills become part of the system prompt (verified live)
-        params.put("systemPrompt", Map.of("mode", "append",
-            "content", List.of(Map.of("type", "text", "text", spec.instructions()))));
-        instructionsSent = true;
+      if (capabilities.contains(SYSTEM_PROMPT)) {
+        // the agent's instructions and skills become part of the system prompt (verified live), after a
+        // note on how this workspace works: TRAE's models otherwise tend to give up on a blocked commit
+        boolean own = spec.instructions() != null && !spec.instructions().isBlank();
+        String text = spec.permission() == Permission.WORKSPACE ? WORKSPACE_NOTE + (own ? "\n\n" + spec.instructions() : "")
+            : own ? spec.instructions() : null;
+        if (text != null) {
+          params.put("systemPrompt", Map.of("mode", "append", "content", List.of(Map.of("type", "text", "text", text))));
+        }
+        instructionsSent = own;
       }
       result = conn.call("session/new", params, timeout);
       sessionId = Json.str(result, "sessionId");
@@ -301,10 +315,13 @@ final class TraeSession implements AgentSession {
     }
     segmentNo++;
     StringBuilder text = new StringBuilder();
-    if (!instructionsSent && spec.instructions() != null && !spec.instructions().isBlank()) {
+    reviewTurn = turn.review() != null;
+    if (!reviewTurn && !instructionsSent && spec.instructions() != null && !spec.instructions().isBlank()) {
+      // without system-prompt support the instructions lead the first prompt; a review turn is the
+      // /review command alone (it must start the prompt), so they wait for the next ordinary turn
       text.append(spec.instructions()).append("\n\n---\n\n");
+      instructionsSent = true;
     }
-    instructionsSent = true;
     if (turn.review() != null) {
       // TRAE CLI's own reviewer, the /review command (verified live): same [P0..P3] findings as Codex
       text.append(reviewCommand(turn.review(), turn.text()));
@@ -345,7 +362,8 @@ final class TraeSession implements AgentSession {
       for (int attempt = 0; ; attempt++) {
         declinedInTurn = null;
         CompletableFuture<Object> f = conn.request("session/prompt", Map.of("sessionId", sessionId, "prompt", prompt));
-        result = clock.await(f, turn.timeout());
+        // continuations are part of the same turn and share its deadline
+        result = clock.awaitWithinTurn(f, turn.timeout());
         stop = Json.str(result, "stopReason");
         recordUsage(result);
         // TRAE ends the whole turn when a request is declined ("No, and tell TRAE CLI what to do
@@ -360,7 +378,12 @@ final class TraeSession implements AgentSession {
         }
         break;
       }
-      if ("cancelled".equals(stop)) {
+      if ("cancelled".equals(stop) && declinedInTurn != null && !userCancelled) {
+        status = TurnResult.Status.FAILED;
+        code = ErrorCodes.AGENT_ERROR;
+        error = "TRAE CLI stopped after " + (MAX_DECLINE_CONTINUATIONS + 1) + " declined requests; the last was `"
+            + declinedInTurn + "`";
+      } else if ("cancelled".equals(stop)) {
         status = TurnResult.Status.INTERRUPTED;
         code = ErrorCodes.CANCELLED;
       } else if ("refusal".equals(stop)) {
@@ -515,7 +538,8 @@ final class TraeSession implements AgentSession {
         if (t != null) {
           synchronized (segment) {
             // the reviewer repeats its overall verdict as a second message: drop a long chunk already sent
-            if (t.length() > 40 && segment.toString().contains(t.strip())) {
+            // (only in review turns: an ordinary answer may legitimately repeat a paragraph)
+            if (reviewTurn && t.length() > 40 && segment.toString().contains(t.strip())) {
               return;
             }
             segment.append(t);
@@ -550,12 +574,13 @@ final class TraeSession implements AgentSession {
         String output = contentText(u);
         if ("completed".equals(status) || "failed".equals(status)) {
           String title = Json.str(u, "title");
+          List<Map<String, Object>> started = toolDiffs.remove(String.valueOf(id));
           sink.accept(AgentEvent.of(AgentEvent.TOOL_COMPLETED, "itemId", id,
               "kind", toolKinds.getOrDefault(String.valueOf(id), "other"),
               "title", title != null ? title : toolTitles.get(String.valueOf(id)),
-              "status", status, "output", diffs(u) == null && toolDiffs.containsKey(String.valueOf(id))
+              "status", status, "output", diffs(u) == null && started != null
                   && output != null && output.trim().equals("{\"success\":true}") ? null : Truncate.middle(output, Truncate.TOOL_OUTPUT),
-              "changes", diffs(u) != null ? diffs(u) : "completed".equals(status) ? toolDiffs.remove(String.valueOf(id)) : null));
+              "changes", diffs(u) != null ? diffs(u) : "completed".equals(status) ? started : null));
         } else if (output != null && !output.isBlank()) {
           sink.accept(AgentEvent.of(AgentEvent.TOOL_OUTPUT, "itemId", id, "text", output));
         }
@@ -705,19 +730,33 @@ final class TraeSession implements AgentSession {
     return sb.isEmpty() ? null : sb.toString();
   }
 
-  private static List<Map<String, Object>> diffs(Map<String, Object> u) {
+  private List<Map<String, Object>> diffs(Map<String, Object> u) {
     List<Map<String, Object>> out = new ArrayList<>();
     for (Object c : Json.list(u, "content")) {
       if ("diff".equals(Json.str(c, "type"))) {
         Map<String, Object> m = new LinkedHashMap<>();
         m.put("path", Json.str(c, "path"));
         m.put("kind", Json.str(c, "oldText") == null ? "add" : "update");
-        m.put("diff", Truncate.middle(unifiedDiff(Json.str(c, "path"), Json.str(c, "oldText"), Json.str(c, "newText")),
+        m.put("diff", Truncate.middle(unifiedDiff(relative(Json.str(c, "path")), Json.str(c, "oldText"), Json.str(c, "newText")),
             Truncate.TOOL_OUTPUT));
         out.add(m);
       }
     }
     return out.isEmpty() ? null : out;
+  }
+
+  /** A path inside the workspace as written in a diff header ({@code a/src/x.py}); others unchanged. */
+  private String relative(String path) {
+    if (path == null) {
+      return null;
+    }
+    try {
+      Path root = spec.cwd().toAbsolutePath().normalize();
+      Path p = Path.of(path).normalize();
+      return p.isAbsolute() && p.startsWith(root) && !p.equals(root) ? root.relativize(p).toString().replace('\\', '/') : path;
+    } catch (RuntimeException e) {
+      return path;
+    }
   }
 
   /**

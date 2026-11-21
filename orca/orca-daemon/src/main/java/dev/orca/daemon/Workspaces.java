@@ -30,19 +30,29 @@ public final class Workspaces {
   }
 
   /**
-   * A repository's identity regardless of how it is written: credentials, scheme and port, {@code .git}
-   * and trailing slashes do not matter, and {@code git@host:org/repo} equals {@code https://host/org/repo}.
-   * Rotating a token in an https URL or moving to SSH therefore keeps existing checkouts usable.
+   * A repository's identity regardless of how it is written: credentials, scheme, default ports (22, 80,
+   * 443), {@code .git}, trailing slashes and the host's letter case do not matter, and
+   * {@code git@host:org/repo} equals {@code https://host/org/repo}. Rotating a token in an https URL or
+   * moving to SSH therefore keeps existing checkouts usable. The path keeps its case and other ports are
+   * kept: a server may treat {@code /Repo} and {@code /repo}, or two ports, as different repositories.
    */
   static String repoKey(String url) {
     String u = url.trim();
-    u = u.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://", "");   // scheme
-    u = u.replaceFirst("^[^/@]*@", "");                        // user info
-    u = u.replaceFirst("^([^/:]+):\\d+/", "$1/");              // port
-    if (!u.startsWith("/") && u.matches("^[^/:]+:[^/].*")) {   // scp-like host:path
-      u = u.replaceFirst(":", "/");
+    boolean scheme = u.matches("^[a-zA-Z][a-zA-Z0-9+.-]*://.*");
+    u = u.replaceFirst("^[a-zA-Z][a-zA-Z0-9+.-]*://", "");
+    String path;
+    String host;
+    if (u.startsWith("/") || !scheme && !u.matches("^([^/@]*@)?[^/:]+:[^/].*")) {
+      host = "";                                               // a local path
+      path = u;
+    } else {
+      u = u.replaceFirst("^[^/@]*@", "");                      // user info
+      int slash = u.indexOf('/');
+      String authority = scheme ? (slash < 0 ? u : u.substring(0, slash)) : u.substring(0, u.indexOf(':'));
+      path = scheme ? (slash < 0 ? "" : u.substring(slash)) : "/" + u.substring(u.indexOf(':') + 1);
+      host = authority.toLowerCase(java.util.Locale.ROOT).replaceFirst(":(22|80|443)$", "");
     }
-    return u.replaceAll("(\\.git)?/*$", "").toLowerCase(java.util.Locale.ROOT);
+    return host + path.replaceAll("(\\.git)?/*$", "");
   }
 
   public Path prepare(String key, Wire.RepoSpec repo) throws AgentException {
@@ -78,7 +88,7 @@ public final class Workspaces {
         }
         excludeCaches(dir);
       } else {
-        Executables.Output origin = Executables.run(List.of("git", "-C", dir.toString(), "remote", "get-url", "origin"),
+        Executables.Output origin = Executables.run(SafeGit.cmd(dir, "remote", "get-url", "origin"),
             Map.of(), 30);
         if (origin.exitCode() != 0 || !sameRepo(origin.stdout().trim(), repo.url())) {
           throw new AgentException(ErrorCodes.AGENT_ERROR, "workspace " + key + " is a checkout of another repository ("
@@ -87,10 +97,10 @@ public final class Workspaces {
         }
         if (!origin.stdout().trim().equals(repo.url())) {
           // same repository written differently (new token, https to ssh): follow the project's setting
-          Executables.run(List.of("git", "-C", dir.toString(), "remote", "set-url", "origin", repo.url()), Map.of(), 30);
+          git(dir, "remote", "set-url", "origin", repo.url());
         }
         // keep local work; just refresh remote refs so the agent can rebase if it wants to
-        Executables.run(List.of("git", "-C", dir.toString(), "fetch", "--quiet", "--all"), Map.of(), 120);
+        Executables.run(SafeGit.cmd(dir, "fetch", "--quiet", "--all"), Map.of("GIT_TERMINAL_PROMPT", "0"), 120);
       }
       return touched(dir);
     } catch (IOException e) {
@@ -149,11 +159,7 @@ public final class Workspaces {
   }
 
   private static void git(Path cwd, String... args) throws AgentException {
-    List<String> cmd = new java.util.ArrayList<>();
-    cmd.add("git");
-    cmd.add("-C");
-    cmd.add(cwd.toString());
-    cmd.addAll(List.of(args));
+    List<String> cmd = SafeGit.cmd(cwd, args);
     Executables.Output out = Executables.run(cmd, Map.of("GIT_TERMINAL_PROMPT", "0"), 600);
     if (out.exitCode() != 0) {
       throw new AgentException(ErrorCodes.AGENT_ERROR, "git " + args[0] + " failed: " + Executables.plain(out.stderr()));

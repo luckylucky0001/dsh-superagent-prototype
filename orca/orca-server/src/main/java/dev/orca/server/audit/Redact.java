@@ -9,7 +9,7 @@ public final class Redact {
   private static final Pattern URL_USERINFO = Pattern.compile("(?i)\\b([a-z][a-z0-9+.-]*://)[^/@\\s]+@");
   private static final Pattern BEARER = Pattern.compile("(?i)\\b(bearer|basic|token)\\s+[A-Za-z0-9._~+/=-]{8,}");
   private static final Pattern KEY_VALUE = Pattern.compile(
-      "(?i)\\b([a-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|auth)[a-z0-9_.-]*)(\\s*[=:]\\s*)(\"[^\"]*\"|'[^']*'|[^\\s&\"']+)");
+      "(?i)\\b([a-z0-9_.-]*(?:password|passwd|secret|token|api[_-]?key|access[_-]?key|auth(?!ors?\\b))[a-z0-9_.-]*)(\\s*[=:]\\s*)(\"[^\"]*\"|'[^']*'|[^\\s&\"']+)");
   private static final Pattern KNOWN_TOKENS = Pattern.compile(
       "\\b(?:orca_[a-z]_[A-Za-z0-9]{8,}|gh[pousr]_[A-Za-z0-9]{20,}|github_pat_[A-Za-z0-9_]{20,}|glpat-[A-Za-z0-9_-]{12,}"
           + "|sk-[A-Za-z0-9_-]{16,}|xox[abpr]-[A-Za-z0-9-]{10,}|AKIA[0-9A-Z]{16}|eyJ[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,}\\.[A-Za-z0-9_-]{10,})");

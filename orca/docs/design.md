@@ -102,7 +102,14 @@ WebSocket，帧为 `{type, data}`（`dev.orca.protocol.Wire`）：
 ## 7. 安全
 
 - Web 会话 cookie（HttpOnly、SameSite=Lax）或 Bearer；daemon 用运行时 token；webhook 用节点密钥（常量时间比较）。
-- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（沙箱内联网须 Agent 请求且 daemon 以 `--allow-network` 启动；Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令（禁止 `&&`、`;`、`|`、反引号、`$(`）。`full` 只在标记为隔离环境的运行时生效。
+- 权限档位映射到 CLI 自己的沙箱和审批；daemon 的审批策略默认拒绝（沙箱内联网须 Agent 请求且 daemon 以 `--allow-network` 启动；Agent 可选“受阻时询问人”：策略将拒绝时改为送到收件箱，由人允许一次 / 本任务内允许 / 拒绝），只放行工作区内文件改动和白名单命令，且每次只批准这一条命令（不会“本会话内一直允许”）。被批准的命令在沙箱外执行，所以规则全部是白名单：
+  - 命令的工作目录（解析符号链接后的真实路径）必须在工作区内；`cd` 只允许作为第一段、且只能回到工作区根目录（TRAE 的写法 `cd <工作区> && git add -A && git commit -m "…"`）；
+  - 引号外不允许 `;`、`|`、`&`、重定向、换行、通配符与子 shell，任何位置不允许 `$`、反引号、反斜杠；`&&` 的每一段都必须被允许；
+  - 内置的 `git add / commit / status / diff / log` 只接受逐个列出的选项（git 接受长选项的缩写，黑名单无法完整），路径参数必须在工作区内（工作区外的两个路径会让 `git diff` 变成 `--no-index`）；管理员加入白名单的 git 命令（如 `git push`）禁止 `--receive-pack`、`--upload-pack`、`--exec`、`--no-verify` 等及其缩写；
+  - 工作区内出现嵌套仓库（任何大小写的 `.git` 目录或文件）时不批准任何 git 命令：嵌套仓库的配置由 Agent 写入，git 在其中执行或递归子模块时会读取它（例如 `core.fsmonitor` 可以指定任意程序）；
+  - daemon 自己在工作区执行的 git（自动提交、推送、拉取）一律带 `core.fsmonitor=false`、`core.hooksPath=/dev/null`、`diff.external=` 等设置，并使用 `--no-verify` 与 `--ignore-submodules=all`。
+
+  `full` 只在标记为隔离环境的运行时生效。
 - 工作目录键严格校验，不能逃出工作根目录。
 - `http.request` 只允许 `ORCA_HTTP_ALLOWED_HOSTS` 中的主机，不跟随重定向；通知组件额外允许常见 IM webhook 主机。
 - MCP 回写 token 通过环境变量传给 CLI，不出现在命令行参数里。
