@@ -729,6 +729,15 @@ public class TaskService {
     if (body != null && Boolean.TRUE.equals(body.get("declined"))) {
       answer.put("_declined", true);
     }
+    // `orca approve` / `orca reject` (and API clients) answer an agent's approval request with a decision
+    // instead of choosing an option: approve means "Allow once", reject declines
+    if (answers.isEmpty() && body != null && body.get("decision") instanceof String d) {
+      if (d.equals("approved")) {
+        answer.put("decision", List.of("Allow once"));
+      } else {
+        answer.put("_declined", true);
+      }
+    }
     return answer;
   }
 
