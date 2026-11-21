@@ -74,8 +74,20 @@ public final class JsonRpcConnection implements AutoCloseable {
   };
   private volatile java.util.function.Consumer<String> rawListener;
 
+  /** Every CLI process still open, so a shutting-down daemon can make sure none outlives it. */
+  private static final java.util.Set<JsonRpcConnection> LIVE = java.util.concurrent.ConcurrentHashMap.newKeySet();
+
+  /** Kills every open CLI process and its children at once (daemon shutdown: Java does not kill children). */
+  public static void killAll() {
+    for (JsonRpcConnection c : LIVE) {
+      c.process.descendants().forEach(ProcessHandle::destroyForcibly);
+      c.process.destroyForcibly();
+    }
+  }
+
   public JsonRpcConnection(Process process, String name, boolean jsonrpcField) {
     this.process = process;
+    LIVE.add(this);
     this.name = name;
     this.jsonrpcField = jsonrpcField;
     this.stdin = process.getOutputStream();
@@ -129,6 +141,7 @@ public final class JsonRpcConnection implements AutoCloseable {
       throw new AgentException(ErrorCodes.TIMEOUT, name + ": " + method + " timed out after " + timeout);
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      pending.values().remove(f);
       throw new AgentException(ErrorCodes.CANCELLED, name + ": interrupted during " + method);
     } catch (ExecutionException e) {
       Throwable c = e.getCause();
@@ -189,9 +202,21 @@ public final class JsonRpcConnection implements AutoCloseable {
       }
     } catch (InterruptedException e) {
       Thread.currentThread().interrupt();
+      process.descendants().forEach(ProcessHandle::destroyForcibly);
       process.destroyForcibly();
+      children.forEach(ProcessHandle::destroyForcibly);
     }
-    children.stream().filter(ProcessHandle::isAlive).forEach(ProcessHandle::destroy);
+    // re-parented children (a command the agent started, an MCP server): ask, then insist
+    java.util.List<ProcessHandle> left = children.stream().filter(ProcessHandle::isAlive).toList();
+    left.forEach(ProcessHandle::destroy);
+    for (ProcessHandle h : left) {
+      try {
+        h.onExit().get(2, TimeUnit.SECONDS);
+      } catch (Exception notYet) {
+        h.destroyForcibly();
+      }
+    }
+    LIVE.remove(this);
     handlers.shutdownNow();
     failPending(new IOException(name + " closed"));
   }

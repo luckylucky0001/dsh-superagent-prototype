@@ -47,6 +47,8 @@ final class TraeSession implements AgentSession {
   private final Set<String> capabilities;
   private final Map<String, String> toolTitles = new ConcurrentHashMap<>();
   private final Map<String, String> toolKinds = new ConcurrentHashMap<>();
+  /** Content of each running tool as last reported, so only its new part is passed on. */
+  private final Map<String, String> toolOutputs = new ConcurrentHashMap<>();
   private final Map<String, List<Map<String, Object>>> toolDiffs = new ConcurrentHashMap<>();
   private final AtomicInteger requestIds = new AtomicInteger();
 
@@ -166,6 +168,10 @@ final class TraeSession implements AgentSession {
             + " with this account; pick one from the runtime's model list", e);
       }
       throw new AgentException(e.code(), e.getMessage() + (tail.isBlank() ? "" : "\n" + tail), e);
+    } catch (RuntimeException e) {
+      // e.g. an answer of an unexpected shape: the session never reaches the task, so nothing else would stop it
+      conn.close();
+      throw new AgentException(ErrorCodes.PROVIDER_UNAVAILABLE, "TRAE CLI failed to start: " + e, e);
     }
   }
 
@@ -606,7 +612,16 @@ final class TraeSession implements AgentSession {
                   && output != null && output.trim().equals("{\"success\":true}") ? null : Truncate.middle(output, Truncate.TOOL_OUTPUT),
               "changes", diffs(u) != null ? diffs(u) : "completed".equals(status) ? started : null));
         } else if (output != null && !output.isBlank()) {
-          sink.accept(AgentEvent.of(AgentEvent.TOOL_OUTPUT, "itemId", id, "text", output));
+          // ACP's update content replaces the tool's content, so it may hold everything so far: pass on only
+          // what is new, or the merged transcript would repeat itself ("a", "ab", "abc" -> "aababc")
+          String before = toolOutputs.put(String.valueOf(id), output);
+          String fresh = before != null && output.startsWith(before) ? output.substring(before.length()) : output;
+          if (!fresh.isEmpty()) {
+            sink.accept(AgentEvent.of(AgentEvent.TOOL_OUTPUT, "itemId", id, "text", fresh));
+          }
+        }
+        if ("completed".equals(status) || "failed".equals(status)) {
+          toolOutputs.remove(String.valueOf(id));
         }
       }
       case "plan" -> {

@@ -131,6 +131,10 @@ final class CodexSession implements AgentSession {
         throw new AgentException(ae.code(), ae.getMessage() + (tail.isBlank() ? "" : "\n" + tail), ae);
       }
       throw new AgentException(ErrorCodes.PROVIDER_UNAVAILABLE, "codex failed to start: " + e.getMessage(), e);
+    } catch (RuntimeException e) {
+      // e.g. an answer of an unexpected shape: the session never reaches the task, so nothing else would stop it
+      s.close();
+      throw new AgentException(ErrorCodes.PROVIDER_UNAVAILABLE, "codex failed to start: " + e, e);
     }
   }
 
@@ -387,8 +391,11 @@ final class CodexSession implements AgentSession {
       throw new AgentException(ErrorCodes.PROTOCOL, "no turn is running");
     }
     conn.call("turn/steer", Map.of("threadId", threadId, "expectedTurnId", current,
-        "input", List.of(Map.of("type", "text", "text", text))), timeout);
+        "input", List.of(Map.of("type", "text", "text", text))), STEER_TIMEOUT);
   }
+
+  /** Codex answers turn/steer at once while a turn runs; one that hangs is queued as a follow-up instead. */
+  static final java.time.Duration STEER_TIMEOUT = java.time.Duration.ofSeconds(15);
 
   @Override
   public void interrupt() {

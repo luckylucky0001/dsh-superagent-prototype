@@ -99,6 +99,7 @@ final class TaskRunner implements Runnable {
       log.error("task {} crashed", task.taskId(), e);
       result = completed("failed", null, null, null, ErrorCodes.AGENT_ERROR, String.valueOf(e), Map.of());
     } finally {
+      control.shutdown(); // steers that arrive from now on are dropped; the task is ending
       AgentSession s = session;
       if (s != null) {
         s.close();
@@ -611,6 +612,27 @@ final class TaskRunner implements Runnable {
   }
 
   // ---------------------------------------------------------------- control from the server
+
+  /**
+   * Steers reach the CLI by a blocking call; they run here, one at a time and in order, never on the thread
+   * that reads the server link (a slow CLI must not hold up other tasks' frames).
+   */
+  private final java.util.concurrent.ExecutorService control =
+      java.util.concurrent.Executors.newSingleThreadExecutor(Thread.ofVirtual().name("task-control").factory());
+
+  void steerLater(String text) {
+    try {
+      control.execute(() -> steer(text));
+    } catch (java.util.concurrent.RejectedExecutionException finished) {
+      // the task has ended; nothing to steer
+    }
+  }
+
+  /** Cancel does not queue behind a slow steer. */
+  void cancelLater(String reason) {
+    cancelRequested = true; // seen at once by the turn loop, before the CLI is told
+    Thread.ofVirtual().name("task-cancel").start(() -> cancel(reason));
+  }
 
   void cancel(String reason) {
     cancelRequested = true;

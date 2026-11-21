@@ -84,6 +84,8 @@ public final class Daemon {
           break;
         }
       }
+      // whatever has not stopped by now would keep editing the workspace unsupervised
+      dev.orca.agent.core.JsonRpcConnection.killAll();
       link.stop();
     }));
     link.runForever();
@@ -113,14 +115,14 @@ public final class Daemon {
         Wire.TaskCancel c = Json.convert(f.data(), Wire.TaskCancel.class);
         TaskRunner r = running.get(c.taskId());
         if (r != null) {
-          r.cancel(c.reason());
+          r.cancelLater(c.reason());
         }
       }
       case Wire.TASK_STEER -> {
         Wire.TaskSteer s = Json.convert(f.data(), Wire.TaskSteer.class);
         TaskRunner r = running.get(s.taskId());
         if (r != null) {
-          r.steer(s.text());
+          r.steerLater(s.text());
         }
       }
       case Wire.TASK_INPUT -> {
