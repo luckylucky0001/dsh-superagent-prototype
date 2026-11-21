@@ -680,4 +680,24 @@ class EndToEndTest {
     }
   }
 
+
+  @Test
+  void eventsAreAcknowledgedOnlyWithoutGaps() {
+    long now = System.currentTimeMillis();
+    var t = rawTask("running", "rt_seq", now, now + 60_000);
+    java.util.function.LongFunction<dev.orca.protocol.AgentEvent> ev = n ->
+        new dev.orca.protocol.AgentEvent(n, now, dev.orca.protocol.AgentEvent.NOTICE, Map.of("message", "e" + n));
+    taskService.events("rt_seq", new dev.orca.protocol.Wire.TaskEvents(t.id, List.of(ev.apply(1), ev.apply(2))));
+    assertEquals(2, taskRepo.findById(t.id).orElseThrow().lastSeq);
+    // the batch with 3 failed here; 4 and 5 arrive
+    taskService.events("rt_seq", new dev.orca.protocol.Wire.TaskEvents(t.id, List.of(ev.apply(4), ev.apply(5))));
+    assertEquals(2, taskRepo.findById(t.id).orElseThrow().lastSeq, "not acknowledged past the gap");
+    // the daemon resends from 3: the gap is filled, 4 and 5 are not stored twice
+    taskService.events("rt_seq", new dev.orca.protocol.Wire.TaskEvents(t.id, List.of(ev.apply(3), ev.apply(4), ev.apply(5))));
+    assertEquals(5, taskRepo.findById(t.id).orElseThrow().lastSeq);
+    var done = taskRepo.findById(t.id).orElseThrow();
+    done.status = "cancelled";
+    taskRepo.save(done);
+  }
+
 }

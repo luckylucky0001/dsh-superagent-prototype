@@ -499,6 +499,13 @@ public class TaskService {
       fresh.add(Map.of("seq", e.seq(), "ts", e.ts(), "type", e.type(), "data", e.data()));
       onEvent(t, e);
     }
+    // acknowledge only what is stored without a gap: if an earlier batch failed here, the daemon keeps the
+    // events after it and sends them again, which fills the gap (events already stored are skipped above)
+    long contiguous = t.lastSeq;
+    while (events.existsByTaskIdAndSeq(t.id, contiguous + 1)) {
+      contiguous++; // also past events stored earlier, after a gap this batch filled
+    }
+    max = contiguous;
     t.lastSeq = max;
     t.leaseUntil = Ids.now() + props.leaseSeconds() * 1000L;
     tasks.save(t);
