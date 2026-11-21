@@ -75,8 +75,9 @@ main() {
   if command -v codex >/dev/null 2>&1; then
     if codex login status >/dev/null 2>&1; then
       echo "    Codex CLI is logged in"
-    elif [ -r /dev/tty ] && [ "$ANSWER" != no ] && ask "Codex CLI is not logged in. Log in now with a device code (works over SSH)?"; then
-      codex login --device-auth < /dev/tty
+    elif have_tty && [ "$ANSWER" != no ] && ask "Codex CLI is not logged in. Log in now with a device code (works over SSH)?"; then
+      # interactive even with --yes: it needs a person to enter the code in a browser
+      codex login --device-auth < /dev/tty || warn "Codex login did not complete; run later: codex login --device-auth"
     else
       warn "log in later with: codex login --device-auth   (or: printenv OPENAI_API_KEY | codex login --with-api-key)"
     fi
@@ -127,8 +128,9 @@ SH
   CONFIG="$ORCA_HOME/daemon.json"
   if [ "$SERVICE" = 1 ] || { [ "$(uname -s)" = Linux ] && command -v systemctl >/dev/null 2>&1 \
       && ask "Install a systemd user service so the daemon starts automatically?"; }; then
-    if ! command -v systemctl >/dev/null 2>&1; then
-      warn "systemd is not available here; start the daemon with: $DIR/orca-daemon start $NETWORK"
+    if ! command -v systemctl >/dev/null 2>&1 || ! systemctl --user show-environment >/dev/null 2>&1; then
+      # no systemd, or no user session bus (containers, some ssh sessions, WSL)
+      warn "a systemd user session is not available here; start the daemon with: $DIR/orca-daemon start $NETWORK"
     elif [ ! -s "$CONFIG" ]; then
       warn "this machine is not registered yet, so no service was installed; run again with --code"
     else
@@ -174,10 +176,16 @@ warn() { printf '%s\n' "  ! $*" >&2; }
 die() { printf '%s\n' "  x $*" >&2; exit 1; }
 
 # ask "question": --yes answers yes, --non-interactive (or no terminal) answers no, otherwise the person decides
+# a terminal we can actually open: /dev/tty may exist and be readable but have no terminal behind it
+# (CI, cron, ssh without -t), and then opening it fails
+have_tty() {
+  ( exec < /dev/tty ) 2>/dev/null
+}
+
 ask() {
   [ "$ANSWER" = yes ] && return 0
   [ "$ANSWER" = no ] && return 1
-  [ -r /dev/tty ] || return 1
+  have_tty || return 1
   printf '%s [y/N] ' "$1" > /dev/tty
   read -r reply < /dev/tty || return 1
   case "$reply" in y|Y|yes|YES) return 0 ;; *) return 1 ;; esac

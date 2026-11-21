@@ -1,3 +1,5 @@
+English: [cli.en.md](cli.en.md)
+
 # `orca` 命令行参考
 
 `orca` 是 Orca 的命令行客户端（Java 21，单个 jar），适合在终端、脚本和 CI 中使用。它只调用公开的 REST API，权限与网页端一致。

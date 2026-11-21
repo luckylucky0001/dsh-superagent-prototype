@@ -6,6 +6,8 @@
 
 📘 **[Technical design & Codex / TRAE walkthrough (PDF, 中文)](docs/Orca-Technical-Design-and-Codex-Walkthrough.pdf)** — architecture, component philosophy, protocols, security model, and a live demo with real Codex and TRAE CLI runs on an automotive parts-warehouse (WMS) codebase: putaway, FIFO line-side picking with a three-round review loop, Codex's built-in reviewer, approval escalation, and a cycle-count feature implemented by TRAE and reviewed by Codex until approved.
 
+**English docs:** [Operations guide](docs/operations.en.md) · [CLI reference](docs/cli.en.md) · [Changelog (中文)](CHANGELOG.md)
+
 ---
 
 > 代号 Orca（可替换）。把 AI 编码智能体当作团队成员：Issue 指派给 Agent，Agent 在你自己的机器上用 **OpenAI Codex** 或 **TRAE CLI** 干活，边做边汇报，做完交给人审；所有自动化都是**可编排的工作流**。

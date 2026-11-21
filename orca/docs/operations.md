@@ -1,3 +1,5 @@
+English: [operations.en.md](operations.en.md)
+
 # Orca 运维手册
 
 面向部署和维护 Orca 的运维同事：数据在哪里、怎么备份与恢复、怎么升级、令牌怎么管、出了问题先看什么。
