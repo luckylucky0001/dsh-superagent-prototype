@@ -521,6 +521,14 @@ final class CodexSession implements AgentSession {
         // policy declines and never sends to a person
         String command = rawCommand;
         ApprovalKind kind = network ? ApprovalKind.NETWORK : rawCommand == null ? ApprovalKind.OTHER : ApprovalKind.COMMAND;
+        if (!network && !"command".equals(Json.str(p, "kind") == null ? "command" : Json.str(p, "kind"))) {
+          // writeStdin is input for a command that is already running (possibly outside the sandbox), not the
+          // command itself: judging it as the command would approve arbitrary input. OTHER is declined.
+          ApprovalRequest r = new ApprovalRequest(nextRequestId(), ApprovalKind.OTHER,
+              "input to a running command: " + (rawCommand == null ? "?" : rawCommand), null, Json.str(p, "cwd"), List.of(),
+              Json.str(p, "reason"), p);
+          yield Map.of("decision", commandDecision(decide(r)));
+        }
         if (rawCommand == null && !network) {
           ApprovalRequest r = new ApprovalRequest(nextRequestId(), kind, actions.isEmpty() ? "command" : String.join(" && ", actions),
               null, Json.str(p, "cwd"), List.of(), Json.str(p, "reason"), p);

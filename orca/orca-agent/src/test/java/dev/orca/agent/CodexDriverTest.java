@@ -245,6 +245,17 @@ class CodexDriverTest {
   }
 
   @Test
+  void inputForARunningCommandIsNotJudgedAsTheCommand() throws Exception {
+    RecordingHandler h = new RecordingHandler();
+    try (AgentSession s = provider("stdin").open(spec(), h)) {
+      s.runTurn(TurnSpec.text("go"), e -> {});
+      assertEquals(dev.orca.agent.core.Interaction.ApprovalKind.OTHER, h.approval.get().kind());
+      assertEquals(null, h.approval.get().command(), "no command for the policy to match");
+      assertTrue(h.approval.get().title().startsWith("input to a running command"));
+    }
+  }
+
+  @Test
   void codexErrorsKeepTheirMeaning() {
     assertEquals(dev.orca.protocol.ErrorCodes.MODEL_NOT_FOUND, dev.orca.agent.codex.CodexSessionAccess.errorCode("modelNotFound"));
     assertEquals(dev.orca.protocol.ErrorCodes.USAGE_LIMIT, dev.orca.agent.codex.CodexSessionAccess.errorCode(Map.of("rateLimitExceeded", Map.of())));

@@ -18,7 +18,7 @@ import java.util.concurrent.atomic.AtomicLong;
  * A scripted stand-in for {@code codex app-server}, shaped after recorded traffic of codex-cli 0.171.
  * The scenario comes from the {@code FAKE_SCENARIO} environment variable:
  * {@code echo} (default), {@code approval}, {@code question}, {@code fail_auth}, {@code hang},
- * {@code slow_start} (answers turn/start after 1.5 s), {@code review_hang} (a review that runs until interrupted).
+ * {@code slow_start} (answers turn/start after 1.5 s), {@code stdin} (asks to write to a running command), {@code review_hang} (a review that runs until interrupted).
  * Like codex 0.171, a review runs as a sub-turn with its own id (rootTurnId = the review's id), turn/interrupt
  * must name the running turn, a resumed thread replays its token totals, and a review's text is repeated as
  * a plain agent message.
@@ -155,12 +155,16 @@ public final class FakeCodexAppServer {
   private static void runTurn(String scenario, String turnId, String text, boolean structured) throws Exception {
     notify("turn/started", Map.of("threadId", THREAD, "turn", Map.of("id", turnId, "status", "inProgress")));
     switch (scenario) {
-      case "approval" -> {
+      case "approval", "stdin" -> {
         notify("item/started", item(turnId, Map.of("type", "commandExecution", "id", "exec-1",
             "command", "/bin/bash -lc 'rm -rf build'", "cwd", "/w", "status", "inProgress",
             "commandActions", List.of(Map.of("type", "unknown", "command", "rm -rf build")))));
-        Map<String, Object> res = request("item/commandExecution/requestApproval", Map.of("threadId", THREAD,
+        Map<String, Object> ask = new LinkedHashMap<>(Map.of("threadId", THREAD,
             "turnId", turnId, "itemId", "exec-1", "command", "rm -rf build", "cwd", "/w", "reason", "outside sandbox"));
+        if ("stdin".equals(scenario)) {
+          ask.put("kind", "writeStdin"); // input for the running command, not the command
+        }
+        Map<String, Object> res = request("item/commandExecution/requestApproval", ask);
         String decision = String.valueOf(res.get("decision"));
         boolean ok = decision.startsWith("accept");
         notify("item/completed", item(turnId, Map.of("type", "commandExecution", "id", "exec-1",

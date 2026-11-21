@@ -33,7 +33,7 @@
 | 中断 | `turn/interrupt` → `turn/completed.status = interrupted`；轮次 id 尚未返回时收到的取消会被记住，拿到 id 后立即中断 | ✅ 实测 |
 | 错误码 | `codexErrorInfo`：`modelNotFound` → MODEL_NOT_FOUND，`usageLimitExceeded` / `rateLimitExceeded` / `sessionBudgetExceeded` → USAGE_LIMIT（不自动重试），连接类与 `responseTooManyFailedAttempts` → PROVIDER_UNAVAILABLE（可重试） | ✅ 对照 0.171 schema |
 | 插话 | `turn/steer {threadId, expectedTurnId, input}` | ✅ 实测（运行中改指令，最终回复按新指令） |
-| 审批 | `item/commandExecution/requestApproval`、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | ✅ 实测：写工作区外（如 `$HOME`）触发命令审批，策略拒绝后 Agent 报告受阻；注意 workspace-write 默认允许写 `/tmp` |
+| 审批 | `item/commandExecution/requestApproval`（`kind` 为 `writeStdin` 时是给已在运行的命令写入输入，不按原命令判断，一律拒绝）、`item/fileChange/requestApproval`、`item/permissions/requestApproval`（决策 accept/acceptForSession/decline/cancel） | ✅ 实测：写工作区外（如 `$HOME`）触发命令审批，策略拒绝后 Agent 报告受阻；注意 workspace-write 默认允许写 `/tmp` |
 | 向人提问 | `item/tool/requestUserInput`、`mcpServer/elicitation/request` | 🟡 按 schema 实现 |
 | 错误分类 | `turn.error.codexErrorInfo`：unauthorized / usageLimitExceeded / contextWindowExceeded / sandboxError / httpConnectionFailed… | 🟡 按文档实现 |
 
