@@ -55,9 +55,9 @@ jobs:
     - name: End-to-end tests on PostgreSQL 16
       env:
         MAVEN_OPTS: -Daether.connector.http.retryHandler.count=5 -Daether.connector.http.retryHandler.interval=3000 -Daether.connector.http.retryHandler.serviceUnavailable=429,500,502,503,504
-        ORCA_TEST_DB_URL: jdbc:postgresql://localhost:5432/fellowloop_e2e
-        ORCA_TEST_DB_USER: fellowloop
-        ORCA_TEST_DB_PASSWORD: fellowloop-test
+        FELLOWLOOP_TEST_DB_URL: jdbc:postgresql://localhost:5432/fellowloop_e2e
+        FELLOWLOOP_TEST_DB_USER: fellowloop
+        FELLOWLOOP_TEST_DB_PASSWORD: fellowloop-test
       run: 'mvn -B -q install -DskipTests
 
         mvn -B -q test -pl fellowloop-server
@@ -73,7 +73,7 @@ jobs:
     - name: Build the image
       run: docker build -t fellowloop-server:ci .
     - name: Start it and check
-      run: 'docker run -d --name fellowloop -p 8080:8080 -e ORCA_ADMIN_PASSWORD=ci-pass-123 fellowloop-server:ci
+      run: 'docker run -d --name fellowloop -p 8080:8080 -e FELLOWLOOP_ADMIN_PASSWORD=ci-pass-123 fellowloop-server:ci
 
         for i in $(seq 60); do curl -sf localhost:8080/api/health && break; sleep 2; done
 
@@ -85,7 +85,7 @@ jobs:
 
         curl -sf -o /dev/null localhost:8080/downloads/fellowloop-cli.jar
 
-        curl -sf localhost:8080/ | grep -q "<title>Orca</title>"
+        curl -sf localhost:8080/ | grep -q "<title>Fellowloop</title>"
 
         test "$(docker exec fellowloop id -un)" = fellowloop
 
